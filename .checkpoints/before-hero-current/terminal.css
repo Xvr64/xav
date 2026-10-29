@@ -1,0 +1,548 @@
+/* ============================================================================
+   OCEANIC EDITORIAL SYSTEM
+   Newsreader (display, opsz 72) · Plus Jakarta Sans (text) · JetBrains Mono (metadata)
+   The ASCII canvases keep their own JetBrains Mono rendering; nothing here touches them.
+   ============================================================================ */
+
+:root {
+  /* Families */
+  --font-display: 'Newsreader', 'Iowan Old Style', Georgia, serif;
+  --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  /* Legacy aliases still referenced by components */
+  --font-serif: var(--font-display);
+  --font-hero: var(--font-display);
+  --font-hero-title: var(--font-display);
+  --font-body: var(--font-sans);
+  --font-title: var(--font-sans);
+  --font-annot: var(--font-mono);
+  --font-tech: var(--font-mono);
+
+  /* Type scale — display sizes are set at opsz 72 */
+  --text-cover: clamp(54px, 9.4vw, 160px);
+  --text-name: clamp(58px, 10.8vw, 178px);
+  --text-display: clamp(40px, 5.6vw, 92px);
+  --text-h2: clamp(31px, 3.9vw, 58px);
+  --text-lead: clamp(21px, 1.95vw, 29px);
+  --text-h3: clamp(20px, 1.65vw, 25px);
+  --text-body: clamp(15.5px, 1vw, 16.5px);
+  --text-small: 14px;
+  --text-meta: 11.5px;
+  /* kept for components that still read them */
+  --text-hero: var(--text-cover);
+  --text-body-sm: var(--text-small);
+  --text-meta-xs: 11px;
+
+  --leading-display: 1.02;
+  --leading-h2: 1.08;
+  --leading-lead: 1.32;
+  --leading-h3: 1.25;
+  --leading-body: 1.6;
+  --leading-meta: 1.5;
+
+  --tracking-display: -0.03em;
+  --tracking-name: -0.03em;
+  --tracking-h2: -0.025em;
+  --tracking-h3: -0.012em;
+  --tracking-body: -0.004em;
+  --tracking-mono: 0.01em;
+  --tracking-mono-wide: 0.04em;
+
+  /* Spacing scale (8-based, stretched toward the deep end) */
+  --space-2xs: 4px;
+  --space-xs: 8px;
+  --space-s: 16px;
+  --space-m: 24px;
+  --space-l: 40px;
+  --space-xl: 64px;
+  --space-2xl: 104px;
+  --space-3xl: 168px;
+  --section-gap: clamp(150px, 24vh, 272px);
+
+  /* Grid & measure */
+  --page-margin: clamp(20px, 5.2vw, 88px);
+  --gutter: clamp(16px, 1.9vw, 32px);
+  --measure: 62ch;
+  --measure-narrow: 46ch;
+
+  /* Static fallbacks (the abyss palette sets --ink-* live) */
+  --ink-primary: #171717;
+  --ink-secondary: #3E4C52;
+  --ink-muted: #52595E;
+}
+
+/* overflow-x:hidden makes body a scroll container and breaks the globe's sticky stage. */
+html { overflow-x: clip !important; }
+body {
+  overflow-x: clip !important;
+  overflow-y: visible !important;
+  font-family: var(--font-sans);
+  color: var(--ink-primary);
+  background-color: #ffffff;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+.terminal-portfolio {
+  font-family: var(--font-sans);
+  font-size: var(--text-body);
+  line-height: var(--leading-body);
+  letter-spacing: var(--tracking-body);
+  color: var(--ink-primary);
+}
+
+.font-sans, .cv-arch, .font-arch { font-family: var(--font-sans); }
+.font-mono, .font-tech, .font-annot { font-family: var(--font-mono); letter-spacing: var(--tracking-mono); }
+.font-serif, .font-display { font-family: var(--font-display); font-variation-settings: 'opsz' 72; }
+
+/* ---------------------------------------------------------------------------
+   Page frame & 12-column editorial grid
+   --------------------------------------------------------------------------- */
+.terminal-portfolio main {
+  max-width: 1440px;
+  padding-inline: var(--page-margin) !important;
+  overflow: visible;
+}
+.terminal-portfolio .cv-arch { margin-top: var(--section-gap) !important; }
+.terminal-portfolio .cv-arch > section + section { margin-top: var(--section-gap) !important; }
+.terminal-portfolio [data-editorial-section] { scroll-margin-top: 100px; }
+
+.ed-grid {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  column-gap: var(--gutter);
+}
+
+/* Metadata voice: JetBrains Mono, small, lower-case, quiet */
+.depth-mark,
+.meta {
+  font-family: var(--font-mono);
+  font-size: var(--text-meta);
+  font-weight: 400;
+  line-height: var(--leading-meta);
+  letter-spacing: var(--tracking-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-52595E, #52595E);
+}
+.depth-mark { opacity: 0.78; }
+.meta { opacity: 0.9; }
+
+/* Display voice: Newsreader at opsz 72 */
+.display {
+  font-family: var(--font-display);
+  font-variation-settings: 'opsz' 72;
+  font-optical-sizing: none;
+  font-weight: 300;
+  letter-spacing: var(--tracking-display);
+  line-height: var(--leading-display);
+}
+.display em, .display-italic { font-style: italic; }
+
+/* Reading voice */
+.lead {
+  font-family: var(--font-display);
+  font-variation-settings: 'opsz' 36;
+  font-weight: 300;
+  font-size: var(--text-lead);
+  line-height: var(--leading-lead);
+  letter-spacing: -0.012em;
+  color: var(--ink-171717, #171717);
+  max-width: var(--measure-narrow);
+  text-wrap: pretty;
+}
+.body-copy {
+  font-family: var(--font-sans);
+  font-size: var(--text-body);
+  line-height: var(--leading-body);
+  letter-spacing: var(--tracking-body);
+  max-width: var(--measure);
+  text-wrap: pretty;
+}
+
+/* ---------------------------------------------------------------------------
+   Headings
+   --------------------------------------------------------------------------- */
+.terminal-portfolio .ocean-h2 {
+  font-family: var(--font-sans);
+  font-size: var(--text-h2);
+  font-weight: 400;
+  line-height: var(--leading-h2);
+  letter-spacing: var(--tracking-h2);
+  text-wrap: balance;
+  margin: 0;
+}
+.terminal-portfolio .ocean-h3 {
+  font-family: var(--font-sans);
+  font-size: var(--text-h3);
+  font-weight: 400;
+  line-height: var(--leading-h3);
+  letter-spacing: var(--tracking-h3);
+  margin: 0;
+}
+.terminal-portfolio :is(article p, article li, #skills .ocean-skill-item, #interests li) {
+  font-family: var(--font-sans);
+  line-height: var(--leading-body);
+  letter-spacing: var(--tracking-body);
+}
+
+/* Section header: one structure, composed differently per section */
+.section-head {
+  row-gap: var(--space-m);
+  padding-bottom: var(--space-xl);
+  align-items: end;
+}
+.section-head > .depth-mark { grid-row: 1; }
+.section-head > .ocean-h2 { grid-row: 2; }
+.section-head .section-dek {
+  font-size: var(--text-body);
+  line-height: var(--leading-body);
+  max-width: var(--measure-narrow);
+  color: var(--ink-3E4C52, #3E4C52);
+  text-wrap: pretty;
+}
+.section-head .section-aside {
+  font-family: var(--font-display);
+  font-variation-settings: 'opsz' 36;
+  font-style: italic;
+  font-weight: 300;
+  font-size: var(--text-lead);
+  line-height: var(--leading-lead);
+  letter-spacing: -0.012em;
+  max-width: 30ch;
+  color: var(--ink-171717, #171717);
+}
+/* surface-left: title broad on the left, dek tucked to its right on the title baseline */
+.section-head--left > .depth-mark { grid-column: 1 / span 4; }
+.section-head--left > .ocean-h2 { grid-column: 1 / span 7; }
+.section-head--left > .section-dek { grid-column: 9 / span 4; grid-row: 2; }
+.section-head--left > .section-aside { grid-column: 2 / span 6; grid-row: 3; margin-top: var(--space-l); }
+/* drift: title enters from the third column, dek steps further right beneath it */
+.section-head--drift > .depth-mark { grid-column: 3 / span 4; }
+.section-head--drift > .ocean-h2 { grid-column: 3 / span 8; }
+.section-head--drift > .section-dek { grid-column: 7 / span 5; grid-row: 3; }
+/* counter: title sits on the right half, dek hangs below on the same left edge */
+.section-head--counter > .depth-mark { grid-column: 6 / span 4; }
+.section-head--counter > .ocean-h2 { grid-column: 6 / span 7; }
+.section-head--counter > .section-dek { grid-column: 6 / span 5; grid-row: 3; }
+/* stacked: title left, dek indented one column */
+.section-head--stacked > .depth-mark { grid-column: 1 / span 4; }
+.section-head--stacked > .ocean-h2 { grid-column: 1 / span 8; }
+.section-head--stacked > .section-dek { grid-column: 2 / span 5; grid-row: 3; }
+
+/* ---------------------------------------------------------------------------
+   01 · Cover — "A journey without horizons"
+   --------------------------------------------------------------------------- */
+.minimal-hero {
+  min-height: 100svh;
+  align-content: end;
+  padding-block: 22vh 17vh;
+}
+.minimal-hero h1 {
+  grid-column: 1 / span 12;
+  margin: 0;
+  font-size: var(--text-cover);
+  color: var(--ink-171717, #171717);
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  column-gap: var(--gutter);
+}
+.minimal-hero .cover-line { grid-column: 1 / span 12; display: block; }
+.minimal-hero .cover-line--drift {
+  grid-column: 5 / span 8;
+  font-style: italic;
+  font-weight: 300;
+  margin-top: -0.04em;
+}
+/* Annotation top-right, headline bottom-left: the cover reads on a diagonal */
+.minimal-hero .depth-mark {
+  grid-column: 9 / span 4;
+  grid-row: 1;
+  text-align: right;
+  margin-bottom: var(--space-xl);
+}
+.minimal-hero h1 { grid-row: 2; }
+
+/* ---------------------------------------------------------------------------
+   02 · Introduction — name, statement, supporting biography
+   --------------------------------------------------------------------------- */
+.terminal-overview {
+  padding-block: 18vh 0;
+  row-gap: 0;
+}
+.terminal-overview .intro-name {
+  grid-column: 1 / span 12;
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  column-gap: var(--gutter);
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-name);
+  font-weight: 400;
+  line-height: 0.94;
+  letter-spacing: var(--tracking-name);
+  color: var(--ink-171717, #171717);
+}
+.terminal-overview .intro-name-first { grid-column: 1 / span 12; }
+/* "Hery" steps in to column 5, the same edge the statement below starts on */
+.terminal-overview .intro-name-last { grid-column: 5 / span 8; }
+.terminal-overview .depth-mark {
+  grid-column: 1 / span 3;
+  grid-row: 2;
+  align-self: start;
+  margin-top: calc(var(--space-2xl) + 0.55em);
+}
+.terminal-overview .lead {
+  grid-column: 5 / span 7;
+  grid-row: 2;
+  margin: var(--space-2xl) 0 0;
+}
+.terminal-overview .intro-support {
+  grid-column: 8 / span 4;
+  grid-row: 3;
+  margin: var(--space-xl) 0 0;
+  max-width: 44ch;
+  font-size: var(--text-body);
+  line-height: var(--leading-body);
+  color: var(--ink-3E4C52, #3E4C52);
+}
+
+/* Entries are wrapped by reveal blocks, so rhythm is set on the list, not on siblings */
+.entry-list > * + * { margin-top: var(--space-xl); }
+.entry-list--wide > * + * { margin-top: var(--space-2xl); }
+
+/* ---------------------------------------------------------------------------
+   03 · Experience — index on the left, narrative on a reading column
+   --------------------------------------------------------------------------- */
+.exp-entry { row-gap: var(--space-m); align-items: start; }
+.exp-entry .exp-when { grid-column: 1 / span 2; padding-top: 0.55em; }
+.exp-entry .exp-who { grid-column: 3 / span 4; }
+.exp-entry .exp-what { grid-column: 8 / span 5; }
+.exp-entry .exp-role { margin-top: var(--space-xs); color: var(--ink-3E4C52, #3E4C52); }
+.exp-entry .exp-tags { margin-top: var(--space-m); }
+.exp-entry .exp-what li + li { margin-top: var(--space-s); }
+.exp-entry .exp-what li { max-width: var(--measure-narrow); color: var(--ink-1F2428, #1F2428); }
+
+/* ---------------------------------------------------------------------------
+   05 · Skills — a typographic index: category, then its tools
+   --------------------------------------------------------------------------- */
+.skill-band { row-gap: var(--space-l); align-items: start; }
+.skill-band .skill-head { grid-column: 6 / span 3; }
+.skill-band .skill-head p { margin-top: var(--space-xs); color: var(--ink-52595E, #52595E); font-size: var(--text-small); line-height: 1.55; max-width: 32ch; }
+.skill-band .skill-list {
+  grid-column: 9 / span 4;
+  display: grid;
+  row-gap: var(--space-s);
+}
+.terminal-portfolio #skills .ocean-skill-item { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 0; }
+.terminal-portfolio #skills .ocean-skill-item > span:first-child { font-size: var(--text-h3); line-height: 1.25; letter-spacing: var(--tracking-h3); }
+
+/* ---------------------------------------------------------------------------
+   06 · Education — a chronology with a hanging date column
+   --------------------------------------------------------------------------- */
+.edu-entry { align-items: start; row-gap: var(--space-xs); }
+.edu-entry .edu-when { grid-column: 1 / span 2; padding-top: 0.5em; }
+.edu-entry .edu-body { grid-column: 3 / span 6; }
+.edu-entry .edu-where { grid-column: 10 / span 3; padding-top: 0.5em; text-align: right; }
+.edu-entry .edu-degree { margin-top: var(--space-2xs); color: var(--ink-3E4C52, #3E4C52); }
+.edu-entry .edu-highlights { margin-top: var(--space-s); max-width: var(--measure); }
+.edu-entry .edu-highlights p + p { margin-top: var(--space-xs); }
+
+/* ---------------------------------------------------------------------------
+   07 · Languages — oversized words, one per line, stepping deeper
+   --------------------------------------------------------------------------- */
+.lang-list { display: grid; row-gap: clamp(6px, 1vw, 14px); }
+/* Each word starts on its own grid column (col k starts at (k-1)·(100% + gutter)/12); its level follows it */
+.lang-row {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  column-gap: var(--space-m);
+  margin-left: calc((var(--lang-col, 3) - 1) * (100% + var(--gutter)) / 12);
+}
+.lang-row .lang-name {
+  font-size: var(--text-display);
+  margin: 0;
+  color: var(--ink-171717, #171717);
+}
+.lang-row:nth-child(2) { --lang-col: 4; }
+.lang-row:nth-child(3) { --lang-col: 5; }
+.lang-row:nth-child(4) { --lang-col: 6; }
+.lang-row:nth-child(5) { --lang-col: 5; }
+.lang-row:nth-child(6) { --lang-col: 4; }
+
+/* ---------------------------------------------------------------------------
+   08 · Interests — three vignettes descending across the grid
+   --------------------------------------------------------------------------- */
+.interest-flow { row-gap: var(--space-2xl); }
+.interest-flow .interest { max-width: 52ch; }
+.interest-flow .interest:nth-child(1) { grid-column: 1 / span 5; }
+.interest-flow .interest:nth-child(2) { grid-column: 5 / span 5; }
+.interest-flow .interest:nth-child(3) { grid-column: 8 / span 5; }
+.interest-flow .interest ul { margin-top: var(--space-s); }
+.interest-flow .interest li + li { margin-top: var(--space-xs); }
+
+/* ---------------------------------------------------------------------------
+   09 · Contact
+   --------------------------------------------------------------------------- */
+.contact-grid { row-gap: var(--space-xl); align-items: start; }
+.contact-grid .contact-mail { grid-column: 1 / span 9; }
+.contact-grid .contact-mail .meta { display: block; margin-bottom: var(--space-s); }
+.terminal-portfolio #contact .contact-address {
+  font-family: var(--font-display);
+  font-variation-settings: 'opsz' 72;
+  font-style: italic;
+  font-weight: 300;
+  font-size: clamp(34px, 5.2vw, 84px);
+  line-height: 1.04;
+  letter-spacing: -0.025em;
+  overflow-wrap: anywhere;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.16em;
+}
+.contact-grid .contact-cv { grid-column: 7 / span 5; }
+.contact-grid .contact-cv .ocean-h3 { margin-top: var(--space-xs); }
+.contact-grid .contact-actions { display: flex; flex-wrap: wrap; gap: var(--space-s); margin-top: var(--space-m); }
+
+/* Text-weight controls: quiet outlines, never filled panels */
+.text-control {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: var(--tracking-mono);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: 11px 18px;
+  border: 1px solid var(--rule-20, rgba(23, 23, 23, 0.2));
+  color: var(--ink-171717, #171717);
+  background: transparent;
+  transition: border-color 160ms ease;
+}
+.text-control:hover { border-color: currentColor; }
+.text-control--bare { padding-inline: 0; border-color: transparent; }
+
+.terminal-social {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-s);
+  margin-top: var(--space-2xl);
+  font-family: var(--font-mono);
+  font-size: var(--text-meta);
+}
+.terminal-portfolio #contact .terminal-social a { font-size: var(--text-meta); }
+
+/* ---------------------------------------------------------------------------
+   Links & focus
+   --------------------------------------------------------------------------- */
+.terminal-portfolio a {
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 4px;
+  text-decoration-color: var(--rule-20, rgba(23, 23, 23, 0.3));
+  transition: text-decoration-color 160ms, color 160ms;
+}
+.terminal-portfolio a:hover { text-decoration-color: currentColor; }
+.terminal-portfolio :is(a, button):focus-visible { outline: 1px solid currentColor; outline-offset: 6px; }
+.terminal-portfolio .ocean-skill-item:hover { transform: none; }
+
+/* ---------------------------------------------------------------------------
+   Tablet: keep the grid, relax the offsets
+   --------------------------------------------------------------------------- */
+@media (max-width: 1100px) {
+  .minimal-hero .cover-line--drift { grid-column: 3 / span 10; }
+  .terminal-overview .lead { grid-column: 4 / span 9; }
+  .terminal-overview .intro-support { grid-column: 6 / span 7; }
+  .exp-entry .exp-who { grid-column: 1 / span 6; grid-row: 2; }
+  .exp-entry .exp-when { grid-column: 1 / span 6; grid-row: 1; padding-top: 0; }
+  .exp-entry .exp-what { grid-column: 7 / span 6; grid-row: 1 / span 2; }
+  .skill-band .skill-head { grid-column: 3 / span 4; }
+  .skill-band .skill-list { grid-column: 7 / span 6; }
+  .section-head--counter > :is(.depth-mark, .ocean-h2, .section-dek) { grid-column-start: 4; grid-column-end: span 9; }
+  .section-head--drift > :is(.depth-mark, .ocean-h2) { grid-column: 2 / span 10; }
+  .section-head--left > .ocean-h2 { grid-column: 1 / span 8; }
+  .section-head--left > .section-dek { grid-column: 1 / span 7; grid-row: 3; }
+  .section-head--left > .section-aside { grid-row: 4; }
+  .interest-flow .interest:nth-child(n) { grid-column: auto / span 6; }
+  .interest-flow .interest:nth-child(2) { grid-column: 7 / span 6; }
+  .interest-flow .interest:nth-child(3) { grid-column: 4 / span 7; }
+}
+
+/* ---------------------------------------------------------------------------
+   Mobile: one clear reading column
+   --------------------------------------------------------------------------- */
+@media (max-width: 767px) {
+  :root { --section-gap: 132px; }
+  .ed-grid { grid-template-columns: minmax(0, 1fr); }
+  .ed-grid > *,
+  .minimal-hero h1 > * { grid-column: 1 / -1 !important; grid-row: auto !important; }
+  .minimal-hero h1 { grid-template-columns: minmax(0, 1fr); }
+  .minimal-hero { padding-block: 24vh 16vh; }
+  .minimal-hero .cover-line--drift { padding-left: 1.1em; }
+  .terminal-overview { padding-top: 14vh; }
+  .terminal-overview .intro-name { grid-template-columns: minmax(0, 1fr); }
+  .terminal-overview .intro-name > * { grid-column: 1 / -1 !important; }
+  .terminal-overview .intro-name-last { padding-left: 1.2em; }
+  .minimal-hero .depth-mark { text-align: left; }
+  .terminal-overview .depth-mark { margin-top: var(--space-xl); }
+  .terminal-overview .lead { margin-top: var(--space-s); }
+  .terminal-overview .intro-support { margin-top: var(--space-l); padding-left: var(--space-l); }
+  .section-head { row-gap: var(--space-s); padding-bottom: var(--space-l); }
+  .section-head .section-dek { padding-left: 0; }
+  .section-head .section-aside { margin-top: var(--space-s) !important; }
+  .entry-list--wide > * + * { margin-top: var(--space-xl); }
+  .exp-entry { row-gap: var(--space-s); }
+  .exp-entry .exp-what { margin-top: var(--space-xs); }
+  .skill-band { row-gap: var(--space-m); }
+  .skill-band .skill-list { padding-left: var(--space-l); }
+  .edu-entry .edu-where { text-align: left; padding-top: var(--space-xs); }
+  .edu-entry .edu-when { padding-top: 0; }
+  .lang-row { margin-left: 0; column-gap: var(--space-s); }
+  .lang-row:nth-child(even) { margin-left: var(--space-l); }
+  .interest-flow { row-gap: var(--space-xl); }
+  .interest-flow .interest:nth-child(2) { padding-left: var(--space-l); }
+  .contact-grid { row-gap: var(--space-l); }
+}
+
+/* ---------------------------------------------------------------------------
+   Scroll-driven ASCII word reveal and disappearance system (unchanged)
+   --------------------------------------------------------------------------- */
+.ascii-word {
+  display: inline-block;
+  position: relative;
+  white-space: pre;
+  vertical-align: baseline;
+}
+.ascii-source {
+  opacity: 0;
+  pointer-events: none;
+  user-select: text;
+}
+.ascii-visual {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  user-select: none;
+  white-space: pre;
+  overflow: visible;
+  letter-spacing: inherit;
+  font-family: inherit;
+  font-weight: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  text-transform: inherit;
+}
+
+.terminal-portfolio [data-journey-runway] { overflow: visible; }
+.terminal-portfolio #global { overflow: visible; }
+
+@media (prefers-reduced-motion: reduce) {
+  .ascii-word, .ascii-source { opacity: 1 !important; }
+  .ascii-visual { visibility: hidden; }
+  [data-editorial-section] { transition: none; }
+  .terminal-portfolio *, .terminal-portfolio *::before, .terminal-portfolio *::after { scroll-behavior: auto !important; }
+}
+
+@media print {
+  .ascii-visual { display: none !important; }
+  .ascii-word, .ascii-source, .ascii-text, [data-editorial-section] { opacity: 1 !important; }
+}

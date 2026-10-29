@@ -6,6 +6,7 @@ import { createAsciiJellyfishField } from './asciiOceanLife';
 import { AsciiText, useEditorialScroll } from './TerminalEditorial';
 import { waterShade } from './terminalMotion';
 import { background, fluid, type BackgroundHandle } from 'asciify-engine/kit';
+import { createHeroCurrent, type HeroRect } from './heroCurrent';
 
 // ============================================================================
 // STRICT FACTUAL DATA SOURCE — EXTRACTED VERBATIM FROM "Engl CV Xavier Hery.pdf"
@@ -1674,6 +1675,13 @@ function syncFluidOcean(abyss: number) {
   }
 }
 
+/** Whale tile strength in open water, beside a line of text, and right behind it. */
+const READING_WHALE_ALPHA = [1, 0.62, 0.34];
+/** Viewport line boxes of the page's reading text, shared by the fluid clear map and the whales. */
+const readingZones: { read: () => readonly { left: number; top: number; width: number; height: number }[] } = {
+  read: () => []
+};
+
 /** Reading text the current quiets behind (line boxes, measured on layout changes only). */
 const FLUID_CLEAR_SELECTOR = 'main h1, main h2, main h3, main p, main li, main a, main button';
 
@@ -1692,12 +1700,13 @@ const FluidOceanBackground: React.FC = React.memo(() => {
     let generation = 0;
     let readGeneration = -1;
     let readScrollY = NaN;
+    let readHeroVersion = -1;
     const range = document.createRange();
     const measure = () => {
       const sy = window.scrollY;
       const next: typeof docRects = [];
       document.querySelectorAll<HTMLElement>(FLUID_CLEAR_SELECTOR).forEach((el) => {
-        if (el.parentElement?.closest(FLUID_CLEAR_SELECTOR) || el.closest('[data-journey-runway]')) return;
+        if (el.parentElement?.closest(FLUID_CLEAR_SELECTOR) || el.closest('[data-journey-runway], [data-hero-stage]')) return;
         range.selectNodeContents(el);
         const lines: typeof docRects = [];
         for (const r of Array.from(range.getClientRects())) {
@@ -1719,9 +1728,10 @@ const FluidOceanBackground: React.FC = React.memo(() => {
     };
     const readClear = () => {
       const sy = window.scrollY;
-      if (sy === readScrollY && generation === readGeneration) return viewRects;
+      if (sy === readScrollY && generation === readGeneration && heroZone.version === readHeroVersion) return viewRects;
       readScrollY = sy;
       readGeneration = generation;
+      readHeroVersion = heroZone.version;
       const vh = window.innerHeight;
       viewRects = [];
       for (const r of docRects) {
@@ -1729,6 +1739,8 @@ const FluidOceanBackground: React.FC = React.memo(() => {
         if (top > vh + 48 || top + r.height < -48) continue;
         viewRects.push({ left: r.left, top, width: r.width, height: r.height });
       }
+      // The pinned hero supplies its own live rects (headline, then the gathering name)
+      for (const r of heroZone.rects) viewRects.push(r);
       return viewRects;
     };
     let measureTimer = 0;
@@ -1737,6 +1749,7 @@ const FluidOceanBackground: React.FC = React.memo(() => {
       measureTimer = window.setTimeout(measure, 120);
     };
     measure();
+    readingZones.read = readClear;
     const layoutObserver = new ResizeObserver(scheduleMeasure);
     layoutObserver.observe(document.documentElement);
     document.fonts?.addEventListener?.('loadingdone', scheduleMeasure);
@@ -1789,6 +1802,7 @@ const FluidOceanBackground: React.FC = React.memo(() => {
       window.clearTimeout(measureTimer);
       range.detach();
       handle.destroy();
+      if (readingZones.read === readClear) readingZones.read = () => [];
       if (fluidOcean.handle === handle) {
         fluidOcean.handle = null;
         fluidOcean.host = null;
@@ -2719,6 +2733,8 @@ const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ 
     // Fish school density raster (same cell grid as the whale) + list of touched cells
     let fishBuf = new Float32Array(0);
     let fishTouched = new Int32Array(0);
+    // Reading-text proximity per whale cell (0 open water, 1 near a line, 2 behind a line)
+    let readingBuf = new Uint8Array(0);
 
     // Pre-allocated 1D separable harmonic tables for the generative ocean shader (zero trig in inner loop)
     let colSin1 = new Float32Array(0);
@@ -2870,6 +2886,7 @@ const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ 
       haloBuf = new Uint8Array(total);
       fishBuf = new Float32Array(total);
       fishTouched = new Int32Array(total);
+      readingBuf = new Uint8Array(total);
 
       colSin1 = new Float32Array(oceanCols);
       colCos1 = new Float32Array(oceanCols);
@@ -4109,6 +4126,34 @@ const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ 
         wakeParticles.splice(0, wakeParticles.length - 60);
       }
 
+      // 4A. READING CLEARANCE — whales keep their path, but where their tiles pass behind a
+      // measured line of page text (or the hero typography) they draw at reduced strength with a
+      // soft one-cell falloff, so the copy stays legible without any panel behind it. Computed
+      // before the occlusion fill, which leaves the cells right behind a line open.
+      const rdMinC = Math.max(1, curMinC - 1);
+      const rdMaxC = Math.min(cols - 2, curMaxC + 1);
+      const rdMinR = Math.max(1, curMinR - 1);
+      const rdMaxR = Math.min(rows - 2, curMaxR + 1);
+      for (let r = rdMinR; r <= rdMaxR; r++) readingBuf.fill(0, r * cols + rdMinC, r * cols + rdMaxC + 1);
+      if (!isFocus && rdMaxC >= rdMinC) {
+        const lines = readingZones.read();
+        for (let i = 0; i < lines.length; i++) {
+          const ln = lines[i];
+          const c0 = Math.max(rdMinC, Math.floor(ln.left / cellSize) - 1);
+          const c1 = Math.min(rdMaxC, Math.floor((ln.left + ln.width) / cellSize) + 1);
+          const r0 = Math.max(rdMinR, Math.floor(ln.top / cellSize) - 1);
+          const r1 = Math.min(rdMaxR, Math.floor((ln.top + ln.height) / cellSize) + 1);
+          for (let r = r0; r <= r1; r++) {
+            const edgeR = r === r0 || r === r1;
+            const off = r * cols;
+            for (let c = c0; c <= c1; c++) {
+              const level = edgeR || c === c0 || c === c1 ? 1 : 2;
+              if (level > readingBuf[off + c]) readingBuf[off + c] = level;
+            }
+          }
+        }
+      }
+
       // 4B. WHALE OCCLUSION — the whale silhouette (body + its one-cell halo rim) is filled with
       // the exact water colour, so the Asciify fluid underneath never shows through a whale.
       // Done before everything drawn behind the whales, which therefore reads exactly as before.
@@ -4132,6 +4177,8 @@ const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ 
                 covered = occBuf[up + k] > 0 || occBuf[mid + k] > 0 || occBuf[down + k] > 0;
               }
             }
+            // Right behind a line of text the thinned whale lets the typography show through
+            if (covered && readingBuf[mid + c] === 2) covered = false;
             if (covered && runStart < 0) runStart = c;
             else if (!covered && runStart >= 0) {
               ctx.rect(runStart * cellSize, r * cellSize, (c - runStart) * cellSize, cellSize);
@@ -4591,7 +4638,7 @@ const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ 
           const occ = occBuf[idx];
 
           if (occ > 0) {
-            const targetAlpha = whaleAlpha;
+            const targetAlpha = whaleAlpha * READING_WHALE_ALPHA[readingBuf[idx]];
             if (targetAlpha !== activeAlpha) {
               ctx.globalAlpha = targetAlpha;
               activeAlpha = targetAlpha;
@@ -4641,9 +4688,10 @@ const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ 
               (occBuf[idx + cols + 1] > 0 ? 1 : 0);
 
             if (n > 0) {
-              if (fgWhaleAlpha !== activeAlpha) {
-                ctx.globalAlpha = fgWhaleAlpha;
-                activeAlpha = fgWhaleAlpha;
+              const haloAlpha = fgWhaleAlpha * READING_WHALE_ALPHA[readingBuf[idx]];
+              if (haloAlpha !== activeAlpha) {
+                ctx.globalAlpha = haloAlpha;
+                activeAlpha = haloAlpha;
               }
               const haloCol = n >= 3 ? 2 : n >= 2 ? 1 : 0;
               ctx.drawImage(
@@ -4718,17 +4766,76 @@ const NAME_WORDS = [
   { text: 'Hery', offset: 1.5 }
 ];
 
+/** One span per letter so each can break up on its own; spaces stay plain text. */
+const heroLetters = (text: string) =>
+  Array.from(text).map((ch, i) =>
+    ch === ' ' ? (
+      ' '
+    ) : (
+      <span key={i} className="hero-letter" data-hero-letter>
+        {ch}
+      </span>
+    )
+  );
+
+/** Calm zones of the hero typography (viewport px), read by the fluid clear map and the whales. */
+const heroZone: { rects: HeroRect[]; version: number } = { rects: [], version: 0 };
+
+/**
+ * The hero current's canvas: fixed between the fluid (below) and the whales (above), so the
+ * whales keep priority over the fragments. It redraws only when the scroll position changes.
+ */
+const HeroCurrentLayer: React.FC = React.memo(() => {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const section = document.getElementById('home');
+    const stage = section?.querySelector<HTMLElement>('[data-hero-stage]');
+    if (!canvas || !section || !stage) return;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const handle = createHeroCurrent({
+      canvas,
+      section,
+      stage,
+      letters: Array.from(stage.querySelectorAll<HTMLElement>('[data-hero-letter]')),
+      name: 'XAVIER HERY',
+      onZones: (rects) => {
+        if (rects.length === 0 && heroZone.rects.length === 0) return;
+        heroZone.rects = rects;
+        heroZone.version++;
+      }
+    });
+    return () => handle.destroy();
+  }, []);
+
+  return <canvas ref={canvasRef} aria-hidden="true" className="fixed inset-0 z-0 pointer-events-none w-full h-full" />;
+});
+
 const ProgressiveOceanEntry: React.FC<ProgressiveOceanEntryProps> = React.memo(() => (
   <>
-    <section id="home" data-editorial-section className="minimal-hero relative">
-      <h1><AsciiText text="A journey without horizons" /></h1>
-    </section>
-    <section id="introduction" data-editorial-section className="terminal-overview relative">
-      <h2><AsciiText text="Xavier Hery" /></h2>
-      <div className="overview-copy">
-        <p data-text-rank="2"><AsciiText text={CV_DATA.heroIntroConcise} /></p>
-        <p data-text-rank="3" className="text-[#52595E]"><AsciiText text={CV_DATA.heroIntroSecondary} /></p>
+    {/* Cover: a scroll runway with a pinned stage. The headline's real letters break into the
+        current drawn by HeroCurrentLayer, which gathers them into the name; the stage is kept
+        out of the word-reveal system because it does not move while pinned. */}
+    <section id="home" data-editorial-section className="hero-runway relative">
+      <div className="hero-stage" data-hero-stage data-ascii-preserve>
+        <div className="minimal-hero ed-grid">
+          <h1 className="display">
+            <span className="cover-line">{heroLetters('A journey without')}</span>
+            <span className="cover-line cover-line--drift">{heroLetters('horizons')}</span>
+          </h1>
+        </div>
       </div>
+    </section>
+    {/* Introduction: the ASCII name above carries the heading visually; the semantic name stays here */}
+    <section id="introduction" data-editorial-section className="terminal-overview ed-grid relative">
+      <h2 className="intro-name intro-name--carried">
+        <span className="intro-name-first"><AsciiText text="Xavier" /></span>{' '}
+        <span className="intro-name-last"><AsciiText text="Hery" /></span>
+      </h2>
+      <p className="depth-mark" aria-hidden="true"><AsciiText text="10 m — sunlit zone" /></p>
+      <p className="lead" data-text-rank="2"><AsciiText text={CV_DATA.heroIntroConcise} /></p>
+      <p className="intro-support" data-text-rank="3"><AsciiText text={CV_DATA.heroIntroSecondary} /></p>
     </section>
   </>
 ));
@@ -4738,71 +4845,7 @@ const ProgressiveOceanEntry: React.FC<ProgressiveOceanEntryProps> = React.memo((
 // ============================================================================
 
 const GLOBAL_PORTFOLIO_CSS = `
-  @font-face {
-    font-family: 'Geist';
-    font-style: normal;
-    font-weight: 100 900;
-    font-display: swap;
-    src: url('/fonts/Geist-Variable.woff2') format('woff2');
-  }
-  @font-face {
-    font-family: 'Geist Sans';
-    font-style: normal;
-    font-weight: 100 900;
-    font-display: swap;
-    src: url('/fonts/Geist-Variable.woff2') format('woff2');
-  }
-  @font-face {
-    font-family: 'Geist Mono';
-    font-style: normal;
-    font-weight: 100 900;
-    font-display: swap;
-    src: url('/fonts/GeistMono-Variable.woff2') format('woff2');
-  }
-
-  :root {
-    --font-sans: 'Geist', 'Geist Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-    --font-mono: 'Geist Mono', 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-    --font-serif: var(--font-sans);
-    --font-hero: var(--font-sans);
-    --font-hero-title: var(--font-sans);
-    --font-body: var(--font-sans);
-    --font-title: var(--font-sans);
-    --font-annot: var(--font-mono);
-    --font-tech: var(--font-mono);
-
-    /* Typographic Scale Tokens */
-    --text-hero: clamp(38px, 6.2vw, 84px);
-    --text-name: clamp(48px, 7.5vw, 98px);
-    --text-h2: clamp(28px, 3.6vw, 44px);
-    --text-h3: clamp(20px, 2vw, 28px);
-    --text-body: clamp(16px, 1.05vw, 17.5px);
-    --text-body-sm: clamp(14px, 0.95vw, 15px);
-    --text-meta: 12px;
-    --text-meta-xs: 11px;
-
-    /* Leading / Line Heights */
-    --leading-hero: 1.14;
-    --leading-name: 1.08;
-    --leading-h2: 1.22;
-    --leading-h3: 1.32;
-    --leading-body: 1.65;
-    --leading-meta: 1.4;
-
-    /* Tracking / Letter Spacing */
-    --tracking-hero: -0.028em;
-    --tracking-name: -0.035em;
-    --tracking-h2: -0.025em;
-    --tracking-h3: -0.015em;
-    --tracking-body: -0.011em;
-    --tracking-mono: 0.04em;
-    --tracking-mono-wide: 0.08em;
-
-    /* Text Colors */
-    --ink-primary: #171717;
-    --ink-secondary: #3E4C52;
-    --ink-muted: #52595E;
-  }
+  /* Families, type scale and spacing tokens live in terminal.css (the single source). */
   /* Global CSS Reset for sizing and overflow prevention */
   *, *::before, *::after {
     box-sizing: border-box;
@@ -4846,7 +4889,7 @@ const GLOBAL_PORTFOLIO_CSS = `
   /* Typography tokens */
   .font-sans, .cv-arch, .font-arch { font-family: var(--font-sans); font-style: normal; }
   .font-mono, .font-tech, .font-annot { font-family: var(--font-mono); font-style: normal; letter-spacing: var(--tracking-mono); }
-  .font-serif { font-family: var(--font-sans); }
+  .font-serif { font-family: var(--font-display); font-variation-settings: 'opsz' 72; }
   
   /* Hero / Cover display typography */
   #home .font-display, .hero-display { font-family: var(--font-hero); }
@@ -5042,44 +5085,44 @@ const GLOBAL_PORTFOLIO_CSS = `
 
 interface FloatingSectionHeaderProps {
   sectionId?: string;
-  number?: string;
-  eyebrow?: string;
   title: string;
   description?: string;
-  coordinates?: string;
-  asideAccent?: React.ReactNode;
+  /** Oceanographic depth reference for this stretch of the descent, e.g. "200 m — twilight zone". */
+  depth?: string;
+  /** How the header sits on the 12-column grid; each section picks its own. */
+  layout?: 'left' | 'drift' | 'counter' | 'stacked';
+  /** A single Newsreader statement set beneath the header. */
+  asideAccent?: string;
 }
 
 const FloatingSectionHeader: React.FC<FloatingSectionHeaderProps> = ({
-  sectionId,
   title,
   description,
+  depth,
+  layout = 'left',
   asideAccent
-}) => {
-  return (
-    <div className="relative pt-8 pb-6 sm:pt-12 sm:pb-8">
-      <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-end">
-        <div className="lg:col-span-7">
-          <h2 className="ocean-h2 text-[#171717]">
-            <BioWords text={title} />
-          </h2>
-        </div>
-        {description && (
-          <div className="lg:col-span-5 flex flex-col justify-end">
-            <p className="ocean-body text-sm sm:text-base text-[#1F2428] leading-relaxed">
-              <BioWords text={description} />
-            </p>
-            {asideAccent && (
-              <div className="mt-3 transition-opacity duration-700 delay-300">
-                {asideAccent}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-};
+}) => (
+  <header className={`section-head section-head--${layout} ed-grid relative z-10`}>
+    {depth && (
+      <p className="depth-mark" aria-hidden="true">
+        <AsciiText text={depth} />
+      </p>
+    )}
+    <h2 className="ocean-h2 text-[#171717]">
+      <BioWords text={title} />
+    </h2>
+    {description && (
+      <p className="section-dek">
+        <BioWords text={description} />
+      </p>
+    )}
+    {asideAccent && (
+      <p className="section-aside">
+        <AsciiText text={asideAccent} />
+      </p>
+    )}
+  </header>
+);
 
 export default function App() {
   useEditorialScroll();
@@ -5135,6 +5178,7 @@ export default function App() {
       <style>{GLOBAL_PORTFOLIO_CSS}</style>
 
       <FluidOceanBackground />
+      <HeroCurrentLayer />
       <AsciiWhaleBackground mode="ambient" />
 
       {downloadToast && (
@@ -5157,53 +5201,39 @@ export default function App() {
             <RevealBlock variant="section">
               <FloatingSectionHeader
                 sectionId="experience"
+                layout="left"
+                depth="120 m — sunlit zone"
                 title="Operational & commercial internships"
                 description="Practical experience across business development, commercial quotation workflows, and international air and sea freight coordination."
-                asideAccent={
-                  <p className="font-serif italic text-base text-[#52595E]">
-                    <AsciiText text="Translating cross-cultural adaptability into rigorous B2B execution and freight logistics." />
-                  </p>
-                }
+                asideAccent="Translating cross-cultural adaptability into rigorous B2B execution and freight logistics."
               />
             </RevealBlock>
 
-            <div className="space-y-16 sm:space-y-24 mt-4">
+            <div className="entry-list entry-list--wide">
               {CV_DATA.experiences.map((exp, idx) => (
                 <RevealBlock key={exp.id} delayMs={idx * 100}>
-                  <article className="grid grid-cols-1 lg:grid-cols-12 gap-6 sm:gap-10 items-start relative group">
-                    {/* Left Column: Temporal Anchor & Organization */}
-                    <div className="lg:col-span-5 space-y-2.5">
-                      <div className="flex items-center gap-3">
-                        
-                        <span className="font-mono text-xs text-[#52595E] tracking-wider uppercase">
-                          <BioWords text={exp.date} />
-                        </span>
-                      </div>
-
-                      <h3 className="ocean-h3 text-2xl sm:text-3xl lg:text-4xl text-[#171717] font-medium tracking-tight">
+                  <article className="exp-entry ed-grid relative">
+                    <p className="exp-when meta">
+                      <BioWords text={exp.date} />
+                    </p>
+                    <div className="exp-who">
+                      <h3 className="ocean-h3 text-[#171717]">
                         <BioWords text={exp.company} />
                       </h3>
-
-                      <p className="font-sans text-base text-[#3E4C52] font-normal">
+                      <p className="exp-role body-copy">
                         <BioWords text={exp.role} />
                       </p>
-
-                      <p className="font-mono text-[11px] text-[#52595E]/90 tracking-wide uppercase pt-1">
+                      <p className="exp-tags meta">
                         <BioWords text={exp.domainTag.replace(/\s*\/\s*/g, ' · ')} />
                       </p>
                     </div>
-
-                    {/* Right Column: Flowing Narrative & Deliverables */}
-                    <div className="lg:col-span-7 lg:pl-6 max-w-2xl">
-                      <ul className="space-y-4">
-                        {exp.concisePoints.map((pt, i) => (
-                          <li key={i} className="flex items-start gap-4 text-base text-[#1F2428] leading-relaxed">
-                            
-                            <span className="font-sans"><BioWords text={pt} /></span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
+                    <ul className="exp-what">
+                      {exp.concisePoints.map((pt, i) => (
+                        <li key={i} className="body-copy">
+                          <BioWords text={pt} />
+                        </li>
+                      ))}
+                    </ul>
                   </article>
                 </RevealBlock>
               ))}
@@ -5215,6 +5245,8 @@ export default function App() {
             <RevealBlock variant="section">
               <FloatingSectionHeader
                 sectionId="global"
+                layout="drift"
+                depth="200 – 1 000 m — twilight zone"
                 title="Seven cities across Europe, the Middle East & Asia"
                 description="An international chronology shaped by living across Doha, Paris, Jakarta, Moscow, Singapore, Pau, and Shanghai."
               />
@@ -5238,46 +5270,40 @@ export default function App() {
             <RevealBlock variant="section">
               <FloatingSectionHeader
                 sectionId="skills"
+                layout="counter"
+                depth="1 000 m — midnight zone"
                 title="Technical & creative toolset"
                 description="Organized across automated workflows, media production, and enterprise productivity suites."
               />
             </RevealBlock>
 
-            <div className="mt-8 sm:mt-12 grid grid-cols-1 md:grid-cols-3 gap-10 sm:gap-12 lg:gap-16">
-              {CV_DATA.skills.map((category, idx) => {
-                const columnOffsetClass = idx === 1 ? 'md:pt-8' : idx === 2 ? 'md:pt-4' : '';
-                return (
-                  <RevealBlock key={category.id} delayMs={idx * 110} className={columnOffsetClass}>
-                    <div className="space-y-6">
-                      <div>
-                        
-                        <h3 className="ocean-h3 text-xl sm:text-2xl text-[#171717] font-medium tracking-tight">
-                          <BioWords text={category.title} />
-                        </h3>
-                        <p className="font-sans text-xs sm:text-sm text-[#52595E] mt-1.5 leading-relaxed">
-                          <BioWords text={category.verbatimSummary} />
-                        </p>
-                      </div>
-
-                      <div className="space-y-3.5 pt-2">
-                        {category.items.map((skill) => (
-                          <div
-                            key={skill.name}
-                            className="ocean-skill-item group flex flex-col sm:flex-row sm:items-baseline justify-between gap-1 py-1"
-                          >
-                            <span className="font-sans text-base sm:text-lg text-[#171717] font-normal group-hover:text-[#3E5666] transition-colors">
-                              <BioWords text={skill.name} />
-                            </span>
-                            <span className="font-mono text-[11px] text-[#52595E]/80 tracking-wider uppercase shrink-0">
-                              <BioWords text={skill.classification} />
-                            </span>
-                          </div>
-                        ))}
-                      </div>
+            <div className="entry-list entry-list--wide">
+              {CV_DATA.skills.map((category, idx) => (
+                <RevealBlock key={category.id} delayMs={idx * 110}>
+                  <div className="skill-band ed-grid">
+                    <div className="skill-head">
+                      <h3 className="ocean-h3 text-[#171717]">
+                        <BioWords text={category.title} />
+                      </h3>
+                      <p>
+                        <BioWords text={category.verbatimSummary} />
+                      </p>
                     </div>
-                  </RevealBlock>
-                );
-              })}
+                    <div className="skill-list">
+                      {category.items.map((skill) => (
+                        <div key={skill.name} className="ocean-skill-item">
+                          <span className="text-[#171717]">
+                            <BioWords text={skill.name} />
+                          </span>
+                          <span className="meta">
+                            <BioWords text={skill.classification} />
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </RevealBlock>
+              ))}
             </div>
           </section>
 
@@ -5286,46 +5312,42 @@ export default function App() {
             <RevealBlock variant="section">
               <FloatingSectionHeader
                 sectionId="education"
+                layout="stacked"
+                depth="2 500 m — midnight zone"
                 title="Academic chronology"
                 description="A global educational trajectory across international schools in Europe and Asia, culminating in the ESSCA Bachelor curriculum."
               />
             </RevealBlock>
 
-            <div className="mt-8 sm:mt-12 space-y-12 sm:space-y-16">
+            <div className="entry-list">
               {CV_DATA.education.map((edu, idx) => (
                 <RevealBlock key={edu.id} delayMs={idx * 80}>
-                  <article className="grid grid-cols-1 md:grid-cols-12 gap-4 md:gap-8 items-start relative group">
-                    {/* Date Column */}
-                    <div className="md:col-span-3 font-mono text-xs sm:text-[13px] tracking-wider uppercase text-[#52595E] pt-1">
+                  <article className="edu-entry ed-grid relative">
+                    <p className="edu-when meta">
                       <BioWords text={edu.date} />
-                    </div>
-
-                    {/* Main Institution & Degree */}
-                    <div className="md:col-span-6 space-y-1.5">
-                      <h3 className="ocean-h3 text-xl sm:text-2xl text-[#171717] font-medium tracking-tight">
+                    </p>
+                    <div className="edu-body">
+                      <h3 className="ocean-h3 text-[#171717]">
                         <BioWords text={edu.institution} />
                       </h3>
                       {edu.degree && (
-                        <p className="font-sans text-sm sm:text-base text-[#3E4C52] font-normal">
+                        <p className="edu-degree body-copy">
                           <BioWords text={edu.degree} />
                         </p>
                       )}
                       {edu.highlights && (
-                        <div className="pt-3 space-y-2 max-w-xl">
+                        <div className="edu-highlights">
                           {edu.highlights.map((h, hIdx) => (
-                            <p key={hIdx} className="font-sans text-xs sm:text-sm text-[#2B353B] leading-relaxed">
-                              <span className="font-mono text-[#52595E] mr-2">·</span>
+                            <p key={hIdx} className="body-copy text-[#2B353B]">
                               <BioWords text={h} />
                             </p>
                           ))}
                         </div>
                       )}
                     </div>
-
-                    {/* Location & Metadata */}
-                    <div className="md:col-span-3 md:text-right font-mono text-xs tracking-wider uppercase text-[#52595E] pt-1">
+                    <p className="edu-where meta">
                       <BioWords text={edu.locationLabel} />
-                    </div>
+                    </p>
                   </article>
                 </RevealBlock>
               ))}
@@ -5337,31 +5359,28 @@ export default function App() {
             <RevealBlock variant="section">
               <FloatingSectionHeader
                 sectionId="languages"
+                layout="left"
+                depth="4 000 m — abyssal zone"
                 title="Across languages"
                 description="Multilingual fluency forged through living and studying in six distinct linguistic regions."
               />
             </RevealBlock>
 
-            <div className="mt-8 sm:mt-12 grid grid-cols-1 md:grid-cols-2 gap-x-16 lg:gap-x-24 gap-y-10 sm:gap-y-14">
+            <div className="lang-list">
               {CV_DATA.languages.map((lang, idx) => (
-                <RevealBlock key={lang.id} delayMs={idx * 60}>
-                  <div className="group flex items-baseline justify-between gap-4 pb-4">
-                    <div className="flex items-baseline gap-3">
-                      
-                      <h3 className="ocean-h3 text-2xl sm:text-3xl text-[#171717] font-medium tracking-tight">
-                        <BioWords text={lang.language} />
-                      </h3>
-                    </div>
-                    <div className="font-mono text-xs uppercase tracking-wider text-[#52595E] whitespace-nowrap text-right">
-                      {lang.levelCode && (
-                        <>
-                          <span className="text-[#1F2428] font-medium"><BioWords text={lang.levelCode} /></span>
-                          <span className="text-[#52595E]/50 mx-1.5">·</span>
-                        </>
-                      )}
-                      <span><BioWords text={lang.levelWord} /></span>
-                    </div>
-                  </div>
+                <RevealBlock key={lang.id} delayMs={idx * 60} className="lang-row ed-grid">
+                  <h3 className="lang-name display">
+                    <BioWords text={lang.language} />
+                  </h3>
+                  <p className="lang-level meta">
+                    {lang.levelCode && (
+                      <>
+                        <BioWords text={lang.levelCode} />
+                        <span aria-hidden="true"> · </span>
+                      </>
+                    )}
+                    <BioWords text={lang.levelWord} />
+                  </p>
                 </RevealBlock>
               ))}
             </div>
@@ -5372,27 +5391,26 @@ export default function App() {
             <RevealBlock variant="section">
               <FloatingSectionHeader
                 sectionId="interests"
+                layout="drift"
+                depth="5 200 m — abyssal plain"
                 title="Disciplines & cultural monitoring"
                 description="Athletic conditioning, music production, macroeconomic research, and luxury retail observation."
               />
             </RevealBlock>
 
-            <div className="mt-8 sm:mt-12 grid grid-cols-1 lg:grid-cols-3 gap-12 sm:gap-16">
+            <div className="interest-flow ed-grid">
               {CV_DATA.interests.map((interest, idx) => (
-                <RevealBlock key={interest.id} delayMs={idx * 80}>
-                  <div className="space-y-4">
-                    
-                    <h3 className="ocean-h3 text-xl sm:text-2xl text-[#171717] font-medium tracking-tight">
-                      <BioWords text={interest.title} />
-                    </h3>
-                    <ul className="space-y-3 pt-1">
-                      {interest.bullets.map((b, bIdx) => (
-                        <li key={bIdx} className="font-sans text-sm sm:text-base leading-relaxed text-[#2B353B]">
-                          <BioWords text={b} />
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
+                <RevealBlock key={interest.id} delayMs={idx * 80} className="interest">
+                  <h3 className="ocean-h3 text-[#171717]">
+                    <BioWords text={interest.title} />
+                  </h3>
+                  <ul>
+                    {interest.bullets.map((b, bIdx) => (
+                      <li key={bIdx} className="body-copy text-[#2B353B]">
+                        <BioWords text={b} />
+                      </li>
+                    ))}
+                  </ul>
                 </RevealBlock>
               ))}
             </div>
@@ -5403,58 +5421,45 @@ export default function App() {
             <RevealBlock variant="section">
               <FloatingSectionHeader
                 sectionId="contact"
+                layout="stacked"
+                depth="6 000 m — hadal zone"
                 title="Direct correspondence"
                 description="Open for B2B development, international logistics coordination, and strategic business inquiries."
               />
             </RevealBlock>
 
-            <div className="mt-8 sm:mt-12 grid grid-cols-1 lg:grid-cols-12 gap-12 sm:gap-16 items-start">
-              {/* Email Editorial Action */}
-              <div className="lg:col-span-6 space-y-4">
-                <div className="font-mono text-xs uppercase tracking-widest text-[#52595E]">
+            <div className="contact-grid ed-grid">
+              {/* The address is the last large statement of the descent */}
+              <div className="contact-mail">
+                <span className="meta">
                   <AsciiText text="electronic mail" />
-                </div>
-                <div>
-                  <a
-                    href={CV_DATA.emailHref}
-                    className="font-sans text-2xl sm:text-3xl lg:text-4xl text-[#171717] font-medium tracking-tight hover:text-[#3E5666] transition-colors underline underline-offset-8 decoration-1 decoration-[#171717]/30 hover:decoration-[#3E5666]"
-                  >
-                    <AsciiText text={CV_DATA.email} />
-                  </a>
-                </div>
-                <div className="pt-2">
-                  <button
-                    onClick={handleCopyEmail}
-                    className="font-mono text-xs uppercase tracking-wider text-[#52595E] hover:text-[#171717] transition-colors inline-flex items-center gap-2"
-                  >
-                    <AsciiText text={copiedEmail ? '[ copied to clipboard ]' : '[ copy address ]'} />
+                </span>
+                <a href={CV_DATA.emailHref} className="contact-address text-[#171717]">
+                  <AsciiText text={CV_DATA.email} />
+                </a>
+                <div className="contact-actions">
+                  <button onClick={handleCopyEmail} className="text-control text-control--bare">
+                    <AsciiText text={copiedEmail ? 'copied to clipboard' : 'copy address'} />
                   </button>
                 </div>
               </div>
 
-              {/* Dossier PDF Action */}
-              <div className="lg:col-span-6 space-y-4">
-                <div className="font-mono text-xs uppercase tracking-widest text-[#52595E]">
-                  <AsciiText text="curriculum vitae dossier" />
-                </div>
-                <h3 className="ocean-h3 text-xl sm:text-2xl text-[#171717] font-medium tracking-tight">
+              <div className="contact-cv">
+                <span className="meta">
+                  <AsciiText text="curriculum vitae" />
+                </span>
+                <h3 className="ocean-h3 text-[#171717]">
                   <BioWords text="Original English CV PDF" />
                 </h3>
-                <p className="font-mono text-xs text-[#52595E] tracking-wide">
+                <p className="meta">
                   <BioWords text="Engl CV Xavier Hery.pdf · official document" />
                 </p>
-                <div className="flex flex-wrap items-center gap-4 pt-2">
-                  <button
-                    onClick={() => setCvModalOpen(true)}
-                    className="px-5 py-3 border border-[#171717]/25 hover:border-[#171717] transition-colors text-[#171717] font-mono text-xs uppercase tracking-wider inline-flex items-center gap-2"
-                  >
+                <div className="contact-actions">
+                  <button onClick={() => setCvModalOpen(true)} className="text-control">
                     <Eye className="w-4 h-4" />
                     <AsciiText text="preview document" />
                   </button>
-                  <button
-                    onClick={handleDownloadOriginalCv}
-                    className="px-6 py-3 bg-[#B6C5B0] hover:bg-[#9BB4B5] transition-colors text-[#171717] font-mono text-xs font-medium uppercase tracking-wider inline-flex items-center gap-2"
-                  >
+                  <button onClick={handleDownloadOriginalCv} className="text-control">
                     <Download className="w-4 h-4" />
                     <AsciiText text="download pdf" />
                   </button>
