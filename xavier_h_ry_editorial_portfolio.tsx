@@ -2,7 +2,9 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Eye, Download, X, Menu, Check, ArrowDown } from 'lucide-react';
 import { loadLandDots, type LandDots } from './glyphcssGlobe';
-import { createAsciiJellyfishField, createAsciiFishingBoat, boatSurfaceY } from './asciiOceanLife';
+import { createAsciiJellyfishField } from './asciiOceanLife';
+import { AsciiText, useEditorialScroll } from './TerminalEditorial';
+import { waterShade } from './terminalMotion';
 
 // ============================================================================
 // STRICT FACTUAL DATA SOURCE — EXTRACTED VERBATIM FROM "Engl CV Xavier Hery.pdf"
@@ -542,79 +544,13 @@ interface RevealBlockProps {
   variant?: 'section' | 'item';
 }
 
-const RevealBlock: React.FC<RevealBlockProps> = ({
-  children,
-  delayMs = 0,
-  className = '',
-  variant = 'item'
-}) => {
-  const ref = useRef<HTMLDivElement | null>(null);
-  const [visible, setVisible] = useState<boolean>(false);
-
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-
-    if (
-      typeof window !== 'undefined' &&
-      window.matchMedia &&
-      window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    ) {
-      setVisible(true);
-      return;
-    }
-
-    const isSection = variant === 'section';
-    // For section introductions:
-    // rootMargin bottom of -28% ensures the section content remains 100% visually hidden
-    // while in the lower 28% of the viewport. It triggers strictly when the section enters
-    // the central / lower-middle zone (rect.top <= 72% vh).
-    //
-    // For individual items inside an already active section:
-    // rootMargin bottom of -15% allows items to reveal fluidly as the visitor scrolls through the section content.
-    const rootMargin = isSection ? '0px 0px -28% 0px' : '0px 0px -15% 0px';
-    const threshold = isSection ? 0.08 : 0.04;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            setVisible(true);
-          } else if (entry.boundingClientRect.top > 0) {
-            // Element has moved below the reveal zone (user scrolled up past the section)
-            // Reset to hidden so the previous section retains complete visual focus
-            setVisible(false);
-          }
-          // Note: if entry.boundingClientRect.top <= 0, the element is scrolled ABOVE the viewport.
-          // We intentionally do NOT hide it, ensuring smooth document continuity as the user scrolls downward.
-        });
-      },
-      { threshold, rootMargin }
-    );
-
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [variant]);
-
-  return (
-    <div
-      ref={ref}
-      data-revealed={visible ? 'true' : 'false'}
-      style={{ transitionDelay: `${delayMs}ms` }}
-      className={`transition-[opacity,transform] duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] will-change-transform ${
-        visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6 pointer-events-none'
-      } ${className}`}
-    >
-      {children}
-    </div>
-  );
-};
-
-const ScrambleText: React.FC<{ text: string; className?: string }> = ({ text, className = '' }) => (
-  <span className={className}>{text}</span>
+// Layout-only wrapper; one shared controller owns all editorial scroll updates.
+const RevealBlock: React.FC<RevealBlockProps> = ({ children, className = '' }) => (
+  <div className={className}>{children}</div>
 );
-
-const BioWords: React.FC<{ text: string }> = ({ text }) => <>{text}</>;
+const ScrambleText = AsciiText;
+const BioWords = AsciiText;
+const PlainText = ({ text }: { text: string }) => <>{text}</>;
 
 // TideWord: a word that drifts between the regular and italic cuts of Instrument Serif
 // (like a changing current). Staying within ONE typeface keeps the size, x-height and
@@ -1038,7 +974,7 @@ const HeroAsciiCanvas: React.FC<{ isInteractive?: boolean }> = React.memo(({ isI
           oCtx.restore();
         }
 
-        oCtx.font = '500 9px "Tenor Sans", sans-serif';
+        oCtx.font = '500 9px "JetBrains Mono", monospace';
         oCtx.textAlign = 'center';
         oCtx.textBaseline = 'middle';
         for (const wp of WHALE_MIGRATION_WAYPOINTS) {
@@ -1667,7 +1603,7 @@ function buildAbyssCss(): string {
     --glass-chip-bg: rgba(255, 255, 255, 0.20);
     --glass-border: rgba(0, 0, 0, 0.10);
   }`);
-  rules.push(`html, body { background-color: var(--ocean-background); }`);
+  rules.push(`html, body { background-color: var(--ocean-background); overflow-x: hidden; }`);
   rules.push(`.glass-panel { background-color: var(--glass-bg); border: 1px solid var(--glass-border); backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px); }`);
   rules.push(`.glass-chip { background-color: var(--glass-chip-bg); border: 1px solid var(--glass-border); }`);
   rules.push(`.glass-rule { border-color: var(--glass-border) !important; }`);
@@ -1793,7 +1729,7 @@ const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations }) => 
     const inactiveLabelWidths = new Float32Array(locations.length);
     const measureCityLabels = () => {
       ctx.save();
-      ctx.font = '14px "Tenor Sans", sans-serif';
+      ctx.font = '14px "JetBrains Mono", monospace';
       for (let i = 0; i < locations.length; i++) {
         activeLabelWidths[i] = ctx.measureText(locations[i].city.toUpperCase()).width;
       }
@@ -2156,7 +2092,7 @@ const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations }) => 
         // Label (reached cities only), with collision avoidance — active wins
         if (rv < 0.5) continue;
         const off = JOURNEY_LABEL_OFFSETS[locations[k].id] || { dx: 13, dy: -11, align: 'left' as CanvasTextAlign };
-        ctx.font = isActive ? '14px "Tenor Sans", sans-serif' : '11.5px "JetBrains Mono", monospace';
+        ctx.font = isActive ? '14px "JetBrains Mono", monospace' : '11.5px "JetBrains Mono", monospace';
         const label = isActive ? locations[k].city.toUpperCase() : locations[k].city;
         const tw = isActive ? activeLabelWidths[k] : inactiveLabelWidths[k];
         let align: CanvasTextAlign = off.align;
@@ -2297,8 +2233,8 @@ const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations }) => 
   const activeIdx = Math.max(0, locations.findIndex((l) => l.id === activeId));
 
   return (
-    <div ref={stageRef} className="relative w-full h-full overflow-hidden">
-      <canvas ref={canvasRef} aria-hidden="true" className="absolute inset-0 w-full h-full block" />
+    <div ref={stageRef} className="relative w-full max-w-full h-full overflow-hidden">
+      <canvas ref={canvasRef} aria-hidden="true" className="absolute inset-0 w-full max-w-full h-full block" />
 
       {/* Subtle water-matched veil softens whale glyphs directly behind the destination caption */}
       <div
@@ -2336,18 +2272,18 @@ const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations }) => 
               className={`col-start-1 row-start-1 ${isCityActive ? 'globe-caption-in' : 'opacity-0'}`}
             >
               <p className="font-mono text-xs uppercase tracking-[0.18em] text-[#3E4C52]">
-                <BioWords text={`${String(cIdx + 1).padStart(2, '0')} / ${String(locations.length).padStart(2, '0')}`} />
+                <PlainText text={`${String(cIdx + 1).padStart(2, '0')} / ${String(locations.length).padStart(2, '0')}`} />
               </p>
               <h3 className="mt-2 font-arch text-[38px] md:text-[54px] lg:text-[62px] leading-[1.02] tracking-[-0.02em] text-[#162633]">
-                <BioWords text={city.city} />
+                <PlainText text={city.city} />
               </h3>
               {city.country && city.country !== city.city && (
                 <p className="mt-2.5 font-mono text-xs md:text-[13px] uppercase tracking-[0.16em] text-[#3E4C52]">
-                  <BioWords text={city.country} />
+                  <PlainText text={city.country} />
                 </p>
               )}
               <p className="mt-3 font-mono text-lg md:text-[22px] leading-none tracking-[0.06em] text-[#1F3B57]">
-                <BioWords text={city.period} />
+                <PlainText text={city.period} />
               </p>
             </div>
           );
@@ -2719,29 +2655,20 @@ const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ 
     }));
     let ambientOffsetY = 0;
 
-    // Pre-allocated 1D Ocean Surface Wave LUT (12px horizontal spacing, zero inner-loop trig)
-    const SURF_STEP = 12;
-    let surfaceLut = new Float32Array(0);
-    let surfaceLutLen = 0;
-
-    // Anatomical ASCII jellyfish (3 species, 3 parallax depth planes) and the ASCII fishing boat.
-    // Both are rendered by this component's single RAF loop through pre-baked glyph atlases
+    // Anatomical ASCII jellyfish (3 species, 3 parallax depth planes).
+    // Rendered by this component's single RAF loop through pre-baked glyph atlases
     // (see asciiOceanLife.ts) — no extra loop, no per-glyph fillText, no shadowBlur.
     const jellyfishField = createAsciiJellyfishField(atlasScale);
-    const fishingBoat = createAsciiFishingBoat(atlasScale);
     let oceanLifeDisposed = false;
     // Re-bake glyph atlases once the web font is ready (first bake may use the fallback face)
     if (typeof document !== 'undefined' && document.fonts && document.fonts.ready) {
       document.fonts.ready.then(() => {
         if (oceanLifeDisposed) return;
         jellyfishField.rebake();
-        fishingBoat.rebake();
       });
     }
     (window as unknown as Record<string, unknown>).__oceanLife = {
-      jellyfish: jellyfishField.stats,
-      boat: fishingBoat.state,
-      fishNow: fishingBoat.forceFishing
+      jellyfish: jellyfishField.stats
     };
 
     const handleResize = () => {
@@ -2790,8 +2717,6 @@ const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ 
         colReading[oc] = 0.7 + 0.3 * (t * t * (3 - 2 * t));
       }
       docScrollable = Math.max(1, document.documentElement.scrollHeight - h);
-      surfaceLutLen = Math.ceil(w / SURF_STEP) + 3;
-      surfaceLut = new Float32Array(surfaceLutLen);
 
       // Pre-render subtle hydrographic dot matrix once on resize
       bgGridCanvas.width = w * dpr;
@@ -2892,10 +2817,8 @@ const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ 
       auto.pauseLeft = 0;
     };
 
-    const getMinUnderwaterYFrac = (h: number, clearancePx = 110): number => {
-      if (isFocus || h <= 0) return 0.18;
-      const curSurfY = boatSurfaceY(viewW, h) - scrollMotionRef.current.smoothScrollY * 0.34;
-      return Math.min(0.56, Math.max(0.18, (curSurfY + clearancePx) / h));
+    const getMinUnderwaterYFrac = (_h?: number, _clearancePx = 0): number => {
+      return 0.05; // Whales can reach the very top of the site
     };
 
     const startNextPhase = (wh: WhaleAgent, w: number, h: number) => {
@@ -2903,7 +2826,6 @@ const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ 
       auto.pauseAt = -1;
       auto.pauseLeft = 0;
       const facing: 1 | -1 = Math.cos(wh.heading) >= 0 ? 1 : -1;
-      const minYFrac = getMinUnderwaterYFrac(h, Math.min(w, h) * 0.18);
       const r = Math.random();
 
       if (r < 0.24 && feed.state !== 'school') {
@@ -2911,7 +2833,7 @@ const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ 
         // (never while a school is waiting — the encounter takes priority)
         auto.phase = 'cruise';
         auto.dir = facing;
-        auto.targetYFrac = rand(Math.max(0.2, minYFrac), 0.82);
+        auto.targetYFrac = rand(0.06, 0.82);
         auto.targetSpeed = rand(1.7, 2.5) * wh.scale;
       } else if (r < 0.32) {
         // Brief, slow glide
@@ -2927,7 +2849,7 @@ const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ 
         const lo = ahead > 0 ? Math.min(0.88, xNow + 0.22) : 0.12;
         const hi = ahead > 0 ? 0.88 : Math.max(0.12, xNow - 0.22);
         auto.targetXFrac = lo < hi ? rand(lo, hi) : rand(0.15, 0.85);
-        auto.targetYFrac = rand(minYFrac, 0.84);
+        auto.targetYFrac = rand(0.06, 0.84);
         auto.targetSpeed = rand(1.2, 2.2) * wh.scale;
         auto.phaseDuration = rand(7, 12); // safety timeout
         auto.pauseAt = Math.random() < 0.15 ? rand(1.5, 3.5) : -1;
@@ -3045,8 +2967,8 @@ const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ 
       } else if (auto.phase === 'offscreen') {
         speed = auto.curSpeed;
         if (auto.phaseTime >= auto.phaseDuration) {
-          // Re-enter from the opposite side, continuing the same heading below the waterline
-          auto.targetYFrac = rand(Math.max(0.24, getMinUnderwaterYFrac(h, bodyLenPx * 0.28)), 0.78);
+          // Re-enter from the opposite side, continuing the same heading (roaming from top to bottom)
+          auto.targetYFrac = rand(0.06, 0.80);
           auto.targetSpeed = rand(1.5, 2.2) * wh.scale;
           auto.curSpeed = auto.targetSpeed;
           placeWhaleOffscreen(wh, w, h, segLen);
@@ -3148,7 +3070,7 @@ const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ 
       cx = Math.max(w * 0.12, Math.min(w * 0.88, cx));
       cy = scrolling
         ? Math.max(-h * edgeAllowance, Math.min(h * (1 + edgeAllowance), cy))
-        : Math.max(h * 0.16, Math.min(h * 0.84, cy));
+        : Math.max(h * 0.06, Math.min(h * 0.86, cy));
       feed.cx = cx;
       feed.cy = cy;
       feed.swimDir = Math.random() < 0.5 ? 1 : -1;
@@ -3213,9 +3135,9 @@ const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ 
       const sm = scrollMotionRef.current;
 
       if (!wh.initialized) {
-        // Opening screen placement: calm distant presence in open water, safely below the surface waterline
+        // Opening screen placement: graceful presence in open water spanning from upper to lower depths
         wh.x = idx === 0 ? w * 0.64 : w * 0.24;
-        wh.y = idx === 0 ? h * 0.70 : h * 0.36;
+        wh.y = idx === 0 ? h * 0.58 : h * 0.18;
         wh.heading = idx === 0 ? -0.08 : 0.14;
         for (let k = 0; k < SPINE_NODES; k++) {
           wh.spineX[k] = wh.x - Math.cos(wh.heading) * k * segLen;
@@ -3243,12 +3165,12 @@ const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ 
           ? w * (0.58 - (1 - entryCalm) * 0.06) + Math.sin(sProg * Math.PI * 2.4 + time * 0.1) * (w * 0.22)
           : w * (0.26 + (1 - entryCalm) * 0.08) + Math.cos(sProg * Math.PI * 2.0 + 1.2 + time * 0.085) * (w * 0.2);
 
-      // On the opening screen (entryCalm ~ 1), keep Whale 0 in the lower water column and Whale 1 comfortably below the surface waterline
-      const entryScreenY = idx === 0 ? h * 0.70 : h * 0.36;
+      // Opening screen & scroll lanes: allow both whales to glide throughout the water column including the top of the site
+      const entryScreenY = idx === 0 ? h * 0.58 : h * 0.16;
       const dossierScreenY =
         idx === 0
-          ? h * (0.3 + sProg * 0.42)
-          : h * (0.24 + (1 - sProg * 0.5) * 0.46);
+          ? h * (0.16 + sProg * 0.50)
+          : h * (0.08 + (1 - sProg * 0.5) * 0.40);
       const rawScrollLinkedScreenY =
         entryScreenY * entryCalm + dossierScreenY * (1 - entryCalm);
 
@@ -3403,83 +3325,21 @@ const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ 
         wh.spineY[k] += pullY;
       }
 
-      // Soft underwater ceiling beneath the ocean surface waterline so whales never breach into the air
-      if (!isFocus) {
-        const curSurfY = boatSurfaceY(w, h) - sm.smoothScrollY * 0.34;
-        const minWhaleY = curSurfY + bodyLenPx * 0.25;
-        if (wh.y < minWhaleY) {
-          const pushDown = (minWhaleY - wh.y) * Math.min(1, 0.18 * dtScale);
-          wh.y += pushDown;
-          for (let k = 0; k < SPINE_NODES; k++) {
-            wh.spineY[k] += pushDown;
-          }
-          if (Math.sin(wh.heading) < 0) {
-            wh.heading += (Math.cos(wh.heading) >= 0 ? 1 : -1) * 0.025 * dtScale;
-          }
+      // Boundary near the very top of the viewport so whales can reach the top of the site and bank smoothly
+      const minWhaleY = Math.max(18, bodyLenPx * 0.04);
+      if (wh.y < minWhaleY) {
+        const pushDown = (minWhaleY - wh.y) * Math.min(1, 0.14 * dtScale);
+        wh.y += pushDown;
+        for (let k = 0; k < SPINE_NODES; k++) {
+          wh.spineY[k] += pushDown;
+        }
+        if (Math.sin(wh.heading) < 0) {
+          wh.heading += (Math.cos(wh.heading) >= 0 ? 1 : -1) * 0.025 * dtScale;
         }
       }
     };
 
-    // Fast linear interpolation along the 1D ocean surface wave LUT
-    const sampleSurfaceY = (x: number): number => {
-      if (surfaceLutLen === 0) return -999;
-      const fx = Math.max(0, Math.min(surfaceLutLen - 1.001, x / SURF_STEP));
-      const i0 = fx | 0;
-      const frac = fx - i0;
-      return surfaceLut[i0] + (surfaceLut[i0 + 1] - surfaceLut[i0]) * frac;
-    };
 
-    const populateSurfaceLut = (w: number, surfaceBaseY: number) => {
-      const need = Math.ceil(w / SURF_STEP) + 3;
-      if (surfaceLut.length < need) {
-        surfaceLut = new Float32Array(need);
-      }
-      surfaceLutLen = need;
-      const waveAmp = prefersReducedMotion ? 0.18 : 1.0;
-      for (let i = 0; i < need; i++) {
-        const x = i * SURF_STEP;
-        surfaceLut[i] =
-          surfaceBaseY +
-          (Math.sin(x * 0.0046 + time * 0.52) * 3.1 +
-            Math.sin(x * 0.0112 - time * 0.78 + 1.3) * 1.35 +
-            Math.sin(x * 0.026 + time * 1.16) * 0.45) *
-            waveAmp;
-      }
-    };
-
-    // ------------------------------------------------------------------------
-    // ASCII OCEAN SURFACE WATERLINE & MINIMALIST TERMINAL ART SHIP
-    // ------------------------------------------------------------------------
-    // Renders the ocean surface: clear horizontal ASCII wave waterline boundary,
-    // warm bright surface sky world, and a refined terminal ASCII ship floating on the surface.
-    const renderSurfaceBoundaryAndShip = (w: number, h: number, surfaceBaseY: number) => {
-      if (isFocus || surfaceBaseY < -h * 0.35 || surfaceLutLen < 2) return;
-
-      // A sparse three-row band follows the same sampled surface as the hull.
-      // No sky fill or continuous bright crest: the page stays pure white here.
-      ctx.save();
-      ctx.font = '400 9px "JetBrains Mono", monospace';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      const waveStep = 13;
-      const waveChars = ['.', '-', "'", ',', '-'];
-      for (let row = 0; row < 3; row++) {
-        for (let i = 0; i <= Math.ceil(w / waveStep); i++) {
-          const seed = ((i * 73 + row * 31) % 101) / 101;
-          if (seed > 0.42 + row * 0.12) continue;
-          const wx = i * waveStep + row * 4;
-          const wy = sampleSurfaceY(wx) + row * 5 + (seed - 0.5) * 4;
-          const breath = 0.9 + 0.1 * Math.sin(wx * 0.012 + time * 0.3);
-          ctx.fillStyle = `rgba(38, 70, 86, ${((0.16 - row * 0.035) * breath).toFixed(3)})`;
-          ctx.fillText(waveChars[(i + row * 2) % waveChars.length], wx, wy);
-        }
-      }
-      ctx.restore();
-
-      // 3. ASCII fishing boat: pre-composed mosaic hull/deck/wheelhouse, animated gantry,
-      //    line or net, catch, foam and reflection — anchored to the sampled waterline
-      fishingBoat.render(ctx, w, h, time, surfaceBaseY, prefersReducedMotion, sampleSurfaceY);
-    };
 
     // ------------------------------------------------------------------------
     // ASCII BIOLUMINESCENT JELLYFISH (anatomical, multi-species — see asciiOceanLife.ts)
@@ -3567,13 +3427,9 @@ const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ 
       // Preserve overall page progress for creature movement and ocean texture.
       const rawDepth = Math.max(0, Math.min(1, sm.smoothScrollY / docScrollable));
       const depth = rawDepth;
-      // Linear scroll-driven surface waterline: clearly visible near top at scroll=0, recedes immediately on scroll
-      const surfaceBaseY = isFocus ? -999 : boatSurfaceY(w, h) - sm.smoothScrollY * 0.34;
-      if (!isFocus && surfaceBaseY > -h * 0.35) {
-        populateSurfaceLut(w, surfaceBaseY);
-      }
+      const surfaceBaseY = -999;
       // Actual scroll (not the lagging creature position) guarantees white on upward return.
-      const abyss = isFocus ? 0 : abyssFromProgress(globeScrollProgress());
+      const abyss = isFocus ? 0 : (1 - waterShade(window.scrollY, globeScrollGeometry.start, globeScrollGeometry.travel, h) / 255);
       const oceanPresence = isFocus ? 0.88 : 0.4 + depth * 0.46;
       const surfaceLight = isFocus ? 0.6 : (1 - depth) * (1 - abyss);
 
@@ -3653,8 +3509,7 @@ const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ 
       // Light crests belong to the surface; deeper water turns slate
       const crestThreshold = 0.38 + depth * 0.5;
 
-      const minOceanRow =
-        !isFocus && surfaceBaseY > 0 ? Math.max(0, Math.floor((surfaceBaseY - 4) / oceanCell)) : 0;
+      const minOceanRow = 0;
       for (let or = minOceanRow; or < oRows; or++) {
         const rs1 = rowSin1[or];
         const rc1 = rowCos1[or];
@@ -3694,13 +3549,8 @@ const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ 
             waveVal *= colReading[oc];
           }
 
-          // Fade character density into the sampled horizon instead of a rectangular cutoff.
-          const surfaceDistance = isFocus ? 100 : py - sampleSurfaceY(oc * oceanCell);
-          if (surfaceBaseY > -h * 0.35 && surfaceDistance < 0) continue;
-          const horizonT = Math.max(0, Math.min(1, surfaceDistance / (oceanCell * 3)));
-          const horizonOpacity = horizonT * horizonT * (3 - 2 * horizonT);
           if (waveVal > densityCutoff) {
-            ctx.globalAlpha = horizonOpacity;
+            ctx.globalAlpha = 1;
             const norm = Math.min(0.999, (waveVal - densityCutoff) * invSpan);
             const gIdx = (norm * NUM_OCEAN_GLYPHS) | 0;
 
@@ -4601,12 +4451,6 @@ const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ 
       // 7. DEEP-OCEAN BIOLUMINESCENT JELLYFISH — Foreground-margin plane
       renderJellyfishPlanes(w, h, rawDepth, abyss, surfaceBaseY, 2, 2);
 
-      // 7B. Fishing-boat behaviour (time-based state machine; never coupled to scroll position)
-      if (!isFocus) fishingBoat.update(prefersReducedMotion ? dt * 0.15 : dt, surfaceBaseY, h, prefersReducedMotion);
-
-      // 8. OCEAN SURFACE WATERLINE BOUNDARY, REFLECTIONS & SURFACE SHIP (recedes cleanly above viewport on scroll)
-      renderSurfaceBoundaryAndShip(w, h, surfaceBaseY);
-
       animId = requestAnimationFrame(render);
     };
 
@@ -4628,11 +4472,11 @@ const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ 
   return (
     <div
       aria-hidden="true"
-      className={`fixed inset-0 pointer-events-none transition-opacity duration-500 ${
+      className={`fixed inset-0 pointer-events-none transition-opacity duration-500 max-w-full overflow-hidden ${
         mode === 'focus' ? 'z-30 bg-[#F5F3EE]/85 backdrop-blur-[2px]' : 'z-[1]'
       }`}
     >
-      <canvas ref={canvasRef} className="w-full h-full block" />
+      <canvas ref={canvasRef} className="w-full max-w-full h-full block" />
     </div>
   );
 });
@@ -4657,303 +4501,20 @@ const NAME_WORDS = [
   { text: 'Hery', offset: 1.5 }
 ];
 
-const ProgressiveOceanEntry: React.FC<ProgressiveOceanEntryProps> = React.memo(({
-  onExploreDossier,
-  onDownloadPdf
-}) => {
-  const runwayRef = useRef<HTMLDivElement | null>(null);
-  const sectionRef = useRef<HTMLElement | null>(null);
-  const metricsRef = useRef<{ docTop: number; travel: number }>({ docTop: 0, travel: 1 });
-  const [introProgress, setIntroProgress] = useState<number>(0);
-  const [reducedMotion, setReducedMotion] = useState<boolean>(false);
-
-  useEffect(() => {
-    const el = sectionRef.current;
-    if (!el || typeof IntersectionObserver === 'undefined') return;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const entry = entries[0];
-        if (entry && sectionRef.current) {
-          sectionRef.current.dataset.homeOffscreen = entry.isIntersecting ? 'false' : 'true';
-        }
-      },
-      { threshold: 0 }
-    );
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, []);
-
-  useEffect(() => {
-    const mq =
-      typeof window !== 'undefined' && window.matchMedia
-        ? window.matchMedia('(prefers-reduced-motion: reduce)')
-        : null;
-    const isReduced = Boolean(mq?.matches);
-    setReducedMotion(isReduced);
-
-    let rafId = 0;
-    let isLooping = false;
-    let targetP = 0;
-    let currentP = 0;
-
-    const updateMetrics = () => {
-      const el = runwayRef.current;
-      if (!el) return;
-      const rect = el.getBoundingClientRect();
-      metricsRef.current.docTop = rect.top + window.scrollY;
-      metricsRef.current.travel = Math.max(1, rect.height - window.innerHeight);
-    };
-
-    const computeTargetProgress = (): number => {
-      const { docTop, travel } = metricsRef.current;
-      const scrolled = Math.max(0, window.scrollY - docTop);
-      return Math.max(0, Math.min(1, scrolled / travel));
-    };
-
-    // Initialize immediately to current scroll position (handles refresh mid-page cleanly)
-    updateMetrics();
-    targetP = computeTargetProgress();
-    currentP = targetP;
-    setIntroProgress(currentP);
-
-    const tick = () => {
-      const diff = targetP - currentP;
-      if (Math.abs(diff) < 0.0007 || isReduced) {
-        if (currentP !== targetP) {
-          currentP = targetP;
-          setIntroProgress(currentP);
-        }
-        isLooping = false;
-        return;
-      }
-      currentP += diff * 0.22;
-      setIntroProgress(currentP);
-      rafId = requestAnimationFrame(tick);
-    };
-
-    const onScroll = () => {
-      targetP = computeTargetProgress();
-      if (Math.abs(targetP - currentP) < 0.0005) return;
-      if (isReduced) {
-        currentP = targetP;
-        setIntroProgress(currentP);
-        return;
-      }
-      if (!isLooping) {
-        isLooping = true;
-        rafId = requestAnimationFrame(tick);
-      }
-    };
-
-    const onResize = () => {
-      updateMetrics();
-      onScroll();
-    };
-
-    const ro =
-      typeof ResizeObserver !== 'undefined' && runwayRef.current
-        ? new ResizeObserver(onResize)
-        : null;
-    if (ro && runwayRef.current) ro.observe(runwayRef.current);
-
-    window.addEventListener('scroll', onScroll, { passive: true });
-    window.addEventListener('resize', onResize, { passive: true });
-    return () => {
-      if (ro) ro.disconnect();
-      window.removeEventListener('scroll', onScroll);
-      window.removeEventListener('resize', onResize);
-      cancelAnimationFrame(rafId);
-    };
-  }, []);
-
-  const handleDescendInvite = useCallback(() => {
-    const { docTop, travel } = metricsRef.current;
-    const nextScrollY =
-      introProgress < 0.35 ? docTop + travel * 0.45 : docTop + travel * 0.9;
-    window.scrollTo({ top: nextScrollY, behavior: 'smooth' });
-  }, [introProgress]);
-
-  // Phase 1 — The Invitation (0.00 -> 0.24)
-  const p = introProgress;
-  const phase1Opacity = 1 - smoothStepRange(p, 0.02, 0.24);
-  const phase1TranslateY = reducedMotion ? 0 : -smoothStepRange(p, 0.01, 0.25) * 20;
-  const phase1Blur = reducedMotion ? 0 : smoothStepRange(p, 0.05, 0.24) * 3.2;
-
-  const indicatorOpacity = 1 - smoothStepRange(p, 0.01, 0.19);
-  const indicatorTranslateY = reducedMotion ? 0 : smoothStepRange(p, 0.01, 0.19) * 10;
-  const indicatorScaleY = 1 + smoothStepRange(p, 0.0, 0.18) * 0.45;
-
-  // Phase 2 — The Identity: XAVIER HERY (0.25 -> 0.53)
-  const phase2Reveal = smoothStepRange(p, 0.25, 0.53);
-  // Subtle vertical settle as Phase 3 joins beneath the name
-  const identityCenterOffset = reducedMotion ? 0 : (1 - smoothStepRange(p, 0.46, 0.68)) * 34;
-
-  // Phase 3 — The Migration & Experience Introduction (0.48 -> 0.90)
-  const dividerScaleX = smoothStepRange(p, 0.47, 0.63);
-  const group3AReveal = smoothStepRange(p, 0.5, 0.68);
-  const group3BReveal = smoothStepRange(p, 0.61, 0.79);
-  const group3CReveal = smoothStepRange(p, 0.71, 0.89);
-
-  return (
-    <section
-      id="home"
-      ref={sectionRef}
-      data-home-offscreen="false"
-      className="relative"
-    >
-      {/* Scroll runway for natural, unlocked progressive discovery — pure top edge with no header text */}
-      <div ref={runwayRef} className="relative min-h-[240vh] sm:min-h-[255vh]">
-        <div className="sticky top-0 h-[100dvh] min-h-[540px] flex flex-col justify-center py-10 sm:py-14 overflow-hidden">
-          {/* PHASE 1: Spacious Atmospheric Opening Viewport */}
-          <div
-            aria-hidden={phase1Opacity < 0.05}
-            style={{
-              opacity: phase1Opacity,
-              transform: `translateY(${phase1TranslateY}px)`,
-              filter: phase1Blur > 0.05 ? `blur(${(Math.round(phase1Blur * 4) / 4).toFixed(2)}px)` : 'none',
-              pointerEvents: phase1Opacity > 0.15 ? 'auto' : 'none',
-              visibility: phase1Opacity <= 0.01 ? 'hidden' : 'visible'
-            }}
-            className="absolute inset-0 flex flex-col items-center justify-center text-center px-4 select-none z-10"
-          >
-            <div className="max-w-2xl mx-auto">
-              <p
-                aria-label="A journey without horizons"
-                className="font-display text-[42px] sm:text-6xl md:text-7xl text-[#162633] leading-[1.08] tracking-[-0.01em]"
-              >
-                <span aria-hidden="true" className="block">
-                  <span className="ocean-wave-word" style={{ animationDelay: '0.08s', animationDuration: '0.95s' }}>
-                    A
-                  </span>{' '}
-                  <span className="ocean-wave-word" style={{ animationDelay: '0.24s', animationDuration: '0.98s' }}>
-                    journey
-                  </span>{' '}
-                  <span className="ocean-wave-word" style={{ animationDelay: '0.42s', animationDuration: '1.00s' }}>
-                    without
-                  </span>
-                </span>
-                <span aria-hidden="true" className="block mt-0.5 sm:mt-1">
-                  <span
-                    className="ocean-wave-word font-title italic font-normal text-[1.1em] tracking-[-0.005em]"
-                    style={{ animationDelay: '0.66s', animationDuration: '1.12s' }}
-                  >
-                    horizons
-                  </span>
-                </span>
-              </p>
-            </div>
-          </div>
-
-          {/* PHASE 1 Bottom Animated Scroll Indicator */}
-          <button
-            type="button"
-            onClick={handleDescendInvite}
-            aria-label="Descend to explore portfolio"
-            style={{
-              opacity: indicatorOpacity,
-              transform: `translate(-50%, ${indicatorTranslateY}px)`,
-              pointerEvents: indicatorOpacity > 0.18 ? 'auto' : 'none',
-              visibility: indicatorOpacity <= 0.01 ? 'hidden' : 'visible'
-            }}
-            className="absolute bottom-6 sm:bottom-8 left-1/2 z-20 cursor-pointer group"
-          >
-            <span className="ocean-cue-in flex flex-col items-center gap-2.5">
-              <span
-                style={{ transform: `scaleY(${indicatorScaleY.toFixed(3)})` }}
-                className="w-[1px] h-8 sm:h-10 bg-[#3E5666]/30 relative overflow-hidden block origin-top"
-              >
-                <span className="absolute inset-0 bg-[#162633] animate-scroll-line block" />
-              </span>
-            </span>
-          </button>
-
-          {/* PHASES 2 & 3: Progressive Identity & Whale-Linked Introduction (no top text bar) */}
-          <div
-            style={{
-              transform: `translateY(${identityCenterOffset.toFixed(1)}px)`,
-              pointerEvents: phase2Reveal > 0.15 ? 'auto' : 'none',
-              visibility: phase2Reveal <= 0.01 ? 'hidden' : 'visible'
-            }}
-            className="my-auto py-1 sm:py-3 relative z-10"
-          >
-            {/* Phase 2: XAVIER HERY — Controlled ASCII-Shader-Connected Emergence */}
-            <h1
-              aria-label="Xavier Hery"
-              className="font-title text-[#171717] text-[19vw] sm:text-[15vw] lg:text-[clamp(96px,11vw,176px)] leading-[0.92] tracking-[-0.02em] flex flex-wrap items-baseline gap-x-[0.22em]"
-            >
-              {NAME_WORDS.map((word, idx) => {
-                const wordP = smoothStepRange(phase2Reveal, idx * 0.22, idx * 0.22 + 0.6);
-                return (
-                  <span
-                    key={word.text}
-                    aria-hidden="true"
-                    style={{
-                      opacity: reducedMotion ? phase2Reveal : wordP,
-                      transform: reducedMotion ? 'none' : `translateY(${((1 - wordP) * 22).toFixed(1)}px)`,
-                      filter: reducedMotion || wordP > 0.98 ? 'none' : `blur(${(Math.round((1 - wordP) * 5 * 4) / 4).toFixed(2)}px)`
-                    }}
-                    className="inline-block"
-                  >
-                    <TideWord text={word.text} offset={word.offset} />
-                  </span>
-                );
-              })}
-            </h1>
-
-            {/* Phase 3: Progressive Factual Introduction */}
-            <div className="relative pt-4 sm:pt-7 mt-4 sm:mt-7">
-              <div
-                aria-hidden="true"
-                style={{
-                  transform: `scaleX(${dividerScaleX.toFixed(3)})`,
-                  opacity: dividerScaleX
-                }}
-                className="absolute top-0 left-0 right-0 h-[1px] bg-[#162633]/18 origin-left"
-              />
-
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-start">
-                <div aria-hidden="true" className="hidden lg:block lg:col-span-5" />
-
-                {/* Readable Line Groups for the Factual CV Introduction */}
-                <div className="lg:col-span-7 flex flex-col justify-between">
-                  <div>
-                    <p
-                      style={{
-                        opacity: group3AReveal,
-                        transform: `translateY(${reducedMotion ? 0 : (1 - group3AReveal) * 14}px)`
-                      }}
-                      className="font-display text-xl sm:text-2xl lg:text-[28px] xl:text-[31px] text-[#171717] font-medium leading-[1.22]"
-                    >
-                      <BioWords text="Like the whale migrating across oceans without borders, my journey has been shaped by constant movement, living across" />{' '}
-                      <TideWord text="Doha" offset={0} />, <TideWord text="Paris" offset={0.8} />,{' '}
-                      <TideWord text="Jakarta" offset={1.6} />, <TideWord text="Moscow" offset={2.4} />,{' '}
-                      <TideWord text="Singapore" offset={3.2} />, <TideWord text="Pau" offset={4.0} />, and{' '}
-                      <TideWord text="Shanghai" offset={4.8} />.
-                    </p>
-                    <p
-                      style={{
-                        opacity: group3BReveal,
-                        transform: `translateY(${reducedMotion ? 0 : (1 - group3BReveal) * 14}px)`
-                      }}
-                      className="mt-3 sm:mt-4 text-base sm:text-lg lg:text-xl text-[#2B353B] font-normal leading-relaxed max-w-3xl"
-                    >
-                      <BioWords text={CV_DATA.heroIntroSecondary} />
-                    </p>
-                  </div>
-
-
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div aria-hidden="true" className="h-1" />
-        </div>
-      </div>
-
-    </section>
-  );
-});
+const ProgressiveOceanEntry: React.FC<ProgressiveOceanEntryProps> = React.memo(() => (
+  <>
+  <section id="home" data-editorial-section className="minimal-hero relative">
+    <h1><AsciiText text="A journey without horizons" /></h1>
+  </section>
+  <section id="introduction" data-editorial-section className="terminal-overview relative">
+    <h2><AsciiText text="Xavier Hery" /></h2>
+    <div className="overview-copy">
+      <p data-text-rank="2"><AsciiText text={CV_DATA.heroIntroConcise} /></p>
+      <p data-text-rank="3" className="text-[#52595E]"><AsciiText text={CV_DATA.heroIntroSecondary} /></p>
+    </div>
+  </section>
+  </>
+));
 
 // ============================================================================
 // MAIN APPLICATION COMPONENT & REDESIGNED OCEANIC TYPOGRAPHY SYSTEM
@@ -4961,28 +4522,53 @@ const ProgressiveOceanEntry: React.FC<ProgressiveOceanEntryProps> = React.memo((
 
 const GLOBAL_PORTFOLIO_CSS = `
   :root {
-    --font-sans: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    --font-mono: 'IBM Plex Mono', 'JetBrains Mono', ui-monospace, monospace;
-    --font-serif: 'Instrument Serif', 'Cormorant Garamond', Georgia, serif;
-    --font-hero: 'Instrument Serif', 'Cormorant Garamond', Georgia, serif;
-    --font-hero-title: 'Cormorant Garamond', 'Instrument Serif', Georgia, serif;
+    --font-sans: 'JetBrains Mono', monospace;
+    --font-mono: 'JetBrains Mono', monospace;
+    --font-serif: 'JetBrains Mono', monospace;
+    --font-hero: 'JetBrains Mono', monospace;
+    --font-hero-title: 'JetBrains Mono', monospace;
     --font-body: var(--font-sans);
     --font-title: var(--font-sans);
     --font-annot: var(--font-mono);
     --font-tech: var(--font-mono);
   }
-  html { scroll-padding-top: 4.5rem; }
+  /* Global CSS Reset for sizing and overflow prevention */
+  *, *::before, *::after {
+    box-sizing: border-box;
+  }
+  html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+  /* Hide scrollbar visually while keeping full scroll functionality */
+  html {
+    scroll-padding-top: 4.5rem;
+    overflow-y: scroll;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
   body {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
     font-family: var(--font-sans);
-    background-color: #F5F3EE;
-    color: #171717;
-    line-height: 1.62;
+    background-color: #FFFFFF;
+    color: #EDEDED;
+    font-size: 15px;
+    line-height: 1.7;
     letter-spacing: -0.011em;
     font-size-adjust: none;
     font-synthesis: none;
     font-kerning: normal;
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
+  }
+  ::-webkit-scrollbar {
+    display: none;
+    width: 0px;
+    background: transparent;
   }
   button, input, textarea, select { font-family: inherit; }
 
@@ -5190,6 +4776,7 @@ interface FloatingSectionHeaderProps {
 }
 
 const FloatingSectionHeader: React.FC<FloatingSectionHeaderProps> = ({
+  sectionId,
   title,
   description,
   asideAccent
@@ -5198,13 +4785,13 @@ const FloatingSectionHeader: React.FC<FloatingSectionHeaderProps> = ({
     <div className="relative pt-8 pb-6 sm:pt-12 sm:pb-8">
       <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-end">
         <div className="lg:col-span-7">
-          <h2 className="ocean-h2 text-[#171717] transition-[opacity,transform] duration-700 ease-[cubic-bezier(0.16,1,0.3,1)]">
+          <h2 className="ocean-h2 text-[#171717]">
             <BioWords text={title} />
           </h2>
         </div>
         {description && (
           <div className="lg:col-span-5 flex flex-col justify-end">
-            <p className="ocean-body text-sm sm:text-base text-[#1F2428] leading-relaxed transition-opacity duration-700 delay-150">
+            <p className="ocean-body text-sm sm:text-base text-[#1F2428] leading-relaxed">
               <BioWords text={description} />
             </p>
             {asideAccent && (
@@ -5220,61 +4807,15 @@ const FloatingSectionHeader: React.FC<FloatingSectionHeaderProps> = ({
 };
 
 export default function App() {
-  const progressBarRef = useRef<HTMLDivElement | null>(null);
-  const [pastIntro, setPastIntro] = useState<boolean>(false);
+  useEditorialScroll();
+
+
   const [cvModalOpen, setCvModalOpen] = useState<boolean>(false);
   const [copiedEmail, setCopiedEmail] = useState<boolean>(false);
   const [downloadToast, setDownloadToast] = useState<boolean>(false);
 
   useEffect(() => {
     document.title = 'Xavier Hery | International Business, Technology, Strategy';
-  }, []);
-
-  useEffect(() => {
-    let rafPending = false;
-    let rafId = 0;
-    let cachedDocScrollable = 1;
-    let cachedExpThresholdY = 600;
-
-    const measureDoc = () => {
-      const h = window.innerHeight;
-      cachedDocScrollable = Math.max(1, document.documentElement.scrollHeight - h);
-      const expEl = document.getElementById('experience');
-      cachedExpThresholdY = expEl ? expEl.offsetTop - h * 0.35 : cachedDocScrollable * 0.18;
-    };
-
-    const updateScrollState = () => {
-      rafPending = false;
-      const scrollTop = window.scrollY;
-      const ratio = Math.min(1, Math.max(0, scrollTop / cachedDocScrollable));
-      if (progressBarRef.current) {
-        progressBarRef.current.style.transform = `scaleX(${ratio.toFixed(4)})`;
-      }
-      const nextPastIntro = scrollTop >= cachedExpThresholdY;
-      setPastIntro((prev) => (prev === nextPastIntro ? prev : nextPastIntro));
-    };
-
-    const handleScroll = () => {
-      if (!rafPending) {
-        rafPending = true;
-        rafId = requestAnimationFrame(updateScrollState);
-      }
-    };
-
-    const handleResize = () => {
-      measureDoc();
-      handleScroll();
-    };
-
-    measureDoc();
-    updateScrollState();
-    window.addEventListener('scroll', handleScroll, { passive: true });
-    window.addEventListener('resize', handleResize, { passive: true });
-    return () => {
-      window.removeEventListener('scroll', handleScroll);
-      window.removeEventListener('resize', handleResize);
-      cancelAnimationFrame(rafId);
-    };
   }, []);
 
   const scrollToSection = useCallback((id: string) => {
@@ -5315,22 +4856,8 @@ export default function App() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-[var(--ocean-background)] text-[#171717] antialiased selection:bg-[#B6C5B0] selection:text-[#171717] [overflow-x:clip]">
+    <div className="terminal-portfolio min-h-screen w-full max-w-full bg-[var(--ocean-background)] text-[#171717] antialiased selection:bg-neutral-700 selection:text-[#EDEDED]">
       <style>{GLOBAL_PORTFOLIO_CSS}</style>
-
-      {/* Persistent Oceanic Scroll Depth Indicator */}
-      <div
-        className={`fixed top-0 left-0 right-0 h-[2px] bg-[#9BB4B5]/40 z-50 pointer-events-none transition-opacity duration-500 ${
-          pastIntro ? 'opacity-100' : 'opacity-0'
-        }`}
-        aria-hidden="true"
-      >
-        <div
-          ref={progressBarRef}
-          className="h-full w-full origin-left will-change-transform bg-gradient-to-r from-[#162633] via-[#3E5666] to-[#6C8D91]"
-          style={{ transform: 'scaleX(0)' }}
-        />
-      </div>
 
       <AsciiWhaleBackground mode="ambient" />
 
@@ -5341,7 +4868,7 @@ export default function App() {
         </div>
       )}
 
-      <main className="relative z-10 max-w-[1440px] mx-auto px-4 sm:px-8 ocean-legible">
+      <main className="relative z-10 w-full max-w-[1440px] mx-auto px-4 sm:px-8 ocean-legible overflow-x-hidden">
         {/* SECTION 01: PROGRESSIVE OCEAN ENTRY & INTRODUCTION (Hero Preserved) */}
         <ProgressiveOceanEntry
           onExploreDossier={handleExploreDossier}
@@ -5350,7 +4877,7 @@ export default function App() {
 
         <div className="cv-arch mt-16 sm:mt-24 lg:mt-32 space-y-28 sm:space-y-36">
           {/* SECTION 02: EXPERIENCE (De-boxed, Floating Editorial Timeline) */}
-          <section id="experience" className="relative">
+          <section id="experience" data-editorial-section className="relative">
             <RevealBlock variant="section">
               <FloatingSectionHeader
                 sectionId="experience"
@@ -5358,7 +4885,7 @@ export default function App() {
                 description="Practical experience across business development, commercial quotation workflows, and international air and sea freight coordination."
                 asideAccent={
                   <p className="font-serif italic text-base text-[#52595E]">
-                    Translating cross-cultural adaptability into rigorous B2B execution and freight logistics.
+                    <AsciiText text="Translating cross-cultural adaptability into rigorous B2B execution and freight logistics." />
                   </p>
                 }
               />
@@ -5371,10 +4898,7 @@ export default function App() {
                     {/* Left Column: Temporal Anchor & Organization */}
                     <div className="lg:col-span-5 space-y-2.5">
                       <div className="flex items-center gap-3">
-                        <span className="font-mono text-xs text-[#52595E] tracking-widest uppercase">
-                          {exp.index}
-                        </span>
-                        <span className="w-1 h-1 rounded-full bg-[#B6C5B0]" />
+                        
                         <span className="font-mono text-xs text-[#171717] tracking-wider uppercase font-medium">
                           <BioWords text={exp.date} />
                         </span>
@@ -5398,9 +4922,7 @@ export default function App() {
                       <ul className="space-y-4">
                         {exp.concisePoints.map((pt, i) => (
                           <li key={i} className="flex items-start gap-4 text-base text-[#1F2428] leading-relaxed">
-                            <span className="font-mono text-xs text-[#52595E] mt-1 shrink-0 font-normal">
-                              0{i + 1}
-                            </span>
+                            
                             <span className="font-sans"><BioWords text={pt} /></span>
                           </li>
                         ))}
@@ -5413,7 +4935,7 @@ export default function App() {
           </section>
 
           {/* SECTION 03: INTERNATIONAL BACKGROUND (Pinned 3D Runway) */}
-          <section id="global" className="relative">
+          <section id="global" data-editorial-section className="relative">
             <RevealBlock variant="section">
               <FloatingSectionHeader
                 sectionId="global"
@@ -5422,20 +4944,21 @@ export default function App() {
               />
             </RevealBlock>
 
-            {/* Journey runway: a full-bleed, full-viewport stage stays pinned while the visitor
+            {/* Journey runway: full-width stage stays pinned while the visitor
                 scrolls through this distance — the scroll position IS the journey timeline */}
             <div
               data-journey-runway
-              className="relative mt-8 sm:mt-12 h-[600vh] motion-reduce:h-[100svh] ml-[calc(50%-50vw)] mr-[calc(50%-50vw)]"
+              data-ascii-preserve
+              className="relative mt-8 sm:mt-12 h-[600vh] motion-reduce:h-[100svh] w-full max-w-full overflow-hidden"
             >
-              <div className="sticky top-0 h-[100svh] w-full">
+              <div className="sticky top-0 h-[100svh] w-full max-w-full overflow-hidden">
                 <JourneyGlobe locations={CV_DATA.locations} />
               </div>
             </div>
           </section>
 
           {/* SECTION 04: SKILLS & TECHNOLOGY (Open Typographic Landscape) */}
-          <section id="skills" className="relative">
+          <section id="skills" data-editorial-section className="relative">
             <RevealBlock variant="section">
               <FloatingSectionHeader
                 sectionId="skills"
@@ -5451,9 +4974,7 @@ export default function App() {
                   <RevealBlock key={category.id} delayMs={idx * 110} className={columnOffsetClass}>
                     <div className="space-y-6">
                       <div>
-                        <div className="font-mono text-xs uppercase tracking-widest text-[#52595E] mb-1.5">
-                          // 0{idx + 1}
-                        </div>
+                        
                         <h3 className="ocean-h3 text-xl sm:text-2xl text-[#171717] font-medium tracking-tight">
                           <BioWords text={category.title} />
                         </h3>
@@ -5485,7 +5006,7 @@ export default function App() {
           </section>
 
           {/* SECTION 05: EDUCATION (Chronological Narrative Flow) */}
-          <section id="education" className="relative">
+          <section id="education" data-editorial-section className="relative">
             <RevealBlock variant="section">
               <FloatingSectionHeader
                 sectionId="education"
@@ -5536,7 +5057,7 @@ export default function App() {
           </section>
 
           {/* SECTION 06: LANGUAGES (Open Typographic Matrix) */}
-          <section id="languages" className="relative">
+          <section id="languages" data-editorial-section className="relative">
             <RevealBlock variant="section">
               <FloatingSectionHeader
                 sectionId="languages"
@@ -5550,7 +5071,7 @@ export default function App() {
                 <RevealBlock key={lang.id} delayMs={idx * 60}>
                   <div className="group flex items-baseline justify-between gap-4 pb-4">
                     <div className="flex items-baseline gap-3">
-                      <span className="font-mono text-xs text-[#52595E]/70">0{idx + 1}</span>
+                      
                       <h3 className="ocean-h3 text-2xl sm:text-3xl text-[#171717] font-medium tracking-tight">
                         <BioWords text={lang.language} />
                       </h3>
@@ -5571,7 +5092,7 @@ export default function App() {
           </section>
 
           {/* SECTION 07: PERSONAL INTERESTS (Open Vignettes) */}
-          <section id="interests" className="relative">
+          <section id="interests" data-editorial-section className="relative">
             <RevealBlock variant="section">
               <FloatingSectionHeader
                 sectionId="interests"
@@ -5584,9 +5105,7 @@ export default function App() {
               {CV_DATA.interests.map((interest, idx) => (
                 <RevealBlock key={interest.id} delayMs={idx * 80}>
                   <div className="space-y-4">
-                    <div className="font-mono text-xs uppercase tracking-widest text-[#52595E]">
-                      // 0{idx + 1}
-                    </div>
+                    
                     <h3 className="ocean-h3 text-xl sm:text-2xl text-[#171717] font-medium tracking-tight">
                       <BioWords text={interest.title} />
                     </h3>
@@ -5604,7 +5123,7 @@ export default function App() {
           </section>
 
           {/* SECTION 08: CONTACT & DOSSIER (Direct Correspondence Suite) */}
-          <section id="contact" className="relative pb-24 sm:pb-36">
+          <section id="contact" data-editorial-section className="relative pb-24 sm:pb-36">
             <RevealBlock variant="section">
               <FloatingSectionHeader
                 sectionId="contact"
@@ -5617,14 +5136,14 @@ export default function App() {
               {/* Email Editorial Action */}
               <div className="lg:col-span-6 space-y-4">
                 <div className="font-mono text-xs uppercase tracking-widest text-[#52595E]">
-                  Electronic Mail
+                  <AsciiText text="electronic mail" />
                 </div>
                 <div>
                   <a
                     href={CV_DATA.emailHref}
                     className="font-sans text-2xl sm:text-3xl lg:text-4xl text-[#171717] font-medium tracking-tight hover:text-[#3E5666] transition-colors underline underline-offset-8 decoration-1 decoration-[#171717]/30 hover:decoration-[#3E5666]"
                   >
-                    {CV_DATA.email}
+                    <AsciiText text={CV_DATA.email} />
                   </a>
                 </div>
                 <div className="pt-2">
@@ -5632,7 +5151,7 @@ export default function App() {
                     onClick={handleCopyEmail}
                     className="font-mono text-xs uppercase tracking-wider text-[#52595E] hover:text-[#171717] transition-colors inline-flex items-center gap-2"
                   >
-                    <span>{copiedEmail ? '[ Copied to clipboard ]' : '[ Copy address ]'}</span>
+                    <AsciiText text={copiedEmail ? '[ copied to clipboard ]' : '[ copy address ]'} />
                   </button>
                 </div>
               </div>
@@ -5640,7 +5159,7 @@ export default function App() {
               {/* Dossier PDF Action */}
               <div className="lg:col-span-6 space-y-4">
                 <div className="font-mono text-xs uppercase tracking-widest text-[#52595E]">
-                  Curriculum Vitae Dossier
+                  <AsciiText text="curriculum vitae dossier" />
                 </div>
                 <h3 className="ocean-h3 text-xl sm:text-2xl text-[#171717] font-medium tracking-tight">
                   <BioWords text="Original English CV PDF" />
@@ -5654,26 +5173,32 @@ export default function App() {
                     className="px-5 py-3 border border-[#171717]/25 hover:border-[#171717] transition-colors text-[#171717] font-mono text-xs uppercase tracking-wider inline-flex items-center gap-2"
                   >
                     <Eye className="w-4 h-4" />
-                    Preview Document
+                    <AsciiText text="preview document" />
                   </button>
                   <button
                     onClick={handleDownloadOriginalCv}
                     className="px-6 py-3 bg-[#B6C5B0] hover:bg-[#9BB4B5] transition-colors text-[#171717] font-mono text-xs font-medium uppercase tracking-wider inline-flex items-center gap-2"
                   >
                     <Download className="w-4 h-4" />
-                    <span>Download PDF</span>
+                    <AsciiText text="download pdf" />
                   </button>
                 </div>
               </div>
             </div>
 
+            <footer className="terminal-social">
+              <a href={CV_DATA.linkedin} target="_blank" rel="noopener noreferrer"><AsciiText text="linkedin" /></a>
+              <span aria-hidden="true">/</span>
+              <a href={CV_DATA.emailHref}><AsciiText text="email" /></a>
+            </footer>
+
             {/* Closing Editorial Accent */}
             <div className="mt-24 pt-12 border-t border-[#171717]/10 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 text-xs">
               <p className="font-serif italic text-base sm:text-lg text-[#52595E]">
-                Based in Europe · Operating globally across shifting currents.
+                <AsciiText text="based in europe · operating globally across shifting currents." />
               </p>
               <p className="font-mono text-[11px] text-[#52595E]/80 tracking-widest uppercase">
-                XAVIER HERY · PORTFOLIO MMXXVI
+                <AsciiText text="xavier hery · portfolio mmxxvi" />
               </p>
             </div>
           </section>
