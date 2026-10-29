@@ -1,0 +1,295 @@
+/* Premium Minimalist Typography System — Geist Sans & Geist Mono */
+@font-face {
+  font-family: 'Geist';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('/fonts/Geist-Variable.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Geist Sans';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('/fonts/Geist-Variable.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Geist Mono';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('/fonts/GeistMono-Variable.woff2') format('woff2');
+}
+
+:root {
+  --terminal-bg: #ffffff;
+  --terminal-ink: #171717;
+  --terminal-muted: #52595E;
+  --terminal-orange: #c26747;
+  --terminal-blue: #4a6572;
+
+  /* Typography Font Families */
+  --font-sans: 'Geist', 'Geist Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: 'Geist Mono', 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --font-hero: var(--font-sans);
+  --font-hero-title: var(--font-sans);
+  --font-body: var(--font-sans);
+  --font-title: var(--font-sans);
+  --font-annot: var(--font-mono);
+  --font-tech: var(--font-mono);
+
+  /* Typographic Scale Tokens */
+  --text-hero: clamp(38px, 6.2vw, 84px);
+  --text-name: clamp(48px, 7.5vw, 98px);
+  --text-h2: clamp(28px, 3.6vw, 44px);
+  --text-h3: clamp(20px, 2vw, 28px);
+  --text-body: clamp(16px, 1.05vw, 17.5px);
+  --text-body-sm: clamp(14px, 0.95vw, 15px);
+  --text-meta: 12px;
+  --text-meta-xs: 11px;
+
+  /* Leading / Line Heights */
+  --leading-hero: 1.14;
+  --leading-name: 1.08;
+  --leading-h2: 1.22;
+  --leading-h3: 1.32;
+  --leading-body: 1.65;
+  --leading-meta: 1.4;
+
+  /* Tracking / Letter Spacing */
+  --tracking-hero: -0.028em;
+  --tracking-name: -0.035em;
+  --tracking-h2: -0.025em;
+  --tracking-h3: -0.015em;
+  --tracking-body: -0.011em;
+  --tracking-mono: 0.04em;
+  --tracking-mono-wide: 0.08em;
+
+  /* Text Colors */
+  --ink-primary: #171717;
+  --ink-secondary: #3E4C52;
+  --ink-muted: #52595E;
+}
+
+/* overflow-x:hidden makes body a scroll container and breaks the globe's sticky stage. */
+html { overflow-x: clip !important; }
+body {
+  overflow-x: clip !important;
+  overflow-y: visible !important;
+  font-family: var(--font-sans);
+  color: var(--ink-primary);
+  background-color: #ffffff;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.terminal-portfolio {
+  font-family: var(--font-sans);
+  font-size: var(--text-body);
+  line-height: var(--leading-body);
+  letter-spacing: var(--tracking-body);
+  color: var(--ink-primary);
+}
+
+.font-sans, .cv-arch, .font-arch {
+  font-family: var(--font-sans);
+}
+.font-mono, .font-tech, .font-annot {
+  font-family: var(--font-mono);
+  letter-spacing: var(--tracking-mono);
+}
+.font-serif {
+  font-family: var(--font-sans);
+}
+
+.terminal-portfolio main { max-width: 1280px; overflow: visible; }
+.terminal-portfolio .cv-arch { margin-top: 20vh; }
+.terminal-portfolio .cv-arch > section + section { margin-top: 26vh !important; }
+.terminal-portfolio [data-editorial-section] { scroll-margin-top: 100px; }
+.terminal-portfolio .ocean-legible { text-shadow: 0 0 5px var(--ocean-background); }
+
+/* Editorial Section Headings */
+.terminal-portfolio .ocean-h2 {
+  font-family: var(--font-sans);
+  font-size: var(--text-h2);
+  font-weight: 400;
+  line-height: var(--leading-h2);
+  letter-spacing: var(--tracking-h2);
+  color: var(--ink-primary);
+  text-wrap: balance;
+}
+
+.terminal-portfolio .ocean-h3 {
+  font-family: var(--font-sans);
+  font-size: var(--text-h3);
+  font-weight: 400;
+  line-height: var(--leading-h3);
+  letter-spacing: var(--tracking-h3);
+  color: var(--ink-primary);
+}
+
+.terminal-portfolio :is(.ocean-body, article p, article li, #skills .ocean-skill-item, #interests li) {
+  font-family: var(--font-sans);
+  font-size: var(--text-body);
+  font-weight: 400;
+  line-height: var(--leading-body);
+  letter-spacing: var(--tracking-body);
+}
+
+/* Links & Interactive Focus */
+.terminal-portfolio a {
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 4px;
+  text-decoration-color: rgba(23, 23, 23, 0.3);
+  transition: text-decoration-color 160ms, color 160ms;
+}
+.terminal-portfolio a:hover {
+  text-decoration-color: currentColor;
+}
+.terminal-portfolio :is(a,button):focus-visible {
+  outline: 1px solid currentColor;
+  outline-offset: 6px;
+}
+
+.terminal-portfolio [class*="bg-[#B6C5B0]"] {
+  background: transparent !important;
+  border: 1px solid #7e7e7e;
+  color: var(--ink-primary) !important;
+}
+.terminal-portfolio .ocean-legible [class*="bg-[#B6C5B0]"] * {
+  color: inherit !important;
+}
+.terminal-portfolio [class*="border-[#171717]"] {
+  border-color: #383838;
+}
+.terminal-portfolio .ocean-skill-item:hover {
+  transform: none;
+}
+.terminal-portfolio #skills .ocean-skill-item {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+.terminal-portfolio #skills .ocean-skill-item > span:first-child {
+  font-size: var(--text-body);
+}
+
+/* Minimal Hero */
+.minimal-hero {
+  min-height: 100svh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20vh 4vw;
+}
+.minimal-hero h1 {
+  font-family: var(--font-sans);
+  max-width: 1080px;
+  text-align: center;
+  font-size: var(--text-hero);
+  font-weight: 300;
+  line-height: var(--leading-hero);
+  letter-spacing: var(--tracking-hero);
+  color: var(--ink-primary);
+  text-wrap: balance;
+  position: relative;
+}
+
+/* Editorial Overview / Introduction */
+.terminal-overview {
+  padding-block: 22vh 80px;
+}
+.terminal-overview h2 {
+  font-family: var(--font-sans);
+  font-size: var(--text-name);
+  line-height: var(--leading-name);
+  font-weight: 300;
+  letter-spacing: var(--tracking-name);
+  color: var(--ink-primary);
+  margin: 0 0 48px;
+}
+.terminal-overview .overview-copy {
+  max-width: 680px;
+}
+.terminal-overview .overview-copy p {
+  font-family: var(--font-sans);
+  font-size: clamp(16.5px, 1.1vw, 18.5px);
+  font-weight: 400;
+  line-height: 1.65;
+  letter-spacing: -0.012em;
+}
+.terminal-overview p + p {
+  margin-top: 24px;
+}
+
+/* Social & Contact */
+.terminal-social {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  font-size: var(--text-meta);
+  margin-top: 40px;
+}
+.terminal-portfolio #contact a[href^="mailto:"] {
+  font-size: clamp(20px, 2.8vw, 36px);
+  overflow-wrap: anywhere;
+}
+.terminal-portfolio #contact .terminal-social a {
+  font-size: var(--text-meta);
+}
+
+/* Scroll-driven ASCII word reveal and disappearance system */
+.ascii-word {
+  display: inline-block;
+  position: relative;
+  white-space: pre;
+  vertical-align: baseline;
+}
+.ascii-source {
+  opacity: 0;
+  pointer-events: none;
+  user-select: text;
+}
+.ascii-visual {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  user-select: none;
+  white-space: pre;
+  overflow: visible;
+  letter-spacing: inherit;
+  font-family: inherit;
+  font-weight: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  text-transform: inherit;
+}
+
+.terminal-portfolio [data-journey-runway] { overflow: visible; }
+.terminal-portfolio #global { overflow: visible; }
+
+@media (max-width: 600px) {
+  .terminal-portfolio .ocean-body,
+  .terminal-portfolio article li {
+    font-size: 14.5px;
+  }
+  .terminal-portfolio #languages .group {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ascii-word, .ascii-source { opacity: 1 !important; }
+  .ascii-visual { visibility: hidden; }
+  [data-editorial-section] { transition: none; }
+  .terminal-portfolio *, .terminal-portfolio *::before, .terminal-portfolio *::after { scroll-behavior: auto !important; }
+}
+
+@media print {
+  .ascii-visual { display: none !important; }
+  .ascii-word, .ascii-source, .ascii-text, [data-editorial-section] { opacity: 1 !important; }
+}

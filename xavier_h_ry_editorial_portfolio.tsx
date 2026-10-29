@@ -5,6 +5,7 @@ import { loadLandDots, type LandDots } from './glyphcssGlobe';
 import { createAsciiJellyfishField } from './asciiOceanLife';
 import { AsciiText, useEditorialScroll } from './TerminalEditorial';
 import { waterShade } from './terminalMotion';
+import { background, fluid, type BackgroundHandle } from 'asciify-engine/kit';
 
 // ============================================================================
 // STRICT FACTUAL DATA SOURCE — EXTRACTED VERBATIM FROM "Engl CV Xavier Hery.pdf"
@@ -1496,7 +1497,7 @@ const TiltCard: React.FC<TiltCardProps> = ({ children, className = '', intensity
 // drives the dark water after the Globe section — no independent CSS transitions.
 type AbyssRGB = [number, number, number];
 const ABYSS_TEXT: { hex: string; light: AbyssRGB; dark: AbyssRGB }[] = [
-  { hex: '171717', light: [23, 23, 23], dark: [230, 236, 232] },
+  { hex: '171717', light: [23, 23, 23], dark: [245, 247, 248] },
   { hex: '162633', light: [22, 38, 51], dark: [222, 232, 234] },
   { hex: '1F2428', light: [31, 36, 40], dark: [226, 232, 229] },
   { hex: '2B353B', light: [43, 53, 59], dark: [212, 222, 219] },
@@ -1622,6 +1623,181 @@ function buildAbyssCss(): string {
   );
   return rules.join('\n');
 }
+
+// ============================================================================
+// ASCIIFY FLUID OCEAN — one shared field for the whole page
+// ============================================================================
+// A single official `fluid` background on a fixed, viewport-sized host sits directly under the
+// whale canvas, so the current is continuous across every section (no per-section instances,
+// no restart at boundaries). The whale canvas no longer paints the water colour itself: the
+// page background shows through, and each whale's silhouette cells are filled with that exact
+// water colour before its tiles, so the fluid never shows through a whale's body.
+// Ink and opacity follow the same `abyss` value as the background — no second timeline.
+const FLUID_INK_SURFACE: AbyssRGB = [47, 72, 88]; // #2F4858 muted ocean blue-grey on white
+const FLUID_INK_ABYSS: AbyssRGB = [232, 238, 242]; // #E8EEF2 soft cool white on black
+const FLUID_OPACITY_SURFACE = 0.42;
+const FLUID_OPACITY_ABYSS = 0.46;
+const rgbHex = (c: number[]) => `#${c.map((v) => Math.round(v).toString(16).padStart(2, '0')).join('')}`;
+
+const fluidOcean = {
+  host: null as HTMLElement | null,
+  handle: null as BackgroundHandle | null,
+  ink: '',
+  opacity: -1
+};
+/** True while the GPU fluid is mounted; otherwise the canvas keeps its own water as a fallback. */
+const fluidOceanLive = () => !!fluidOcean.handle?.supported;
+
+/**
+ * Ink crosses from dark to light around the neutral water's equal-contrast midpoint
+ * (the same point the text palette switches at), so glyphs stay visible on both sides.
+ */
+function syncFluidOcean(abyss: number) {
+  const { host, handle } = fluidOcean;
+  if (!host || !handle) return;
+  const s = Math.max(0, Math.min(1, (abyss - 0.42) / 0.24));
+  const t = s * s * (3 - 2 * s);
+  const ink = rgbHex(FLUID_INK_SURFACE.map((v, i) => lerpN(v, FLUID_INK_ABYSS[i], t)));
+  if (ink !== fluidOcean.ink) {
+    fluidOcean.ink = ink;
+    // Kept on the host too, so any internal refresh of the kit resolves the same ink
+    host.style.setProperty('--fluid-ink', ink);
+    handle.field?.update({ ink });
+  }
+  const opacity = Math.round(lerpN(FLUID_OPACITY_SURFACE, FLUID_OPACITY_ABYSS, t) * 200) / 200;
+  if (opacity !== fluidOcean.opacity) {
+    const canvas = host.querySelector<HTMLCanvasElement>('canvas[data-ascii-kit]');
+    if (canvas) {
+      canvas.style.opacity = String(opacity);
+      fluidOcean.opacity = opacity;
+    }
+  }
+}
+
+/** Reading text the current quiets behind (line boxes, measured on layout changes only). */
+const FLUID_CLEAR_SELECTOR = 'main h1, main h2, main h3, main p, main li, main a, main button';
+
+const FluidOceanBackground: React.FC = React.memo(() => {
+  const hostRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const host = hostRef.current;
+    if (!host) return;
+    host.style.setProperty('--fluid-ink', rgbHex(FLUID_INK_SURFACE));
+
+    // Text-shaped clear map: line boxes in document space, offset by scroll per drawn frame
+    // (zero layout reads while scrolling; same array returned while nothing moves).
+    let docRects: { left: number; top: number; width: number; height: number }[] = [];
+    let viewRects: { left: number; top: number; width: number; height: number }[] = [];
+    let generation = 0;
+    let readGeneration = -1;
+    let readScrollY = NaN;
+    const range = document.createRange();
+    const measure = () => {
+      const sy = window.scrollY;
+      const next: typeof docRects = [];
+      document.querySelectorAll<HTMLElement>(FLUID_CLEAR_SELECTOR).forEach((el) => {
+        if (el.parentElement?.closest(FLUID_CLEAR_SELECTOR) || el.closest('[data-journey-runway]')) return;
+        range.selectNodeContents(el);
+        const lines: typeof docRects = [];
+        for (const r of Array.from(range.getClientRects())) {
+          if (r.width < 1 || r.height < 1) continue;
+          const line = lines.find((l) => Math.abs(l.top - (r.top + sy)) < r.height * 0.5);
+          if (line) {
+            const right = Math.max(line.left + line.width, r.right);
+            line.left = Math.min(line.left, r.left);
+            line.width = right - line.left;
+            line.height = Math.max(line.height, r.height);
+          } else {
+            lines.push({ left: r.left, top: r.top + sy, width: r.width, height: r.height });
+          }
+        }
+        next.push(...lines);
+      });
+      docRects = next;
+      generation++;
+    };
+    const readClear = () => {
+      const sy = window.scrollY;
+      if (sy === readScrollY && generation === readGeneration) return viewRects;
+      readScrollY = sy;
+      readGeneration = generation;
+      const vh = window.innerHeight;
+      viewRects = [];
+      for (const r of docRects) {
+        const top = r.top - sy;
+        if (top > vh + 48 || top + r.height < -48) continue;
+        viewRects.push({ left: r.left, top, width: r.width, height: r.height });
+      }
+      return viewRects;
+    };
+    let measureTimer = 0;
+    const scheduleMeasure = () => {
+      window.clearTimeout(measureTimer);
+      measureTimer = window.setTimeout(measure, 120);
+    };
+    measure();
+    const layoutObserver = new ResizeObserver(scheduleMeasure);
+    layoutObserver.observe(document.documentElement);
+    document.fonts?.addEventListener?.('loadingdone', scheduleMeasure);
+
+    const handle = background(host, {
+      preset: fluid,
+      color: 'var(--fluid-ink, #2F4858)',
+      opacity: FLUID_OPACITY_SURFACE,
+      lazy: false,
+      clear: readClear,
+      clearPadding: 10,
+      clearSoftness: 36,
+      clearStrength: 0.85,
+      // Full-bleed field behind everything: a lower backing-store ratio than the preset's 1.5
+      // keeps its per-frame GPU draw and canvas copy cheap next to the whales and the Globe.
+      look: { maxPixelRatio: 1 }
+    });
+    fluidOcean.host = host;
+    fluidOcean.handle = handle;
+    fluidOcean.ink = '';
+    fluidOcean.opacity = -1;
+
+    // The host never takes pointer events (content stays clickable), so real pointer moves are
+    // forwarded to it for the fluid's cursor wake; over links and controls the wake lets go.
+    const forwardMove = (e: PointerEvent) => {
+      if (!e.isTrusted || e.pointerType === 'touch') return;
+      const overControl =
+        e.target instanceof Element && e.target.closest('button, a, input, select, summary, textarea');
+      host.dispatchEvent(
+        overControl
+          ? new PointerEvent('pointerleave')
+          : new PointerEvent('pointermove', {
+              clientX: e.clientX,
+              clientY: e.clientY,
+              pointerId: e.pointerId,
+              pointerType: e.pointerType,
+              isPrimary: e.isPrimary
+            })
+      );
+    };
+    const forwardLeave = () => host.dispatchEvent(new PointerEvent('pointerleave'));
+    window.addEventListener('pointermove', forwardMove, { passive: true });
+    document.documentElement.addEventListener('pointerleave', forwardLeave);
+
+    return () => {
+      window.removeEventListener('pointermove', forwardMove);
+      document.documentElement.removeEventListener('pointerleave', forwardLeave);
+      document.fonts?.removeEventListener?.('loadingdone', scheduleMeasure);
+      layoutObserver.disconnect();
+      window.clearTimeout(measureTimer);
+      range.detach();
+      handle.destroy();
+      if (fluidOcean.handle === handle) {
+        fluidOcean.handle = null;
+        fluidOcean.host = null;
+      }
+    };
+  }, []);
+
+  return <div ref={hostRef} aria-hidden="true" className="fixed inset-0 z-0 pointer-events-none overflow-hidden" />;
+});
 
 interface JourneyGlobeProps {
   locations: LocationItem[];
@@ -3445,6 +3621,13 @@ const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ 
         lastWashAbyss = abyss;
         applyAbyssWash(abyss);
       }
+      // The Asciify fluid is the water whenever it is live: ink follows the same abyss value,
+      // the page background (--ocean-background) shows through this canvas, and the canvas's
+      // own generative water below is kept only as the fallback without WebGL2.
+      const fluidLive = !isFocus && fluidOceanLive();
+      if (fluidLive) syncFluidOcean(abyss);
+      const waterLevel = Math.round(255 * (1 - abyss));
+      const waterRgb = `rgb(${waterLevel}, ${waterLevel}, ${waterLevel})`;
 
       // Reuse the cached backdrop and animation loop for an exact neutral background.
       if (waterBackdropCtx && (!backdropValid || abyss !== lastBackdropDepth)) {
@@ -3454,13 +3637,13 @@ const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ 
         lastBackdropDepth = abyss;
         backdropValid = true;
       }
-      if (backdropValid) ctx.drawImage(waterBackdropCanvas, 0, 0, w, h);
+      if (backdropValid && !fluidLive) ctx.drawImage(waterBackdropCanvas, 0, 0, w, h);
 
       const cols = gridCols;
       const rows = gridRows;
 
       // 1B. Draw pre-rendered static hydrographic dot grid in 1 drawImage call
-      ctx.drawImage(bgGridCanvas, 0, 0, w, h);
+      if (!fluidLive) ctx.drawImage(bgGridCanvas, 0, 0, w, h);
 
       // 2. Generative ASCII Ocean Shader (Separable Harmonics: 0 inner-loop trig calls, 0 random flicker)
       const oCols = oceanCols;
@@ -3509,7 +3692,8 @@ const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ 
       // Light crests belong to the surface; deeper water turns slate
       const crestThreshold = 0.38 + depth * 0.5;
 
-      const minOceanRow = 0;
+      // Skipped entirely while the Asciify fluid draws the water
+      const minOceanRow = fluidLive ? oRows : 0;
       for (let or = minOceanRow; or < oRows; or++) {
         const rs1 = rowSin1[or];
         const rc1 = rowCos1[or];
@@ -3586,89 +3770,6 @@ const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ 
       }
 
       ctx.globalAlpha = 1;
-
-      // 2B. Subtle drifting deep-water particles (restrained count, zero flicker)
-      ambientOffsetY = (ambientOffsetY - sm.velocity * 0.00038 * dtScale + 10) % 1;
-      const dotLimit = prefersReducedMotion ? 24 : 48;
-      for (let i = 0; i < dotLimit; i++) {
-        const d = ambientDots[i];
-        const cx = (((d.nx + time * d.speedX * 0.65 + 10) % 1) * cols) | 0;
-        const cy = (((d.ny + ambientOffsetY + 10) % 1) * rows) | 0;
-        const inAbyss = abyss > 0.004 && ((i * 37) % 100) / 100 < abyss;
-        ctx.drawImage(
-          atlasCanvas,
-          (inAbyss ? d.glyphIdx + 1 : d.glyphIdx) * tilePx,
-          (inAbyss ? 20 : 5) * tilePx,
-          tilePx,
-          tilePx,
-          cx * cellSize,
-          cy * cellSize,
-          cellSize,
-          cellSize
-        );
-      }
-
-      // 2C. DEEP-WATER SILHOUETTE (Stage 5): a distant manta ray glides past now and then,
-      // only once the visitor has descended, drawn in the faintest halo glyphs ('.' ':')
-      const rayVis = isFocus || prefersReducedMotion ? 0 : Math.max(0, Math.min(1, (depth - 0.35) / 0.25));
-      if (!mantaRay.active) {
-        mantaRay.wait -= dt;
-        if (mantaRay.wait <= 0 && rayVis > 0.25) {
-          mantaRay.active = true;
-          mantaRay.dir = Math.random() < 0.5 ? 1 : -1;
-          mantaRay.span = Math.min(w, h) * rand(0.11, 0.15);
-          mantaRay.x = mantaRay.dir > 0 ? -mantaRay.span * 2.2 : w + mantaRay.span * 2.2;
-          mantaRay.baseY = h * (Math.random() < 0.5 ? rand(0.16, 0.3) : rand(0.68, 0.82));
-          mantaRay.speed = rand(0.55, 0.85);
-          mantaRay.phase = Math.random() * 6.28;
-        }
-      }
-      if (mantaRay.active) {
-        mantaRay.x += mantaRay.dir * mantaRay.speed * dtScale;
-        const S = mantaRay.span;
-        const L = S * 0.85;
-        const rx = mantaRay.x;
-        const ry = mantaRay.baseY + Math.sin(time * 0.35 + mantaRay.phase) * h * 0.02;
-        const flap = 0.82 + 0.18 * Math.sin(time * 1.4 + mantaRay.phase);
-        const offscreen = mantaRay.dir > 0 ? rx - L * 2 > w : rx + L * 2 < 0;
-        if (offscreen) {
-          mantaRay.active = false;
-          mantaRay.wait = rand(16, 32);
-        } else if (rayVis > 0.01) {
-          ctx.globalAlpha = 0.55 * rayVis;
-          const c0 = Math.max(0, ((rx - L * 2) / cellSize) | 0);
-          const c1 = Math.min(cols - 1, ((rx + L * 1.2) / cellSize) | 0);
-          const r0 = Math.max(0, ((ry - S) / cellSize) | 0);
-          const r1 = Math.min(rows - 1, ((ry + S) / cellSize) | 0);
-          for (let rr = r0; rr <= r1; rr++) {
-            const l = (rr * cellSize + cellSize * 0.5 - ry) / S;
-            for (let cc = c0; cc <= c1; cc++) {
-              const f = ((cc * cellSize + cellSize * 0.5 - rx) * mantaRay.dir) / L; // -1 tail … 1 head
-              let stamp = -1;
-              if (f > -0.9 && f < 1) {
-                // Diamond-like wing planform with a rounded leading edge
-                const hs = Math.pow(Math.max(0, 1 - Math.abs(f - 0.12) / 0.92), 0.75) * flap;
-                const al = Math.abs(l);
-                if (al < hs) stamp = al < hs * 0.55 ? 1 : 0;
-              } else if (f <= -0.9 && f > -1.7 && Math.abs(l) < 0.035) {
-                stamp = 0; // thin tail
-              }
-              if (stamp >= 0) {
-                // Dark halo glyphs in light water, pale teal glyphs ('.' ':') in the abyss
-                if (abyss > 0.5) {
-                  ctx.drawImage(atlasCanvas, (stamp + 1) * tilePx, 19 * tilePx, tilePx, tilePx, cc * cellSize, rr * cellSize, cellSize, cellSize);
-                } else {
-                  ctx.drawImage(atlasCanvas, stamp * tilePx, 5 * tilePx, tilePx, tilePx, cc * cellSize, rr * cellSize, cellSize, cellSize);
-                }
-              }
-            }
-          }
-          ctx.globalAlpha = 1;
-        }
-      }
-
-      // 2D. DEEP-OCEAN BIOLUMINESCENT JELLYFISH — Far & Mid depth planes (behind the whales)
-      renderJellyfishPlanes(w, h, rawDepth, abyss, surfaceBaseY, 0, 1);
 
       // 3. Clear only the dirty bounding box in our pre-allocated buffers
       for (let r = prevMinR; r <= prevMaxR; r++) {
@@ -4007,6 +4108,122 @@ const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ 
       if (wakeParticles.length > 60) {
         wakeParticles.splice(0, wakeParticles.length - 60);
       }
+
+      // 4B. WHALE OCCLUSION — the whale silhouette (body + its one-cell halo rim) is filled with
+      // the exact water colour, so the Asciify fluid underneath never shows through a whale.
+      // Done before everything drawn behind the whales, which therefore reads exactly as before.
+      if (fluidLive && curMaxC >= curMinC && curMaxR >= curMinR) {
+        const oMinC = Math.max(1, curMinC - 1);
+        const oMaxC = Math.min(cols - 2, curMaxC + 1);
+        const oMinR = Math.max(1, curMinR - 1);
+        const oMaxR = Math.min(rows - 2, curMaxR + 1);
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = waterRgb;
+        ctx.beginPath();
+        for (let r = oMinR; r <= oMaxR; r++) {
+          const up = (r - 1) * cols;
+          const mid = r * cols;
+          const down = (r + 1) * cols;
+          let runStart = -1;
+          for (let c = oMinC; c <= oMaxC + 1; c++) {
+            let covered = false;
+            if (c <= oMaxC) {
+              for (let k = c - 1; k <= c + 1 && !covered; k++) {
+                covered = occBuf[up + k] > 0 || occBuf[mid + k] > 0 || occBuf[down + k] > 0;
+              }
+            }
+            if (covered && runStart < 0) runStart = c;
+            else if (!covered && runStart >= 0) {
+              ctx.rect(runStart * cellSize, r * cellSize, (c - runStart) * cellSize, cellSize);
+              runStart = -1;
+            }
+          }
+        }
+        ctx.fill();
+      }
+
+      // 2B. Subtle drifting deep-water particles (restrained count, zero flicker)
+      ambientOffsetY = (ambientOffsetY - sm.velocity * 0.00038 * dtScale + 10) % 1;
+      const dotLimit = prefersReducedMotion ? 24 : 48;
+      for (let i = 0; i < dotLimit; i++) {
+        const d = ambientDots[i];
+        const cx = (((d.nx + time * d.speedX * 0.65 + 10) % 1) * cols) | 0;
+        const cy = (((d.ny + ambientOffsetY + 10) % 1) * rows) | 0;
+        const inAbyss = abyss > 0.004 && ((i * 37) % 100) / 100 < abyss;
+        ctx.drawImage(
+          atlasCanvas,
+          (inAbyss ? d.glyphIdx + 1 : d.glyphIdx) * tilePx,
+          (inAbyss ? 20 : 5) * tilePx,
+          tilePx,
+          tilePx,
+          cx * cellSize,
+          cy * cellSize,
+          cellSize,
+          cellSize
+        );
+      }
+
+      // 2C. DEEP-WATER SILHOUETTE (Stage 5): a distant manta ray glides past now and then,
+      // only once the visitor has descended, drawn in the faintest halo glyphs ('.' ':')
+      const rayVis = isFocus || prefersReducedMotion ? 0 : Math.max(0, Math.min(1, (depth - 0.35) / 0.25));
+      if (!mantaRay.active) {
+        mantaRay.wait -= dt;
+        if (mantaRay.wait <= 0 && rayVis > 0.25) {
+          mantaRay.active = true;
+          mantaRay.dir = Math.random() < 0.5 ? 1 : -1;
+          mantaRay.span = Math.min(w, h) * rand(0.11, 0.15);
+          mantaRay.x = mantaRay.dir > 0 ? -mantaRay.span * 2.2 : w + mantaRay.span * 2.2;
+          mantaRay.baseY = h * (Math.random() < 0.5 ? rand(0.16, 0.3) : rand(0.68, 0.82));
+          mantaRay.speed = rand(0.55, 0.85);
+          mantaRay.phase = Math.random() * 6.28;
+        }
+      }
+      if (mantaRay.active) {
+        mantaRay.x += mantaRay.dir * mantaRay.speed * dtScale;
+        const S = mantaRay.span;
+        const L = S * 0.85;
+        const rx = mantaRay.x;
+        const ry = mantaRay.baseY + Math.sin(time * 0.35 + mantaRay.phase) * h * 0.02;
+        const flap = 0.82 + 0.18 * Math.sin(time * 1.4 + mantaRay.phase);
+        const offscreen = mantaRay.dir > 0 ? rx - L * 2 > w : rx + L * 2 < 0;
+        if (offscreen) {
+          mantaRay.active = false;
+          mantaRay.wait = rand(16, 32);
+        } else if (rayVis > 0.01) {
+          ctx.globalAlpha = 0.55 * rayVis;
+          const c0 = Math.max(0, ((rx - L * 2) / cellSize) | 0);
+          const c1 = Math.min(cols - 1, ((rx + L * 1.2) / cellSize) | 0);
+          const r0 = Math.max(0, ((ry - S) / cellSize) | 0);
+          const r1 = Math.min(rows - 1, ((ry + S) / cellSize) | 0);
+          for (let rr = r0; rr <= r1; rr++) {
+            const l = (rr * cellSize + cellSize * 0.5 - ry) / S;
+            for (let cc = c0; cc <= c1; cc++) {
+              const f = ((cc * cellSize + cellSize * 0.5 - rx) * mantaRay.dir) / L; // -1 tail … 1 head
+              let stamp = -1;
+              if (f > -0.9 && f < 1) {
+                // Diamond-like wing planform with a rounded leading edge
+                const hs = Math.pow(Math.max(0, 1 - Math.abs(f - 0.12) / 0.92), 0.75) * flap;
+                const al = Math.abs(l);
+                if (al < hs) stamp = al < hs * 0.55 ? 1 : 0;
+              } else if (f <= -0.9 && f > -1.7 && Math.abs(l) < 0.035) {
+                stamp = 0; // thin tail
+              }
+              if (stamp >= 0) {
+                // Dark halo glyphs in light water, pale teal glyphs ('.' ':') in the abyss
+                if (abyss > 0.5) {
+                  ctx.drawImage(atlasCanvas, (stamp + 1) * tilePx, 19 * tilePx, tilePx, tilePx, cc * cellSize, rr * cellSize, cellSize, cellSize);
+                } else {
+                  ctx.drawImage(atlasCanvas, stamp * tilePx, 5 * tilePx, tilePx, tilePx, cc * cellSize, rr * cellSize, cellSize, cellSize);
+                }
+              }
+            }
+          }
+          ctx.globalAlpha = 1;
+        }
+      }
+
+      // 2D. DEEP-OCEAN BIOLUMINESCENT JELLYFISH — Far & Mid depth planes (behind the whales)
+      renderJellyfishPlanes(w, h, rawDepth, abyss, surfaceBaseY, 0, 1);
 
       // 5. Render Wake Vortices & Bubble Trails
       for (let i = wakeParticles.length - 1; i >= 0; i--) {
@@ -4503,16 +4720,16 @@ const NAME_WORDS = [
 
 const ProgressiveOceanEntry: React.FC<ProgressiveOceanEntryProps> = React.memo(() => (
   <>
-  <section id="home" data-editorial-section className="minimal-hero relative">
-    <h1><AsciiText text="A journey without horizons" /></h1>
-  </section>
-  <section id="introduction" data-editorial-section className="terminal-overview relative">
-    <h2><AsciiText text="Xavier Hery" /></h2>
-    <div className="overview-copy">
-      <p data-text-rank="2"><AsciiText text={CV_DATA.heroIntroConcise} /></p>
-      <p data-text-rank="3" className="text-[#52595E]"><AsciiText text={CV_DATA.heroIntroSecondary} /></p>
-    </div>
-  </section>
+    <section id="home" data-editorial-section className="minimal-hero relative">
+      <h1><AsciiText text="A journey without horizons" /></h1>
+    </section>
+    <section id="introduction" data-editorial-section className="terminal-overview relative">
+      <h2><AsciiText text="Xavier Hery" /></h2>
+      <div className="overview-copy">
+        <p data-text-rank="2"><AsciiText text={CV_DATA.heroIntroConcise} /></p>
+        <p data-text-rank="3" className="text-[#52595E]"><AsciiText text={CV_DATA.heroIntroSecondary} /></p>
+      </div>
+    </section>
   </>
 ));
 
@@ -4521,16 +4738,70 @@ const ProgressiveOceanEntry: React.FC<ProgressiveOceanEntryProps> = React.memo((
 // ============================================================================
 
 const GLOBAL_PORTFOLIO_CSS = `
+  @font-face {
+    font-family: 'Geist';
+    font-style: normal;
+    font-weight: 100 900;
+    font-display: swap;
+    src: url('/fonts/Geist-Variable.woff2') format('woff2');
+  }
+  @font-face {
+    font-family: 'Geist Sans';
+    font-style: normal;
+    font-weight: 100 900;
+    font-display: swap;
+    src: url('/fonts/Geist-Variable.woff2') format('woff2');
+  }
+  @font-face {
+    font-family: 'Geist Mono';
+    font-style: normal;
+    font-weight: 100 900;
+    font-display: swap;
+    src: url('/fonts/GeistMono-Variable.woff2') format('woff2');
+  }
+
   :root {
-    --font-sans: 'JetBrains Mono', monospace;
-    --font-mono: 'JetBrains Mono', monospace;
-    --font-serif: 'JetBrains Mono', monospace;
-    --font-hero: 'JetBrains Mono', monospace;
-    --font-hero-title: 'JetBrains Mono', monospace;
+    --font-sans: 'Geist', 'Geist Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    --font-mono: 'Geist Mono', 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    --font-serif: var(--font-sans);
+    --font-hero: var(--font-sans);
+    --font-hero-title: var(--font-sans);
     --font-body: var(--font-sans);
     --font-title: var(--font-sans);
     --font-annot: var(--font-mono);
     --font-tech: var(--font-mono);
+
+    /* Typographic Scale Tokens */
+    --text-hero: clamp(38px, 6.2vw, 84px);
+    --text-name: clamp(48px, 7.5vw, 98px);
+    --text-h2: clamp(28px, 3.6vw, 44px);
+    --text-h3: clamp(20px, 2vw, 28px);
+    --text-body: clamp(16px, 1.05vw, 17.5px);
+    --text-body-sm: clamp(14px, 0.95vw, 15px);
+    --text-meta: 12px;
+    --text-meta-xs: 11px;
+
+    /* Leading / Line Heights */
+    --leading-hero: 1.14;
+    --leading-name: 1.08;
+    --leading-h2: 1.22;
+    --leading-h3: 1.32;
+    --leading-body: 1.65;
+    --leading-meta: 1.4;
+
+    /* Tracking / Letter Spacing */
+    --tracking-hero: -0.028em;
+    --tracking-name: -0.035em;
+    --tracking-h2: -0.025em;
+    --tracking-h3: -0.015em;
+    --tracking-body: -0.011em;
+    --tracking-mono: 0.04em;
+    --tracking-mono-wide: 0.08em;
+
+    /* Text Colors */
+    --ink-primary: #171717;
+    --ink-secondary: #3E4C52;
+    --ink-muted: #52595E;
   }
   /* Global CSS Reset for sizing and overflow prevention */
   *, *::before, *::after {
@@ -4555,10 +4826,10 @@ const GLOBAL_PORTFOLIO_CSS = `
     -ms-overflow-style: none;
     font-family: var(--font-sans);
     background-color: #FFFFFF;
-    color: #EDEDED;
-    font-size: 15px;
-    line-height: 1.7;
-    letter-spacing: -0.011em;
+    color: var(--ink-primary);
+    font-size: var(--text-body);
+    line-height: var(--leading-body);
+    letter-spacing: var(--tracking-body);
     font-size-adjust: none;
     font-synthesis: none;
     font-kerning: normal;
@@ -4574,41 +4845,45 @@ const GLOBAL_PORTFOLIO_CSS = `
 
   /* Typography tokens */
   .font-sans, .cv-arch, .font-arch { font-family: var(--font-sans); font-style: normal; }
-  .font-mono, .font-tech, .font-annot { font-family: var(--font-mono); font-style: normal; letter-spacing: 0.02em; }
-  .font-serif { font-family: var(--font-serif); }
+  .font-mono, .font-tech, .font-annot { font-family: var(--font-mono); font-style: normal; letter-spacing: var(--tracking-mono); }
+  .font-serif { font-family: var(--font-sans); }
   
   /* Hero / Cover display typography */
   #home .font-display, .hero-display { font-family: var(--font-hero); }
-  #home .font-title { font-family: var(--font-hero-title); font-size-adjust: 0.44; }
+  #home .font-title { font-family: var(--font-hero-title); }
   .font-display { font-family: var(--font-hero); }
   .font-title { font-family: var(--font-sans); }
 
   /* Fluid typography & oceanic scales */
   .ocean-h2 {
     font-family: var(--font-sans);
-    font-size: clamp(2rem, 1.35rem + 2.6vw, 3.25rem);
-    line-height: 1.12;
-    letter-spacing: -0.025em;
-    font-weight: 500;
+    font-size: var(--text-h2);
+    line-height: var(--leading-h2);
+    letter-spacing: var(--tracking-h2);
+    font-weight: 400;
+    color: var(--ink-primary);
+    text-wrap: balance;
   }
   .ocean-h3 {
     font-family: var(--font-sans);
-    font-size: clamp(1.25rem, 1.05rem + 1vw, 1.875rem);
-    line-height: 1.25;
-    letter-spacing: -0.015em;
-    font-weight: 500;
+    font-size: var(--text-h3);
+    line-height: var(--leading-h3);
+    letter-spacing: var(--tracking-h3);
+    font-weight: 400;
+    color: var(--ink-primary);
   }
   .ocean-meta {
     font-family: var(--font-mono);
-    font-size: 0.6875rem;
-    line-height: 1.4;
-    letter-spacing: 0.14em;
+    font-size: var(--text-meta);
+    line-height: var(--leading-meta);
+    letter-spacing: var(--tracking-mono-wide);
     text-transform: uppercase;
   }
   .ocean-body {
     font-family: var(--font-sans);
-    font-size: clamp(0.9375rem, 0.9rem + 0.2vw, 1.0625rem);
-    line-height: 1.7;
+    font-size: var(--text-body);
+    line-height: var(--leading-body);
+    letter-spacing: var(--tracking-body);
     color: #1F2428;
   }
 
@@ -4859,6 +5134,7 @@ export default function App() {
     <div className="terminal-portfolio min-h-screen w-full max-w-full bg-[var(--ocean-background)] text-[#171717] antialiased selection:bg-neutral-700 selection:text-[#EDEDED]">
       <style>{GLOBAL_PORTFOLIO_CSS}</style>
 
+      <FluidOceanBackground />
       <AsciiWhaleBackground mode="ambient" />
 
       {downloadToast && (
@@ -4899,7 +5175,7 @@ export default function App() {
                     <div className="lg:col-span-5 space-y-2.5">
                       <div className="flex items-center gap-3">
                         
-                        <span className="font-mono text-xs text-[#171717] tracking-wider uppercase font-medium">
+                        <span className="font-mono text-xs text-[#52595E] tracking-wider uppercase">
                           <BioWords text={exp.date} />
                         </span>
                       </div>
@@ -5191,16 +5467,6 @@ export default function App() {
               <span aria-hidden="true">/</span>
               <a href={CV_DATA.emailHref}><AsciiText text="email" /></a>
             </footer>
-
-            {/* Closing Editorial Accent */}
-            <div className="mt-24 pt-12 border-t border-[#171717]/10 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 text-xs">
-              <p className="font-serif italic text-base sm:text-lg text-[#52595E]">
-                <AsciiText text="based in europe · operating globally across shifting currents." />
-              </p>
-              <p className="font-mono text-[11px] text-[#52595E]/80 tracking-widest uppercase">
-                <AsciiText text="xavier hery · portfolio mmxxvi" />
-              </p>
-            </div>
           </section>
         </div>
       </main>
