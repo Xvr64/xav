@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { createAsciiJellyfishField } from './asciiOceanLife';
-import { playSonarPing } from './decodeAudio';
+import { playSonarPing, setSoundDepth } from './decodeAudio';
 import { MAX_PINGS, arrivalTime, echoStrength, isOpenWaterClick, pingRadius, pingStrength } from './sonarPing';
 import { waterShade } from './terminalMotion';
 import {
@@ -2566,6 +2566,9 @@ export const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.m
         );
       }
       ctx.globalAlpha = 1;
+
+      // The ocean sound bed (when sound is on) darkens with the descent
+      setSoundDepth(Math.max(abyss, rawDepth * 0.4));
 
       // 2B'. MARINE SNOW — in dark water only, sparse flecks pass upward faster than the page as
       // the visitor descends (the reader is the one sinking) and settle into a slow fall when the

@@ -67,7 +67,64 @@ const MASTER_GAIN = 0.16;
 const MAX_VOICES = 3;
 const VARIANTS = 6;
 
-type Engine = { ctx: AudioContext; master: GainNode; buffers: AudioBuffer[]; voices: number };
+type Engine = {
+  ctx: AudioContext;
+  master: GainNode;
+  buffers: AudioBuffer[];
+  voices: number;
+  /** The ocean bed's low-pass, closed further the deeper the page (see setSoundDepth). */
+  bedFilter: BiquadFilterNode;
+};
+
+/** The ocean bed's level against the ticks, and its filter at the surface and at the bottom. */
+const BED_GAIN = 0.22;
+const BED_CUTOFF_SURFACE = 900;
+const BED_CUTOFF_DEEP = 200;
+
+/**
+ * The ocean bed: a few seconds of brown noise, looped, low-passed and breathing slowly like a
+ * swell. Built once with the engine; it sounds only while the master gain is up (sound on).
+ */
+function createOceanBed(ctx: AudioContext, master: GainNode): BiquadFilterNode {
+  const seconds = 6;
+  const buffer = ctx.createBuffer(1, Math.round(ctx.sampleRate * seconds), ctx.sampleRate);
+  const data = buffer.getChannelData(0);
+  const noise = lcg(0xb0a7);
+  let brown = 0;
+  let peak = 0;
+  for (let i = 0; i < data.length; i++) {
+    brown = (brown + noise() * 0.06) * 0.996;
+    data[i] = brown;
+    peak = Math.max(peak, Math.abs(brown));
+  }
+  // Seamless loop: cross-fade the tail into the head
+  const fade = Math.round(ctx.sampleRate * 0.5);
+  for (let i = 0; i < fade; i++) {
+    const k = i / fade;
+    data[i] = data[i] * k + data[data.length - fade + i] * (1 - k);
+  }
+  for (let i = 0; i < data.length; i++) data[i] /= peak || 1;
+  const source = ctx.createBufferSource();
+  source.buffer = buffer;
+  source.loop = true;
+  source.loopEnd = seconds - 0.5;
+  const filter = ctx.createBiquadFilter();
+  filter.type = 'lowpass';
+  filter.frequency.value = BED_CUTOFF_SURFACE;
+  filter.Q.value = 0.4;
+  const level = ctx.createGain();
+  level.gain.value = BED_GAIN;
+  // The swell: a very slow rise and fall of the bed's level
+  const swell = ctx.createOscillator();
+  swell.frequency.value = 0.07;
+  const swellDepth = ctx.createGain();
+  swellDepth.gain.value = BED_GAIN * 0.35;
+  swell.connect(swellDepth).connect(level.gain);
+  source.connect(filter).connect(level).connect(master);
+  source.start();
+  swell.start();
+  return filter;
+}
 
 let engine: Engine | null = null;
 let enabled = false;
@@ -131,7 +188,8 @@ function createEngine(): Engine | null {
   tone.Q.value = 0.5;
   master.connect(tone).connect(ctx.destination);
   const buffers = Array.from({ length: VARIANTS }, (_, i) => renderClick(ctx, i));
-  return { ctx, master, buffers, voices: 0 };
+  const bedFilter = createOceanBed(ctx, master);
+  return { ctx, master, buffers, voices: 0, bedFilter };
 }
 
 function play(click: Click) {
@@ -248,6 +306,21 @@ export function syncDecodeSoundVisibility(hidden: boolean) {
       () => disableDecodeSound()
     );
   }
+}
+
+let lastDepth = -1;
+/**
+ * How deep the visitor is (0 surface … 1 bottom): the ocean bed darkens as the light goes.
+ * Called by the whale loop every frame; only real changes reach the audio graph.
+ */
+export function setSoundDepth(depth: number) {
+  const e = engine;
+  if (!e || !enabled) return;
+  const d = Math.max(0, Math.min(1, depth));
+  if (Math.abs(d - lastDepth) < 0.01) return;
+  lastDepth = d;
+  const cutoff = BED_CUTOFF_SURFACE * Math.pow(BED_CUTOFF_DEEP / BED_CUTOFF_SURFACE, d);
+  e.bedFilter.frequency.setTargetAtTime(cutoff, e.ctx.currentTime, 0.4);
 }
 
 export function disposeDecodeSound() {
