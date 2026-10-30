@@ -6,9 +6,12 @@
  *      (MRT): ink (pigment × light, darker toward the silhouette), linear depth and view normal in
  *      the first; the mouth and eye masks, a far-whale tone and coverage in the second.
  *   2. Cells — one fragment per character cell samples its patch of that G-buffer. "Luminance"
- *      maps mean ink to a density ramp of glyphs measured from the font. "Shape" also builds a
- *      structure tensor from the gradients of coverage, depth, normals and the mouth mask, and
- *      where an edge dominates it chooses an oriented glyph (_ - / \ | ( )) along the contour.
+ *      maps mean ink to a density ramp of glyphs measured from the font. "Shape" engraves: the
+ *      silhouette closes wherever a cell is partly covered (oriented by the coverage gradient),
+ *      a structure tensor of depth, normals and the mouth mask draws inner contours, and the body
+ *      takes an engraver's tone scale — stipple in the light, lines along the body spaced by
+ *      tone, cross-hatching across them in shadow — with the throat grooves, the tubercles of
+ *      the rostrum and the eye from a third target of surface marks.
  *   3. Composite — each screen pixel looks up its cell's glyph in an atlas drawn at the exact
  *      device cell size and writes premultiplied ink: no halos, no rectangle around the whales.
  *
@@ -70,7 +73,7 @@ export const DEFAULT_STYLE: AsciiStyle = {
 
 // ---- Glyph atlas -----------------------------------------------------------------------------
 
-export const ATLAS_CHARS = [' ', '.', '·', ':', '-', '=', '+', '*', 'x', '#', '%', '@', '_', '/', '\\', '|', '(', ')', 'o', '~', ',', "'", '`', ';', '"', '^'];
+export const ATLAS_CHARS = [' ', '.', '·', ':', '-', '=', '+', '*', 'x', '#', '%', '@', '_', '/', '\\', '|', '(', ')', 'o', '~', ',', "'", '`', ';', '"', '^', '°', '•'];
 const RAMP_CANDIDATES = ['.', '·', ':', ';', '+', '*', 'x', '#'];
 export const glyphIndex = (ch: string) => ATLAS_CHARS.indexOf(ch);
 const ATLAS_COLS = 8;
@@ -169,9 +172,10 @@ uniform float uSkinRow;
 out vec3 vViewN;
 out vec3 vViewPos;
 out vec4 vInfo;
-out vec3 vMarks;
+out vec4 vMarks;
 out vec3 vViewTan;
 out vec3 vRestPos;
+out vec3 vRestN;
 void main() {
   vec3 p; vec3 n; vec3 tg;
   skinWhale(aSpine, position, normal, aInfo.x, int(uSkinRow), p, n, tg);
@@ -181,8 +185,11 @@ void main() {
   vViewTan = mat3(viewMatrix) * mat3(modelMatrix) * tg;
   vInfo = aInfo;
   // Region ids are per-vertex integers: turn them into masks before they interpolate
-  vMarks = vec3(abs(aInfo.y - 1.0) < 0.5 ? 1.0 : 0.0, abs(aInfo.y - 2.0) < 0.5 ? 1.0 : 0.0, abs(aInfo.y - 3.0) < 0.5 ? 1.0 : 0.0);
+  // (mouth, eye, throat pleats, tubercles)
+  vMarks = vec4(abs(aInfo.y - 1.0) < 0.5 ? 1.0 : 0.0, abs(aInfo.y - 2.0) < 0.5 ? 1.0 : 0.0, abs(aInfo.y - 3.0) < 0.5 ? 1.0 : 0.0, abs(aInfo.y - 4.0) < 0.5 ? 1.0 : 0.0);
   vRestPos = position + vec3(0.0, 0.0, aSpine);
+  // The body's rest normal: an angle around the body that the skin carries with it
+  vRestN = normal;
   gl_Position = projectionMatrix * view;
 }
 `;
@@ -192,11 +199,13 @@ precision highp float;
 in vec3 vViewN;
 in vec3 vViewPos;
 in vec4 vInfo;
-in vec3 vMarks;
+in vec4 vMarks;
 in vec3 vViewTan;
 in vec3 vRestPos;
+in vec3 vRestN;
 layout(location = 0) out vec4 gInk;
 layout(location = 1) out vec4 gMask;
+layout(location = 2) out vec4 gMarks;
 uniform vec3 uLight;
 uniform vec2 uDepthRange;
 uniform float uDissolve;
@@ -219,11 +228,17 @@ void main() {
   float rim = 1.0 - facing;
   float pigment = vInfo.z;
   // Ink: pigment (dark back, pale belly) shaded by the light, deepening toward the silhouette
+  // and into the core shadow, so the broad flank turns like a modelled surface
   float shade = 1.0 - clamp(lambert, 0.0, 1.0);
-  float ink = pigment * (0.34 + 0.66 * pow(shade, 1.2)) + 0.3 * rim * rim * rim;
-  ink = smoothstep(0.05, 1.02, ink);
-  // The throat pleats: a pale pouch engraved with grooves running along the body
-  ink = max(ink, 0.42 * smoothstep(0.3, 0.9, vMarks.z));
+  float core = smoothstep(-0.05, -0.45, lambert);
+  float ink = pigment * (0.28 + 0.62 * pow(shade, 1.15)) + 0.1 * core + 0.3 * rim * rim * rim;
+  ink = smoothstep(0.04, 1.0, ink);
+  // The throat pleats: a pale pouch engraved with grooves running along the body. The groove
+  // phase is the angle around the body at rest, so the grooves travel with the skin.
+  float pleat = smoothstep(0.25, 0.85, vMarks.z) * (vInfo.x < 0.5 ? 1.0 : 0.0);
+  float groove = 0.5 + 0.5 * cos(atan(vRestN.y, vRestN.x) * 38.0);
+  ink = max(ink, pleat * (0.3 + 0.32 * groove));
+  float knob = smoothstep(0.2, 0.7, vMarks.w);
   float light = clamp(0.15 + 0.85 * wrap * (1.0 - 0.55 * pigment) + 0.25 * pow(max(lambert, 0.0), 6.0), 0.0, 1.0);
   ink = mix(ink, light * 0.9 + 0.12 * rim, uInvert);
   float mouth = smoothstep(0.35, 0.8, vMarks.x);
@@ -246,6 +261,8 @@ void main() {
   vec2 tan2 = normalize(vViewTan).xy;
   float axial = length(tan2) > 0.32 ? fract(atan(tan2.y, tan2.x) / 3.14159265 + 1.0) : 0.0;
   gMask = vec4(mouth, eye, axial, coverage);
+  // Engraving marks: pleat pouch, groove line, tubercles, and appendages (kept pale and crisp)
+  gMarks = vec4(pleat, groove * pleat, knob, vInfo.x > 0.5 && vInfo.x < 3.5 ? 1.0 : 0.0);
 }
 `;
 
@@ -267,6 +284,9 @@ uniform float uRampN;
 uniform float uGamma;
 uniform vec4 uEdgeA;    // indices: '-', '_', '/', '\'
 uniform vec4 uEdgeB;    // indices: '|', '(', ')', 'o'
+uniform vec4 uMarkG;    // indices: '=', '°', '•', ':'
+uniform vec4 uToneG;    // indices: '·', '+', 'x', '#'
+uniform sampler2D uMarks;
 out vec4 outCell;
 
 // 4×4 ordered dither by cell: neighbouring cells straddle two ramp steps instead of banding,
@@ -305,6 +325,7 @@ void main() {
   const int SX = 4;
   const int SY = 5;
   float covSum = 0.0, inkSum = 0.0, depthSum = 0.0, eyeSum = 0.0, mouthSum = 0.0;
+  float pleatSum = 0.0, grooveSum = 0.0, knobSum = 0.0, appSum = 0.0;
   float jxx = 0.0, jyy = 0.0, jxy = 0.0, silE = 0.0, inE = 0.0;
   vec2 covGrad = vec2(0.0);
   vec2 covCentroid = vec2(0.0);
@@ -321,6 +342,11 @@ void main() {
       depthSum += a.g * c;
       eyeSum += m.g * c;
       mouthSum += m.r * c;
+      vec4 mk = texture(uMarks, uv);
+      pleatSum += mk.r * c;
+      grooveSum += mk.g * c;
+      knobSum += mk.b * c;
+      appSum += mk.a * c;
       if (m.b > 0.0) axis += vec2(cos(m.b * 6.2831853), sin(m.b * 6.2831853)) * c;
       covCentroid += (vec2(float(i), float(j)) + 0.5) / vec2(float(SX), float(SY)) * c;
       // Gradients (uv y up): silhouette from coverage, occluding contours from depth, creases
@@ -368,17 +394,30 @@ void main() {
   } else {
     float eye = eyeSum / n;
     float mouth = mouthSum / n;
+    float body = max(covSum, 1e-3);
+    float pleat = pleatSum / body;
+    float groove = grooveSum / body;
+    float knob = knobSum / n;
+    float app = appSum / body;
     float tr = jxx + jyy;
     // Dominant gradient direction of the patch (structure tensor), then the contour across it
     float theta = 0.5 * atan(2.0 * jxy, jxx - jyy);
     float coherence = tr > 1e-5 ? sqrt((jxx - jyy) * (jxx - jyy) + 4.0 * jxy * jxy) / tr : 0.0;
     float lineA = mod(theta + 1.5707963, 3.14159265);
-    bool silhouette = silE > 0.55 && coverage > 0.06 && coverage < 0.96;
-    bool contour = inE > 0.045 * n && coherence > 0.45 && coverage > 0.5;
-    bool mouthLine = mouth > 0.12 && coverage > 0.6;
+    // The silhouette is wherever the cell is partly covered: a soft edge still counts, so the
+    // outline closes instead of breaking into punctuation. Its direction comes from the coverage
+    // gradient itself (it points into the body), which is steadier than the tensor at an edge.
+    bool silhouette = coverage > 0.05 && coverage < 0.94 && silE > 0.06;
+    if (silhouette && length(covGrad) > 0.08) lineA = mod(atan(covGrad.y, covGrad.x) + 1.5707963, 3.14159265);
+    bool contour = inE > 0.04 * n && coherence > 0.42 && coverage > 0.5;
+    bool mouthLine = mouth > 0.1 && coverage > 0.55;
     float v = pow(clamp(ink, 0.0, 1.0), uGamma);
-    if (eye > 0.035) {
-      glyph = uEdgeB.w;
+    float axisLen = length(axis) / body;
+    float axisA = fract(atan(axis.y, axis.x) / 6.2831853 + 1.0) * 3.14159265;
+    bool along = axisLen > 0.55;
+    bool level = axisA < 0.42 || axisA > 2.72;
+    if (eye > 0.14 && coverage > 0.4) {
+      glyph = uMarkG.z;
       alpha = 1.0;
     } else if (silhouette || contour || mouthLine) {
       vec2 cen = covSum > 0.0 ? covCentroid / covSum : vec2(0.5);
@@ -393,26 +432,54 @@ void main() {
       } else {
         glyph = uEdgeA.w;
       }
-      alpha = silhouette ? 1.0 : 0.85;
-    } else if (coverage > 0.3 && v > 0.05) {
-      // Interior: light tones as sparse dots, mid tones as strokes along the body (engraved
-      // hatching that follows the form), the deepest shadow through the dense ramp
-      float axisLen = length(axis) / max(covSum, 1e-3);
-      float axisA = fract(atan(axis.y, axis.x) / 6.2831853 + 1.0) * 3.14159265;
-      if (v > 0.72) {
-        glyph = rampGlyph(v, cellIx);
-        alpha = 0.92;
-      } else if (v > 0.26 && axisLen > 0.6) {
-        if (d < (v - 0.12) * 1.5) {
-          glyph = strokeGlyph(axisA);
-          alpha = 0.55 + 0.4 * v;
-        } else if (d < v * 1.9) {
-          glyph = uRamp[0];
-          alpha = 0.6;
-        }
+      alpha = silhouette ? 1.0 : (mouthLine ? 1.0 : 0.88);
+    } else if (knob > 0.3 && coverage > 0.5) {
+      // Tubercles: the knobs of the rostrum, each its own small ring
+      glyph = uEdgeB.w;
+      alpha = 0.95;
+    } else if (pleat > 0.45 && coverage > 0.5) {
+      // Throat grooves engraved along the body: doubled lines where they run level
+      glyph = along ? (level ? (groove > 0.3 ? uMarkG.x : uEdgeA.x) : strokeGlyph(axisA)) : uMarkG.w;
+      alpha = 0.55 + 0.4 * max(v, groove);
+    } else if (coverage > 0.3) {
+      // The body's mass as an engraver's tone scale: stipple in the light, hatching that runs
+      // along the body through the mid tones, crosshatch in the shadow. No cell inside the body
+      // is left empty except in the brightest light, so the form keeps its weight.
+      float t = clamp(v * (app > 0.5 ? 0.8 : 1.0), 0.0, 1.0);
+      float q = clamp(t * 6.0 + (d - 0.5) * 0.9, 0.0, 6.0);
+      int L = int(floor(q + 0.5));
+      // Engraved lines are spaced across the stroke direction: every other line in the light
+      // tones, every line in the mid tones (the spacing, not the glyph, carries the tone)
+      float sa = sin(axisA), ca = cos(axisA);
+      float perp = -(cellIx.x + 0.5) * uCell.x * sa - (cellIx.y + 0.5) * uCell.y * ca;
+      float pitch = uCell.x * abs(sa) + uCell.y * abs(ca);
+      bool onLine = mod(floor(perp / pitch), 2.0) < 0.5;
+      if (L == 0) {
+        if (d < 0.4) { glyph = uToneG.x; alpha = 0.45; }
+      } else if (L == 1) {
+        if (along && onLine) { glyph = strokeGlyph(axisA); alpha = 0.5; }
+        else if (d < 0.5) { glyph = uToneG.x; alpha = 0.55; }
+      } else if (L == 2) {
+        if (!along) { glyph = uMarkG.w; alpha = 0.7; }
+        else if (onLine) { glyph = strokeGlyph(axisA); alpha = 0.72; }
+        else if (d < 0.35) { glyph = uToneG.x; alpha = 0.55; }
+      } else if (L == 3) {
+        // Lines on every row; the in-between rows only partly, so the tone still breathes
+        if (!along) { glyph = uToneG.y; alpha = 0.8; }
+        else if (onLine || d < 0.55) { glyph = level ? (onLine ? uMarkG.x : uEdgeA.x) : strokeGlyph(axisA); alpha = 0.8; }
+        else { glyph = uToneG.x; alpha = 0.6; }
+      } else if (L == 4) {
+        // Cross-hatching: strokes along the body, crossed by strokes across it between them
+        float crossA = mod(axisA + 1.5707963, 3.14159265);
+        glyph = !along ? uToneG.y : (onLine ? strokeGlyph(axisA) : strokeGlyph(crossA));
+        alpha = 0.88;
+      } else if (L == 5) {
+        glyph = d < 0.5 ? uToneG.z : (along ? strokeGlyph(axisA) : uToneG.y);
+        alpha = 0.94;
       } else {
-        glyph = rampGlyph(v * 0.85, cellIx);
-        alpha = 0.5 + 0.45 * v;
+        // The deepest core shadow only: dense, but dithered so it never sets as a flat block
+        glyph = d < 0.6 ? uToneG.w : uToneG.z;
+        alpha = 1.0;
       }
     }
   }
@@ -592,7 +659,7 @@ export class WhaleAsciiRenderer {
       this.whales.push({ mesh, material, state: null });
     }
 
-    this.gbuffer = new THREE.WebGLRenderTarget(1, 1, { count: 2, depthBuffer: true, type: THREE.UnsignedByteType });
+    this.gbuffer = new THREE.WebGLRenderTarget(1, 1, { count: 3, depthBuffer: true, type: THREE.UnsignedByteType });
     for (const t of this.gbuffer.textures) {
       t.minFilter = THREE.LinearFilter;
       t.magFilter = THREE.LinearFilter;
@@ -621,7 +688,10 @@ export class WhaleAsciiRenderer {
         uRampN: { value: 1 },
         uGamma: { value: 1 },
         uEdgeA: { value: new THREE.Vector4(glyphIndex('-'), glyphIndex('_'), glyphIndex('/'), glyphIndex('\\')) },
-        uEdgeB: { value: new THREE.Vector4(glyphIndex('|'), glyphIndex('('), glyphIndex(')'), glyphIndex('o')) }
+        uEdgeB: { value: new THREE.Vector4(glyphIndex('|'), glyphIndex('('), glyphIndex(')'), glyphIndex('o')) },
+        uMarkG: { value: new THREE.Vector4(glyphIndex('='), glyphIndex('°'), glyphIndex('•'), glyphIndex(':')) },
+        uToneG: { value: new THREE.Vector4(glyphIndex('·'), glyphIndex('+'), glyphIndex('x'), glyphIndex('#')) },
+        uMarks: { value: null }
       }
     });
     this.compositeMaterial = new THREE.ShaderMaterial({
@@ -713,11 +783,13 @@ export class WhaleAsciiRenderer {
     }
     const ctx = this.readingCanvas.getContext('2d')!;
     ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h);
-    ctx.fillStyle = 'rgb(41,41,41)';
-    ctx.shadowColor = 'rgb(41,41,41)'; ctx.shadowBlur = 4;
+    // A generous, soft halo: monumental whales pass behind whole columns, and the type must keep
+    // clean water around it rather than ink right up to its letters
+    ctx.fillStyle = 'rgb(18,18,18)';
+    ctx.shadowColor = 'rgb(18,18,18)'; ctx.shadowBlur = 10;
     for (const r of rects) {
       if (r.top > this.cssH || r.top + r.height < 0) continue;
-      ctx.fillRect((r.left - 5) / 4, (r.top - 4) / 4, (r.width + 10) / 4, (r.height + 8) / 4);
+      ctx.fillRect((r.left - 14) / 4, (r.top - 10) / 4, (r.width + 28) / 4, (r.height + 20) / 4);
     }
     ctx.shadowBlur = 0;
     this.readingTexture.needsUpdate = true;
@@ -818,7 +890,7 @@ export class WhaleAsciiRenderer {
     r.render(this.scene, this.camera);
 
     // 2. Cells or raw view
-    const [inkTex, maskTex] = this.gbuffer.textures;
+    const [inkTex, maskTex, marksTex] = this.gbuffer.textures;
     r.setRenderTarget(null);
     r.setClearColor(0x000000, 0);
     r.clear(true, true, true);
@@ -837,6 +909,7 @@ export class WhaleAsciiRenderer {
       const cu = this.cellMaterial.uniforms;
       cu.uInk.value = inkTex;
       cu.uMask.value = maskTex;
+      cu.uMarks.value = marksTex;
       cu.uCanvas.value.set(W, H);
       cu.uCell.value.set(cw, ch);
       cu.uTexel.value.set(1 / this.gbuffer.width, 1 / this.gbuffer.height);

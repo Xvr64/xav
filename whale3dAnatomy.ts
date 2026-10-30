@@ -32,6 +32,7 @@ export const REGION_SKIN = 0;
 export const REGION_MOUTH = 1;
 export const REGION_EYE = 2;
 export const REGION_PLEATS = 3;
+export const REGION_KNOB = 4;
 
 export type V3 = [number, number, number];
 
@@ -80,21 +81,24 @@ export function monotoneCurve(knots: readonly (readonly [number, number])[]): (x
   };
 }
 
-// s, half-width, height above the centre line, depth below it, centre line
+// s, half-width, height above the centre line, depth below it, centre line.
+// A stout humpback: girth near a quarter of the length behind the flippers, a deep ventral
+// pouch under the jaw and chest, the back rising into the hump and falling to a narrow,
+// keeled tail stock.
 const PROFILE: readonly (readonly [number, number, number, number, number])[] = [
   [0.0, 0.0, 0.0, 0.0, -0.012],
-  [0.01, 0.022, 0.014, 0.022, -0.012],
-  [0.035, 0.042, 0.026, 0.042, -0.012],
-  [0.08, 0.06, 0.038, 0.06, -0.011],
-  [0.15, 0.077, 0.052, 0.08, -0.01],
-  [0.23, 0.092, 0.068, 0.098, -0.008],
-  [0.31, 0.103, 0.083, 0.108, -0.005],
-  [0.39, 0.107, 0.094, 0.104, -0.001],
-  [0.47, 0.103, 0.099, 0.091, 0.004],
-  [0.55, 0.093, 0.099, 0.075, 0.009],
-  [0.62, 0.078, 0.094, 0.063, 0.012],
-  [0.69, 0.06, 0.081, 0.054, 0.013],
-  [0.77, 0.04, 0.062, 0.044, 0.011],
+  [0.01, 0.022, 0.013, 0.024, -0.012],
+  [0.035, 0.043, 0.025, 0.047, -0.012],
+  [0.08, 0.062, 0.037, 0.068, -0.011],
+  [0.15, 0.081, 0.053, 0.092, -0.01],
+  [0.23, 0.1, 0.071, 0.112, -0.008],
+  [0.31, 0.115, 0.09, 0.124, -0.005],
+  [0.39, 0.12, 0.104, 0.12, -0.001],
+  [0.47, 0.116, 0.109, 0.104, 0.004],
+  [0.55, 0.104, 0.108, 0.085, 0.009],
+  [0.62, 0.086, 0.101, 0.07, 0.012],
+  [0.69, 0.065, 0.086, 0.058, 0.013],
+  [0.77, 0.042, 0.064, 0.046, 0.011],
   [0.84, 0.025, 0.044, 0.033, 0.008],
   [0.9, 0.015, 0.028, 0.022, 0.005],
   [0.94, 0.009, 0.015, 0.013, 0.002],
@@ -122,6 +126,31 @@ const smoothstep = (a: number, b: number, x: number) => {
   return t * t * (3 - 2 * t);
 };
 const spow = (v: number, e: number) => Math.sign(v) * Math.abs(v) ** e;
+
+/** The raised hump the dorsal fin sits on: what gives the species its name. */
+export const humpAt = (s: number) => 0.011 * Math.exp(-(((s - 0.61) / 0.055) ** 2));
+
+/**
+ * Tubercles: the knobs on a humpback's rostrum and lower jaw, each holding a sensory hair. Three
+ * rows on the head top (the midline and either side) and one along each jaw edge; s along the
+ * body and v the fraction of the half-width from the midline.
+ */
+export const TUBERCLES: readonly (readonly [number, number])[] = (() => {
+  const k: [number, number][] = [];
+  for (let s = 0.03; s < 0.235; s += 0.026) k.push([s, 0]);
+  for (let s = 0.045; s < 0.215; s += 0.03) k.push([s, 0.45], [s, -0.45]);
+  for (let s = 0.02; s < 0.12; s += 0.028) k.push([s, 0.82], [s, -0.82]);
+  return k;
+})();
+/** Height of the tubercle field at a point of the head (0 … 1), for the upper surface. */
+export function tubercleAt(s: number, v: number): number {
+  let m = 0;
+  for (const [ks, kv] of TUBERCLES) {
+    const d = Math.hypot((s - ks) / 0.0085, (v - kv) / 0.16);
+    if (d < 1) m = Math.max(m, (1 - d * d) ** 2);
+  }
+  return m;
+}
 
 // ---- Mesh assembly ----------------------------------------------------------------------------
 
@@ -177,14 +206,14 @@ function capIndices(b: PartBuilder, ringBase: number, around: number, apex: numb
 }
 
 function buildBody(b: PartBuilder) {
-  const RINGS = 76;
-  const AROUND = 40;
+  const RINGS = 116;
+  const AROUND = 56;
   for (let i = 0; i < RINGS; i++) {
     const u = (i + 1) / (RINGS + 1);
     // Denser rings at the snout and the tail stock, where the outline turns fastest
     const s = BODY_END * (0.3 * u + 0.7 * (0.5 - 0.5 * Math.cos(Math.PI * u)));
     const w = halfWidthAt(s);
-    const ht = topAt(s) + 0.0055 * Math.exp(-(((s - 0.61) / 0.05) ** 2)); // the hump under the fin
+    const ht = topAt(s) + humpAt(s);
     const hb = bottomAt(s);
     const yc = centreAt(s);
     const nt = topExp(s);
@@ -200,11 +229,22 @@ function buildBody(b: PartBuilder) {
       let region = REGION_SKIN;
       // Mouth: a shallow crease along the jaw line on each side of the head
       if (s < MOUTH_END_S + 0.01 && Math.abs(c) > 0.25) {
-        const crease = Math.exp(-(((y - ym) / 0.0048) ** 2)) * smoothstep(0.004, 0.03, s) * (1 - smoothstep(MOUTH_END_S - 0.02, MOUTH_END_S + 0.01, s));
+        const crease = Math.exp(-(((y - ym) / 0.0058) ** 2)) * smoothstep(0.004, 0.03, s) * (1 - smoothstep(MOUTH_END_S - 0.02, MOUTH_END_S + 0.01, s));
         const side = Math.abs(c);
-        x -= Math.sign(x) * 0.0035 * crease * side;
-        y -= 0.0012 * crease;
+        x -= Math.sign(x) * 0.0058 * crease * side;
+        y -= 0.0018 * crease;
         if (crease > 0.38) region = REGION_MOUTH;
+      }
+      // Tubercles raise the skin of the rostrum (upper surface) and the chin
+      if (s < 0.25) {
+        const v = w > 1e-4 ? x / w : 0;
+        const knob = sn > -0.1 ? tubercleAt(s, v) : 0;
+        if (knob > 0) {
+          const r = Math.hypot(x, y - yc) || 1;
+          x += (x / r) * 0.0042 * knob;
+          y += ((y - yc) / r) * 0.0042 * knob;
+          if (knob > 0.3 && region === REGION_SKIN) region = REGION_KNOB;
+        }
       }
       if (Math.abs(c) > 0.35 && Math.hypot((s - EYE_S) * 0.9, y - eyeY()) < 0.0062) region = REGION_EYE;
       // Throat pleats: the grooved ventral pouch from chin to navel
@@ -304,7 +344,7 @@ function buildFlukes(b: PartBuilder) {
     const le = -0.012 + 0.098 * a ** 1.35;
     let chord = 0.074 * Math.max(0, 1 - a ** 2.5) ** 0.55 + 0.0012;
     // Trailing edge: the centre notch, then a gently scalloped, swept edge out to the tips
-    chord -= 0.016 * Math.max(0, 1 - a / 0.075) ** 1.4;
+    chord -= 0.024 * Math.max(0, 1 - a / 0.085) ** 1.3;
     chord += 0.0022 * Math.sin(a * 46) * smoothstep(0.25, 0.4, a) * (1 - a);
     const thick = 0.017 * (1 - a) ** 1.25 + 0.0014;
     for (let j = 0; j < AROUND; j++) {
@@ -345,7 +385,7 @@ function buildFin(b: PartBuilder) {
       const side = Math.sin(th) >= 0 ? 1 : -1;
       const z = zle + chord * xc;
       const s = z + 0.5;
-      const top = centreAt(s) + topAt(s) + 0.0055 * Math.exp(-(((s - 0.61) / 0.05) ** 2));
+      const top = centreAt(s) + topAt(s) + humpAt(s);
       const y = top - 0.008 + v * 0.036 * (1 - 0.35 * xc) + v * v * 0.004;
       b.pos.push(side * 0.5 * thick * AIRFOIL(xc), y, z);
       b.info.push(PART_FIN, REGION_SKIN, 0.95, Math.min(1, s / BODY_END));
@@ -355,7 +395,7 @@ function buildFin(b: PartBuilder) {
   loftIndices(b, 0, RINGS, AROUND);
   const tip = b.pos.length / 3;
   const s = 0.615 + 0.048 + 0.003;
-  b.pos.push(0, centreAt(s) + topAt(s) - 0.008 + 0.0405, s - 0.5);
+  b.pos.push(0, centreAt(s) + topAt(s) + humpAt(s) - 0.008 + 0.0405, s - 0.5);
   b.info.push(PART_FIN, REGION_SKIN, 0.95, s);
   b.spine.push(spineIndexOf(s));
   capIndices(b, (RINGS - 1) * AROUND, AROUND, tip, false);
