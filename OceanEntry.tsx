@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { AsciiText } from './TerminalEditorial';
 import { createHeroCurrent } from './heroCurrent';
+import { createHorizonRipple } from './horizonRipple';
 import { CV_DATA } from './cvData';
 import {
   directWhales,
@@ -110,6 +111,10 @@ export const HeroCurrentLayer: React.FC = React.memo(() => {
     if (intro) introObserver.observe(intro);
     window.addEventListener('resize', measureIntro);
 
+    const horizonEl = stage.querySelector<HTMLElement>('[data-hero-horizon]');
+    // The hairline answers the pointer and the first swell of the descent (see horizonRipple.ts)
+    const ripple = horizonEl ? createHorizonRipple(horizonEl) : null;
+
     const handle = createHeroCurrent({
       canvas,
       section,
@@ -117,7 +122,7 @@ export const HeroCurrentLayer: React.FC = React.memo(() => {
       letters: Array.from(stage.querySelectorAll<HTMLElement>('[data-hero-letter]')),
       nameEl,
       nameLines: Array.from(nameEl.querySelectorAll<HTMLElement>('[data-hero-name-line]')),
-      horizon: stage.querySelector<HTMLElement>('[data-hero-horizon]'),
+      horizon: horizonEl,
       depthEl: stage.querySelector<HTMLElement>('[data-hero-depth]'),
       onZones: (rects) => {
         if (rects.length === 0 && heroZone.rects.length === 0) return;
@@ -126,6 +131,7 @@ export const HeroCurrentLayer: React.FC = React.memo(() => {
       },
       onFrame: ({ t, horizonY, stageTop, stageHeight }) => {
         maskSurface(horizonY);
+        ripple?.setY(horizonY, t);
         // Surface → descent → name, then the stage scrolls away and the introduction takes over
         const toDescent = smoothStepRange(t, 0.04, 0.36);
         const toName = smoothStepRange(t, 0.4, 0.72);
@@ -145,6 +151,7 @@ export const HeroCurrentLayer: React.FC = React.memo(() => {
       }
     });
     return () => {
+      ripple?.destroy();
       handle.destroy();
       introObserver.disconnect();
       window.removeEventListener('resize', measureIntro);
