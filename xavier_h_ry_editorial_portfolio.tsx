@@ -5609,9 +5609,6 @@ const ProgressiveOceanEntry: React.FC<ProgressiveOceanEntryProps> = React.memo((
         </p>
       </div>
     </section>
-    {/* Migration: after the name, the camera follows the two whales across the ocean of a
-        turning planet, never seen whole; the introduction begins once the journey has settled. */}
-    <MigrationRunway />
     {/* Introduction: the name resolved above carries the heading visually; the semantic name stays
         here (visually clipped, so it is excluded from the word system). The rest of the spread
         uses the shared ASCII word reveal like every other section. */}
