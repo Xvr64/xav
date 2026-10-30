@@ -14,33 +14,53 @@ import {
   charOpacity,
   lineProgress,
   entryEndFor,
+  exitStartFor,
   waterShade
 } from './terminalMotion.ts';
 import { ClickGate, CLICK_GAP_MS, MIN_ACTIVITY } from './decodeAudio.ts';
 
-test('reading zone is 22%–78% of the viewport and fully stable there', () => {
+test('reading zone is 14%–84% of the viewport and fully stable there', () => {
   for (const viewport of [600, 800, 1000, 1200]) {
-    // 0–10% and 90–100%: invisible
-    for (const frac of [0.02, 0.05, 0.09, 0.92, 0.98]) {
+    // 0–4% and 95–100%: invisible
+    for (const frac of [0.01, 0.03, 0.96, 0.99]) {
       const p = lineProgress(viewport * frac, viewport);
       assert.equal(p, 0, `at ${frac}`);
       assert.equal(charOpacity(p, charProgress(p, 0.5, frac > 0.5)), 0);
     }
-    // Transition zones
-    for (const frac of [0.16, 0.84]) {
+    // Transition zones: text still decodes in on entry and dissolves on exit
+    for (const frac of [0.06, 0.09, 0.12, 0.87, 0.9, 0.93]) {
       const p = lineProgress(viewport * frac, viewport);
       assert.ok(p > 0 && p < 1, `Expected transition at ${frac}, got ${p}`);
     }
     // Reading zone: every character resolved, full opacity
-    for (const frac of [0.22, 0.25, 0.35, 0.5, 0.65, 0.75, 0.78]) {
+    for (const frac of [0.14, 0.2, 0.35, 0.5, 0.65, 0.8, 0.84]) {
       const p = lineProgress(viewport * frac, viewport);
       assert.equal(p, 1, `Expected fully readable text at ${frac * 100}%, got ${p}`);
       assert.equal(decodeChars('International', 0, 13, p, true, 42), 'International');
       for (const t of [0, 0.5, 1]) assert.equal(charOpacity(p, charProgress(p, t, true)), 1);
     }
   }
-  assert.equal(VIEWPORT_ZONES.READING_TOP, 0.22);
-  assert.equal(VIEWPORT_ZONES.READING_BOTTOM, 0.78);
+  assert.equal(VIEWPORT_ZONES.READING_TOP, 0.14);
+  assert.equal(VIEWPORT_ZONES.READING_BOTTOM, 0.84);
+});
+
+test('lines resting near the top of the final screen stay readable there', () => {
+  const viewport = 800;
+  // A line that leaves the screen before the page ends keeps the normal exit zone
+  assert.equal(exitStartFor(-40, viewport), VIEWPORT_ZONES.EXIT_START);
+  assert.equal(exitStartFor(viewport * 0.5, viewport), VIEWPORT_ZONES.EXIT_START);
+  for (const frac of [0, 0.02, 0.06, 0.1, 0.13]) {
+    const lowest = viewport * frac;
+    const start = exitStartFor(lowest, viewport);
+    // Where it rests at the end of the page: fully readable
+    assert.equal(lineProgress(lowest, viewport, VIEWPORT_ZONES.ENTRY_END, start), 1, `${frac}`);
+    // Lower on the screen (scrolled back up from the end) it is readable too
+    assert.equal(lineProgress(lowest + viewport * 0.3, viewport, VIEWPORT_ZONES.ENTRY_END, start), 1, `${frac}`);
+  }
+  // Scrolling back up, the same lines still decode in from the bottom of the screen
+  const start = exitStartFor(viewport * 0.05, viewport);
+  const entering = lineProgress(viewport * 0.9, viewport, VIEWPORT_ZONES.ENTRY_END, start);
+  assert.ok(entering > 0 && entering < 1);
 });
 
 test('lines that cannot scroll into the reading zone still resolve at the end of the page', () => {

@@ -677,7 +677,7 @@ body {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-s);
-  margin-top: var(--space-2xl);
+  margin-top: var(--space-xl);
   font-family: var(--font-mono);
   font-size: var(--text-meta);
 }

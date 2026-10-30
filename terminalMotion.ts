@@ -5,20 +5,21 @@ export const progressBetween = (position: number, start: number, length: number)
   clamp01((position - start) / Math.max(1, length));
 
 /**
- * Refined Viewport Zones (Expanded Central Reading Zone):
- * 0–10% from top: invisible (p = 0, opacity = 0)
- * 10–22%: outgoing ASCII scramble (transition zone)
- * 22–78%: fully readable, stable text (56% of viewport, 100% stable reading area)
- * 78–90%: incoming ASCII decoding (transition zone)
- * 90–100%: invisible (p = 0, opacity = 0)
+ * Viewport zones. Text decodes on the way in and dissolves on the way out, in bands kept close
+ * to the edges so the stable reading area covers most of the screen:
+ * 0–4% from top: invisible (p = 0, opacity = 0)
+ * 4–14%: outgoing ASCII scramble (transition zone)
+ * 14–84%: fully readable, stable text (70% of the viewport)
+ * 84–95%: incoming ASCII decoding (transition zone)
+ * 95–100%: invisible (p = 0, opacity = 0)
  */
 export const VIEWPORT_ZONES = {
-  EXIT_END: 0.10,       // 10% from top (invisible / fully scrambled off)
-  EXIT_START: 0.22,     // 22% from top (outgoing scramble begins)
-  READING_TOP: 0.22,    // 22% from top
-  READING_BOTTOM: 0.78, // 78% from top
-  ENTRY_END: 0.78,      // 78% from top (fully stable & readable)
-  ENTRY_START: 0.90     // 90% from top (incoming decode begins)
+  EXIT_END: 0.04,       // 4% from top (invisible / fully scrambled off)
+  EXIT_START: 0.14,     // 14% from top (outgoing scramble begins)
+  READING_TOP: 0.14,    // 14% from top
+  READING_BOTTOM: 0.84, // 84% from top
+  ENTRY_END: 0.84,      // 84% from top (fully stable & readable)
+  ENTRY_START: 0.95     // 95% from top (incoming decode begins)
 } as const;
 
 /**
@@ -32,15 +33,33 @@ export function entryEndFor(lowestTop: number, viewport: number): number {
 }
 
 /**
+ * Where a line's exit scramble starts (viewport fraction). Normally the reading zone's upper
+ * edge; but the last screen of the page holds still, and a line resting near its top there
+ * (`lowestTop` is its top at maximum scroll) would never resolve. Its exit zone slides up to
+ * begin just above where it rests, so everything on the final screen reads, and scrolling back
+ * from the end still dissolves and decodes it as before.
+ */
+export function exitStartFor(lowestTop: number, viewport: number): number {
+  if (viewport <= 0 || lowestTop < 0) return VIEWPORT_ZONES.EXIT_START;
+  return Math.min(VIEWPORT_ZONES.EXIT_START, lowestTop / viewport - 0.01);
+}
+
+/**
  * Zone progress of one rendered line from its top edge: 0 invisible → 1 readable. The whole
  * line shares this value; each character derives its own progress from it (`charProgress`).
  */
-export function lineProgress(top: number, viewport: number, entryEnd: number = VIEWPORT_ZONES.ENTRY_END): number {
+export function lineProgress(
+  top: number,
+  viewport: number,
+  entryEnd: number = VIEWPORT_ZONES.ENTRY_END,
+  exitStart: number = VIEWPORT_ZONES.EXIT_START
+): number {
   if (viewport <= 0) return 1;
   const y = top / viewport;
   const entryLength = VIEWPORT_ZONES.ENTRY_START - VIEWPORT_ZONES.ENTRY_END;
+  const exitLength = VIEWPORT_ZONES.EXIT_START - VIEWPORT_ZONES.EXIT_END;
   const enter = clamp01((entryEnd + entryLength - y) / entryLength);
-  const exit = clamp01((y - VIEWPORT_ZONES.EXIT_END) / (VIEWPORT_ZONES.EXIT_START - VIEWPORT_ZONES.EXIT_END));
+  const exit = clamp01((y - (exitStart - exitLength)) / exitLength);
   return Math.min(enter, exit);
 }
 

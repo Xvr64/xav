@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Eye, Download, X, Check } from 'lucide-react';
 import { AsciiText, DecodeSoundToggle, useEditorialScroll } from './TerminalEditorial';
 import { mountLanternCursor } from './lanternCursor';
@@ -120,6 +120,44 @@ export default function App() {
     setTimeout(() => setDownloadToast(false), 3500);
   }, []);
 
+  // CV preview dialog: focus moves to its close control on open, stays inside while it is open
+  // (Tab wraps, Escape closes) and returns to the control that opened it.
+  const cvDialogRef = useRef<HTMLDivElement | null>(null);
+  const cvCloseRef = useRef<HTMLButtonElement | null>(null);
+  const cvReturnFocusRef = useRef<HTMLElement | null>(null);
+  const closeCvModal = useCallback(() => setCvModalOpen(false), []);
+
+  useEffect(() => {
+    if (!cvModalOpen) return;
+    cvReturnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    cvCloseRef.current?.focus();
+    return () => {
+      cvReturnFocusRef.current?.focus();
+    };
+  }, [cvModalOpen]);
+
+  const handleCvDialogKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === 'Escape') {
+      e.stopPropagation();
+      setCvModalOpen(false);
+      return;
+    }
+    if (e.key !== 'Tab' || !cvDialogRef.current) return;
+    const focusable = Array.from(
+      cvDialogRef.current.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), iframe')
+    );
+    if (focusable.length === 0) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault();
+      first.focus();
+    }
+  }, []);
+
   const handleCopyEmail = useCallback(() => {
     if (navigator.clipboard) {
       navigator.clipboard.writeText(CV_DATA.email).catch(() => undefined);
@@ -139,11 +177,15 @@ export default function App() {
       <DecodeSoundToggle />
 
       {downloadToast && (
-        <div className="fixed top-20 right-6 z-50 bg-[#171717]/90 backdrop-blur-md text-[#F5F3EE] border border-[#B6C5B0] px-4 py-3 shadow-lg flex items-center gap-3 font-mono text-xs">
+        <div aria-hidden="true" className="fixed top-20 right-6 z-50 bg-[#171717]/90 backdrop-blur-md text-[#F5F3EE] border border-[#B6C5B0] px-4 py-3 shadow-lg flex items-center gap-3 font-mono text-xs">
           <Check className="w-4 h-4 text-[#B6C5B0]" />
           <span>Downloading {ORIGINAL_CV_FILENAME}</span>
         </div>
       )}
+      {/* One polite live region announces what the copy and download controls just did */}
+      <p className="sr-only" role="status" aria-live="polite">
+        {copiedEmail ? 'Email address copied to clipboard.' : downloadToast ? `Downloading ${ORIGINAL_CV_FILENAME}.` : ''}
+      </p>
 
       <main className="relative z-10 w-full max-w-[1440px] mx-auto px-4 sm:px-8 ocean-legible overflow-x-hidden">
         {/* SECTION 01: PROGRESSIVE OCEAN ENTRY & INTRODUCTION (Hero Preserved) */}
@@ -381,7 +423,8 @@ export default function App() {
           </section>
 
           {/* SECTION 08: CONTACT & DOSSIER (Direct Correspondence Suite) */}
-          <section id="contact" data-editorial-section className="relative pb-24 sm:pb-36">
+          {/* Kept within one screen on desktop so the final, resting view holds the whole section */}
+          <section id="contact" data-editorial-section className="relative pb-16 sm:pb-20">
             <RevealBlock variant="section">
               <FloatingSectionHeader
                 sectionId="contact"
@@ -402,7 +445,7 @@ export default function App() {
                   <AsciiText text={CV_DATA.email} />
                 </a>
                 <div className="contact-actions">
-                  <button onClick={handleCopyEmail} className="text-control text-control--bare">
+                  <button type="button" onClick={handleCopyEmail} className="text-control text-control--bare">
                     <AsciiText text={copiedEmail ? 'copied to clipboard' : 'copy address'} />
                   </button>
                 </div>
@@ -419,12 +462,12 @@ export default function App() {
                   <BioWords text="Engl CV Xavier Hery.pdf · official document" />
                 </p>
                 <div className="contact-actions">
-                  <button onClick={() => setCvModalOpen(true)} className="text-control">
-                    <Eye className="w-4 h-4" />
+                  <button type="button" onClick={() => setCvModalOpen(true)} className="text-control" aria-haspopup="dialog">
+                    <Eye className="w-4 h-4" aria-hidden="true" />
                     <AsciiText text="preview document" />
                   </button>
-                  <button onClick={handleDownloadOriginalCv} className="text-control">
-                    <Download className="w-4 h-4" />
+                  <button type="button" onClick={handleDownloadOriginalCv} className="text-control">
+                    <Download className="w-4 h-4" aria-hidden="true" />
                     <AsciiText text="download pdf" />
                   </button>
                 </div>
@@ -443,15 +486,20 @@ export default function App() {
       {/* CV Modal Preview — Embeds the exact original Engl CV Xavier Hery.pdf */}
       {cvModalOpen && (
         <div
-          onClick={() => setCvModalOpen(false)}
+          onClick={closeCvModal}
           className="fixed inset-0 z-50 bg-[#171717]/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6"
         >
           <div
+            ref={cvDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="cv-preview-title"
             onClick={(e) => e.stopPropagation()}
+            onKeyDown={handleCvDialogKeyDown}
             className="bg-[#F5F3EE] border border-[#171717] w-full max-w-4xl h-[88vh] flex flex-col shadow-2xl"
           >
             <div className="px-4 sm:px-6 py-3.5 bg-[#171717] text-[#F5F3EE] flex justify-between items-center gap-3">
-              <span className="font-mono text-xs truncate">{ORIGINAL_CV_FILENAME}</span>
+              <span id="cv-preview-title" className="font-mono text-xs truncate">{ORIGINAL_CV_FILENAME}</span>
               <div className="flex items-center gap-2.5">
                 <a
                   href={ORIGINAL_CV_PDF_URL}
@@ -462,18 +510,21 @@ export default function App() {
                   Open Tab
                 </a>
                 <button
+                  type="button"
                   onClick={handleDownloadOriginalCv}
                   className="px-3 py-1.5 bg-[#B6C5B0] hover:bg-[#9BB4B5] transition-colors text-[#171717] font-mono text-[13px] font-semibold inline-flex items-center gap-1.5"
                 >
-                  <Download className="w-3.5 h-3.5" />
+                  <Download className="w-3.5 h-3.5" aria-hidden="true" />
                   <span>Download</span>
                 </button>
                 <button
-                  onClick={() => setCvModalOpen(false)}
+                  ref={cvCloseRef}
+                  type="button"
+                  onClick={closeCvModal}
                   aria-label="Close CV preview"
                   className="p-1 text-[#F5F3EE] hover:text-[#9BB4B5] transition-colors"
                 >
-                  <X className="w-5 h-5" />
+                  <X className="w-5 h-5" aria-hidden="true" />
                 </button>
               </div>
             </div>

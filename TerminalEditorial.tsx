@@ -7,6 +7,7 @@ import {
   charProgress,
   charState,
   entryEndFor,
+  exitStartFor,
   isDecodable,
   lineProgress
 } from './terminalMotion';
@@ -70,9 +71,11 @@ type Word = {
   decodable: boolean[];
   /** The enclosing link or button: a focused control always shows its real label. */
   control: Element | null;
-  /** Document Y of the rendered line this word sits on, and where its entry decode completes. */
+  /** Document Y of the rendered line this word sits on, where its entry decode completes and
+   * where its exit scramble begins. */
   top: number;
   entryEnd: number;
+  exitStart: number;
   /** Viewport X and width of the text block the decoding wave crosses. */
   blockLeft: number;
   blockWidth: number;
@@ -157,6 +160,7 @@ export function useEditorialScroll() {
               control: null,
               top: 0,
               entryEnd: 0,
+              exitStart: 0,
               blockLeft: 0,
               blockWidth: 1,
               seed: 0,
@@ -188,9 +192,11 @@ export function useEditorialScroll() {
         });
         lines.forEach((line) => {
           const entryEnd = entryEndFor(line.top - maxScroll, viewport);
+          const exitStart = exitStartFor(line.top - maxScroll, viewport);
           line.words.forEach((word) => {
             word.top = line.top;
             word.entryEnd = entryEnd;
+            word.exitStart = exitStart;
           });
         });
         lines.forEach((line) => next.push(...line.words));
@@ -253,7 +259,7 @@ export function useEditorialScroll() {
       for (const w of words) {
         const relTop = w.top - y;
         const forced = isReduced || (w.control !== null && w.control === focused);
-        const lineP = forced ? 1 : lineProgress(relTop, viewport, w.entryEnd);
+        const lineP = forced ? 1 : lineProgress(relTop, viewport, w.entryEnd, w.exitStart);
         const entering = relTop > viewport * 0.5;
         // Quantized so sub-pixel scroll jitter never re-renders (or clicks)
         const p = Math.round(lineP * 240) / 240;
