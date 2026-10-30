@@ -3365,6 +3365,7 @@ const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ 
     // overridden while scrolling). Within reach the jaws part briefly, nearby fish
     // are drawn in and vanish. If the encounter can't complete (direction reversed,
     // school scrolled away, timeout), the fish scatter and fade.
+    const FEEDING_ENABLED = false;
     interface FeedFish {
       ox: number; // home offset inside the elongated school
       oy: number;
@@ -4937,7 +4938,8 @@ const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ 
             else feed.idleForFeed += dt;
             ready = feed.idleForFeed >= 10 + feed.extraDelay;
           }
-          if (ready) {
+          // The whale no longer hunts: no school is ever spawned
+          if (ready && FEEDING_ENABLED) {
             const headVisible = headX > w * 0.04 && headX < w * 0.96 && headY > h * 0.06 && headY < h * 0.94;
             if (headVisible && auto.phase !== 'offscreen' && auto.phase !== 'return') {
               spawnSchool(headX, headY, hx, hy, w, h, scrollingNow);
