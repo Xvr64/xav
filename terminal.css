@@ -705,6 +705,22 @@ body {
 }
 .terminal-portfolio #contact .terminal-social a { font-size: var(--text-meta); }
 
+/* The hadal floor (HadalFloor.tsx): full bleed along the foot of Contact, beneath the footer
+   links and behind the copy */
+.hadal-floor {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  width: 100vw;
+  height: clamp(110px, 17vh, 160px);
+  margin-left: -50vw;
+  pointer-events: none;
+  z-index: -1;
+}
+@media print {
+  .hadal-floor { display: none; }
+}
+
 /* ---------------------------------------------------------------------------
    Links & focus
    --------------------------------------------------------------------------- */
