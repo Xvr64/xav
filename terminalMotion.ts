@@ -122,3 +122,44 @@ export function waterShade(y: number, start: number, travel: number, viewport: n
   const progress = progressBetween(y, start, travel);
   return Math.round(255 * (1 - progress ** 1.5));
 }
+
+const smoothRange = (value: number, start: number, end: number) => {
+  const t = clamp01((value - start) / (end - start));
+  return t * t * (3 - 2 * t);
+};
+
+/** Radians the forming planet still turns before it settles on the first city. */
+export const ORBIT_SPIN = 1.15;
+
+/**
+ * The whale-to-globe prelude as a pure function of its own scroll progress t ∈ [0, 1]:
+ * converge (0–20%), orbit (20–45%), sphere (45–70%), planet (70–90%), handoff (90–100%).
+ * Both canvases read the same stages, so stopping anywhere holds one exact state and
+ * scrolling back plays the same states in reverse.
+ */
+export function orbitStages(t: number) {
+  const p = clamp01(t);
+  return {
+    /** The whales leave their own swim for the deterministic orbit. */
+    converge: smoothRange(p, 0, 0.2),
+    /** Orbit radius in planet radii: a wide approach that tightens onto the surface. */
+    radius: 1.6 - 0.54 * smoothRange(p, 0.05, 0.62),
+    /** Trails left by the orbit, the first arcs of the sphere. */
+    trails: smoothRange(p, 0.22, 0.42),
+    /** ASCII lattice (limb, longitude and latitude arcs). */
+    sphere: smoothRange(p, 0.42, 0.66),
+    /** ASCII land, the first geography. */
+    land: smoothRange(p, 0.56, 0.8),
+    /** The whales dissolve into the character field, tail first. */
+    dissolve: smoothRange(p, 0.64, 0.88),
+    /** The ASCII sphere hands its place to the drawn globe. */
+    ascii: 1 - smoothRange(p, 0.84, 0.99),
+    globeGrid: smoothRange(p, 0.7, 0.9),
+    globeLand: smoothRange(p, 0.74, 0.94),
+    globeDisc: smoothRange(p, 0.76, 0.96),
+    globeMarks: smoothRange(p, 0.9, 1),
+    caption: smoothRange(p, 0.93, 1),
+    /** Remaining planet rotation (radians about the polar axis); eases to rest at t = 1. */
+    spin: ORBIT_SPIN * (1 - smoothRange(p, 0.3, 1))
+  };
+}

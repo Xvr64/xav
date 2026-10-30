@@ -4,7 +4,7 @@ import { Eye, Download, X, Menu, Check, ArrowDown } from 'lucide-react';
 import { loadLandDots, type LandDots } from './glyphcssGlobe';
 import { createAsciiJellyfishField } from './asciiOceanLife';
 import { AsciiText, useEditorialScroll } from './TerminalEditorial';
-import { waterShade } from './terminalMotion';
+import { waterShade, orbitStages } from './terminalMotion';
 import { background, fluid, type BackgroundHandle } from 'asciify-engine/kit';
 import { createHeroCurrent, type HeroRect } from './heroCurrent';
 
@@ -1909,6 +1909,95 @@ const vecSlerp = (a: Vec3, b: Vec3, t: number): Vec3 => {
   const k2 = Math.sin(t * omega) / s;
   return vecNormalize([k1 * a[0] + k2 * b[0], k1 * a[1] + k2 * b[1], k1 * a[2] + k2 * b[2]]);
 };
+/** Rotation about the polar axis (a change of longitude) */
+const vecRotZ = (v: Vec3, a: number): Vec3 => {
+  const c = Math.cos(a);
+  const s = Math.sin(a);
+  return [v[0] * c - v[1] * s, v[0] * s + v[1] * c, v[2]];
+};
+/** Orthographic camera: local east / north on screen for a view direction */
+const cameraBasis = (view: Vec3): { east: Vec3; north: Vec3 } => {
+  let east: Vec3 = [-view[1], view[0], 0];
+  if (Math.hypot(east[0], east[1]) < 1e-6) east = [1, 0, 0];
+  east = vecNormalize(east);
+  return {
+    east,
+    north: [
+      view[1] * east[2] - view[2] * east[1],
+      view[2] * east[0] - view[0] * east[2],
+      view[0] * east[1] - view[1] * east[0]
+    ]
+  };
+};
+/** Globe placement inside its pinned stage (before the camera's zoom) */
+const globeFrame = (W: number, H: number) => {
+  const mobile = W < 768;
+  return {
+    cx: mobile ? W * 0.5 : W * 0.64,
+    cy: mobile ? H * 0.34 : H * 0.47,
+    baseR: mobile ? Math.min(W * 0.4, H * 0.26) : Math.min(W * 0.27, H * 0.39)
+  };
+};
+const DWELL_ZOOM = 1.08;
+
+// ============================================================================
+// WHALE ORBIT — the Global runway's prelude, where the two whales become the planet
+// ============================================================================
+// The runway pins its stage for a prelude before the city sequence. Its scroll progress t is
+// the only clock: the whale canvas blends the whales from their own swim onto two great-circle
+// orbits, then lays the ASCII sphere along those paths in the globe's exact frame and camera;
+// JourneyGlobe materializes over it layer by layer (orbitStages). The city sequence and the
+// white-to-black descent start after the prelude, so neither timeline changes.
+const orbitHandoff = {
+  active: false,
+  /** Scroll position where the stage pins (t = 0) and the prelude's length in px */
+  start: Infinity,
+  travel: 1,
+  /** The globe's first frame in viewport px while pinned (city sequence p = 0) */
+  cx: 0,
+  cy: 0,
+  R: 0,
+  /** Camera at p = 0 (the first city) */
+  cam: [1, 0, 0] as Vec3
+};
+const orbitProgress = (y: number) =>
+  orbitHandoff.active ? Math.max(0, Math.min(1, (y - orbitHandoff.start) / orbitHandoff.travel)) : 1;
+/** The forming planet's camera: the first city, still turning toward it */
+const orbitCamera = (spin: number): Vec3 => vecRotZ(orbitHandoff.cam, spin);
+
+/**
+ * One great circle per whale in view space (x right, y up, z toward the viewer), set like a
+ * ring seen slightly from above (tilt > 0: its near half passes below the centre) or below,
+ * then rolled in the screen plane. On the near half a whale swims across the face of the
+ * sphere in profile, foreshortens only at the limbs and dims behind. `s` is where it meets its
+ * orbit as convergence ends, `d` the direction it swims from there. The two rings cross, so the
+ * whales wind around each other on the sphere they trace.
+ */
+const orbitRing = (tiltDeg: number, rollDeg: number, meetDeg: number, dir: 1 | -1, speed: number) => {
+  const tilt = tiltDeg * GEO_RAD;
+  const meet = meetDeg * GEO_RAD;
+  const e2: Vec3 = [0, Math.sin(tilt), -Math.cos(tilt)];
+  const c = Math.cos(meet);
+  const s = Math.sin(meet);
+  return {
+    s: vecRotZ([dir * c, e2[1] * s, e2[2] * s], rollDeg * GEO_RAD),
+    d: vecRotZ([-dir * s, e2[1] * c, e2[2] * c], rollDeg * GEO_RAD),
+    speed,
+    phase: 0.2
+  };
+};
+// The near face is crossed at -90°; `dir` is the way across it (1 = left to right)
+const ORBIT_PATHS = [
+  // Main whale: arrives low on the left and crosses the lower face, left to right
+  orbitRing(24, 12, -142, 1, 1.1),
+  // Companion: arrives high on the right and crosses the upper face the other way, so the
+  // two pass on the face and meet again behind the sphere
+  orbitRing(-30, -14, -134, -1, 1.24)
+];
+/** Angle along a whale's orbit at prelude t; it meets its orbit point `s` as convergence ends */
+const orbitAngle = (idx: number, t: number) => (t - ORBIT_PATHS[idx].phase) * Math.PI * 2 * ORBIT_PATHS[idx].speed;
+/** Gentle perspective for points above the orthographic globe (front a touch larger) */
+const orbitPerspective = (z: number) => 1 / (1 - 0.12 * z);
 
 /** Canvas label placement per city (keeps Paris/Pau and Singapore/Jakarta apart) */
 const JOURNEY_LABEL_OFFSETS: Record<string, { dx: number; dy: number; align: CanvasTextAlign }> = {
@@ -1935,6 +2024,7 @@ const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations }) => 
   const stageRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const progressFillRef = useRef<HTMLDivElement | null>(null);
+  const captionRef = useRef<HTMLDivElement | null>(null);
   const activeIdRef = useRef(activeId);
   activeIdRef.current = activeId;
   const goToCityRef = useRef<(id: string) => void>((id) => setActiveId(id));
@@ -2081,8 +2171,10 @@ const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations }) => 
     // ---- Cached geometry (zero forced layout / getComputedStyle during scroll) ----
     const runway = stage.closest('[data-journey-runway]') as HTMLElement | null;
     const pinned = runway?.firstElementChild as HTMLElement | null;
+    const prelude = runway?.querySelector<HTMLElement>('[data-orbit-prelude]') ?? null;
     let runwayDocTop = 0;
     let runwayTravel = 1;
+    let preludeTravel = 0;
     let stickyTop = 0;
     let stageDocLeft = 0;
     let cachedDocScrollable = 1;
@@ -2110,17 +2202,27 @@ const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations }) => 
         const rr = runway.getBoundingClientRect();
         const pr = pinned.getBoundingClientRect();
         runwayDocTop = rr.top + sy;
-        runwayTravel = Math.max(1, rr.height - pr.height);
         stickyTop = parseFloat(getComputedStyle(pinned).top) || 0;
-        globeScrollGeometry.start = runwayDocTop - stickyTop;
+        // The pinned prelude (whales → planet) comes first; the city sequence keeps its own travel
+        preludeTravel = prefersReduced || !prelude ? 0 : prelude.offsetHeight;
+        runwayTravel = Math.max(1, rr.height - pr.height - preludeTravel);
+        globeScrollGeometry.start = runwayDocTop - stickyTop + preludeTravel;
         globeScrollGeometry.travel = runwayTravel;
+        const f = globeFrame(W, H);
+        orbitHandoff.active = preludeTravel > 1;
+        orbitHandoff.start = runwayDocTop - stickyTop;
+        orbitHandoff.travel = Math.max(1, preludeTravel);
+        orbitHandoff.cx = rect.left + f.cx;
+        orbitHandoff.cy = stickyTop + f.cy;
+        orbitHandoff.R = f.baseR * DWELL_ZOOM;
+        orbitHandoff.cam = cityVecs[0];
       }
       cachedDocScrollable = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
     };
 
     const progressGeometry = () => {
       if (!runway || !pinned || runwayTravel <= 1) return null;
-      return { top: runwayDocTop - window.scrollY, stickyTop, travel: runwayTravel };
+      return { top: runwayDocTop - window.scrollY, stickyTop, lead: preludeTravel, travel: runwayTravel };
     };
     const measureProgress = (): number => {
       return globeScrollProgress();
@@ -2129,26 +2231,19 @@ const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations }) => 
     const drawOrderBuf = locations.map((_, k) => k);
 
     // ---- Drawing -----------------------------------------------------------------
-    const draw = (st: JourneyState) => {
+    // During the whale prelude the planet materializes in layers over the ASCII sphere
+    type GlobeForm = { grid: number; land: number; disc: number; marks: number; caption: number };
+    const FULL_FORM: GlobeForm = { grid: 1, land: 1, disc: 1, marks: 1, caption: 1 };
+    const draw = (st: JourneyState, form: GlobeForm) => {
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, W, H);
 
-      const mobile = W < 768;
-      const cx = mobile ? W * 0.5 : W * 0.64;
-      const cy = mobile ? H * 0.34 : H * 0.47;
-      const baseR = mobile ? Math.min(W * 0.4, H * 0.26) : Math.min(W * 0.27, H * 0.39);
+      const { cx, cy, baseR } = globeFrame(W, H);
       const R = baseR * st.zoom;
 
       // Camera basis (orthographic): view direction + local east/north on screen
       const view = st.cam;
-      let east: Vec3 = [-view[1], view[0], 0];
-      if (Math.hypot(east[0], east[1]) < 1e-6) east = [1, 0, 0];
-      east = vecNormalize(east);
-      const north: Vec3 = [
-        view[1] * east[2] - view[2] * east[1],
-        view[2] * east[0] - view[0] * east[2],
-        view[0] * east[1] - view[1] * east[0]
-      ];
+      const { east, north } = cameraBasis(view);
       const px = (v: Vec3) => cx + R * vecDot(v, east);
       const py = (v: Vec3) => cy - R * vecDot(v, north);
 
@@ -2161,6 +2256,7 @@ const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations }) => 
       const ocean = ctx.createRadialGradient(cx - R * 0.3, cy - R * 0.35, R * 0.1, cx, cy, R);
       ocean.addColorStop(0, mc([249, 248, 245, 0.95], [150, 172, 170, 0.6]));
       ocean.addColorStop(1, mc([231, 235, 236, 0.95], [112, 134, 132, 0.66]));
+      ctx.globalAlpha = form.disc;
       ctx.beginPath();
       ctx.arc(cx, cy, R, 0, Math.PI * 2);
       ctx.fillStyle = ocean;
@@ -2170,6 +2266,7 @@ const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations }) => 
       ctx.stroke();
 
       // Graticule (front hemisphere only, batched into 1 stroke call)
+      ctx.globalAlpha = form.grid;
       ctx.lineWidth = 0.6;
       ctx.strokeStyle = mc([31, 59, 87, 0.08], [16, 34, 30, 0.12]);
       ctx.beginPath();
@@ -2186,7 +2283,7 @@ const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations }) => 
       ctx.stroke();
 
       // Land: fine dot-matrix batched into 4 alpha buckets per relief band (<=12 fill calls instead of ~2,000)
-      if (land && dotBuckets) {
+      if (land && dotBuckets && form.land > 0) {
         const { xyz, bands } = land;
         const ex = east[0], ey = east[1], ez = east[2];
         const nx = north[0], ny = north[1], nz = north[2];
@@ -2225,7 +2322,7 @@ const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations }) => 
           for (let t = 0; t < 4; t++) {
             const cnt = bCounts[t];
             if (cnt === 0) continue;
-            ctx.globalAlpha = DOT_BUCKET_ALPHAS[t];
+            ctx.globalAlpha = DOT_BUCKET_ALPHAS[t] * form.land;
             ctx.beginPath();
             const arr = dotBuckets[t];
             for (let m = 0; m < cnt; m++) {
@@ -2236,7 +2333,13 @@ const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations }) => 
             ctx.fill();
           }
         }
-        ctx.globalAlpha = 1;
+      }
+
+      // Routes, markers and labels arrive last, once the planet has formed
+      ctx.globalAlpha = form.marks;
+      if (form.marks <= 0) {
+        blit();
+        return;
       }
 
       // Routes: completed legs a quiet hairline, the current leg slightly stronger
@@ -2314,7 +2417,7 @@ const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations }) => 
           ctx.lineWidth = 1;
           ctx.stroke();
         }
-        ctx.globalAlpha = 0.35 + 0.65 * rv;
+        ctx.globalAlpha = (0.35 + 0.65 * rv) * form.marks;
         ctx.beginPath();
         ctx.arc(x, y, isActive ? 4.5 : 3.4, 0, Math.PI * 2);
         ctx.fillStyle = mc([22, 38, 51], [6, 20, 16]);
@@ -2322,7 +2425,7 @@ const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations }) => 
         ctx.lineWidth = 1.5;
         ctx.strokeStyle = mc([247, 246, 242, 0.95], [200, 218, 216, 0.9]);
         ctx.stroke();
-        ctx.globalAlpha = 1;
+        ctx.globalAlpha = form.marks;
 
         // Label (reached cities only), with collision avoidance — active wins
         if (rv < 0.5) continue;
@@ -2352,8 +2455,11 @@ const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations }) => 
         ctx.fillStyle = isActive ? mc([22, 38, 51], [4, 16, 13]) : mc([43, 53, 59], [14, 32, 28]);
         ctx.fillText(label, lx, ly);
       }
-
-      // Single 1:1 device-pixel blit to DOM canvas (zero DOM style/font access)
+      blit();
+    };
+    // Single 1:1 device-pixel blit to DOM canvas (zero DOM style/font access)
+    const blit = () => {
+      ctx.globalAlpha = 1;
       domCtx.setTransform(1, 0, 0, 1, 0, 0);
       domCtx.clearRect(0, 0, canvas.width, canvas.height);
       domCtx.drawImage(offCanvas, 0, 0);
@@ -2366,8 +2472,15 @@ const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations }) => 
     const lastCityOpacities = new Float32Array(locations.length).fill(-1);
     let lastActive = Math.max(0, locations.findIndex((l) => l.id === activeIdRef.current));
 
-    const apply = (st: JourneyState) => {
-      draw(st);
+    let lastCaption = -1;
+    const apply = (st: JourneyState, form: GlobeForm) => {
+      draw(st, form);
+      // The first city's caption arrives once the planet has fully formed
+      const caption = Math.round(form.caption * 100) / 100;
+      if (caption !== lastCaption && captionRef.current) {
+        lastCaption = caption;
+        captionRef.current.style.opacity = caption >= 1 ? '' : String(caption);
+      }
       if (progressFillRef.current) progressFillRef.current.style.transform = `scaleX(${st.p.toFixed(4)})`;
       for (let idx = 0; idx < cityStopEls.length; idx++) {
         const op = 0.4 + st.reveal[idx] * 0.6;
@@ -2387,7 +2500,20 @@ const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations }) => 
     let raf = 0;
     const frame = () => {
       raf = 0;
-      apply(prefersReduced ? reducedState() : stateAt(measureProgress()));
+      if (prefersReduced) {
+        apply(reducedState(), FULL_FORM);
+        return;
+      }
+      const t = orbitProgress(window.scrollY);
+      if (t >= 1) {
+        apply(stateAt(measureProgress()), FULL_FORM);
+        return;
+      }
+      // Prelude: the first city's frame, the planet still turning toward it as it forms
+      const s = orbitStages(t);
+      const st = stateAt(0);
+      st.cam = orbitCamera(s.spin);
+      apply(st, { grid: s.globeGrid, land: s.globeLand, disc: s.globeDisc, marks: s.globeMarks, caption: s.caption });
     };
     const requestRender = () => {
       if (!raf) raf = requestAnimationFrame(frame);
@@ -2426,7 +2552,7 @@ const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations }) => 
       const g = progressGeometry();
       if (!dwell || !g) return;
       const p = (dwell.start + dwell.end) / 2;
-      const targetTop = g.stickyTop - p * g.travel;
+      const targetTop = g.stickyTop - g.lead - p * g.travel;
       window.scrollTo({ top: window.scrollY + (g.top - targetTop), behavior: 'smooth' });
     };
 
@@ -2491,6 +2617,7 @@ const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations }) => 
 
       {/* Current destination — all 7 captions pre-mounted in a grid stack (zero DOM childList mutations on city change) */}
       <div
+        ref={captionRef}
         className="grid items-center absolute left-5 right-5 bottom-24 md:right-auto md:left-[6vw] md:bottom-auto md:top-1/2 md:-translate-y-1/2 md:w-[min(28vw,440px)]"
         aria-live="polite"
       >
@@ -2583,6 +2710,8 @@ const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ 
     const NUM_GLYPHS = GLYPHS.length;
     const OCEAN_GLYPHS = ['·', '.', ':', '-', '~', '=', '+', '*', '#', '@'];
     const NUM_OCEAN_GLYPHS = OCEAN_GLYPHS.length;
+    // Orbit sphere glyphs, faint to dense: 0 '·' 1 '.' 2 ':' 3 '-' 4 '~' 5 '+' 6 '*'
+    const SPHERE_GLYPHS = ['·', '.', ':', '-', '~', '+', '*'];
 
     // ------------------------------------------------------------------------
     // 1. PRE-BAKED SPRITE ATLAS FOR WHALE MOSAIC TILES, HALO & OCEAN SHADER GLYPHS
@@ -2597,7 +2726,8 @@ const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ 
     // Rows 0..9: legacy whale, halo & ocean tiers. Rows 10..14: whale deep-blue palette.
     // Rows 15..17: fish school ink (glyph only). Row 18: open-mouth interior (baleen).
     // Rows 19..21: abyss ocean tiers — pale teal / blue-grey / forest-green glyphs for dark water.
-    atlasCanvas.height = 22 * tilePx;
+    // Rows 22..23: orbit sphere — the globe's graticule navy (lattice) and land ink, glyph only.
+    atlasCanvas.height = 24 * tilePx;
     const aCtx = atlasCanvas.getContext('2d');
 
     if (aCtx) {
@@ -2755,6 +2885,20 @@ const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ 
           aCtx.fillText(OCEAN_GLYPHS[gIdx], gIdx * cellSize + cellSize * 0.5, py + cellSize * 0.5 + 0.5);
         }
       }
+
+      // Rows 22..23: ORBIT SPHERE — the same inks the drawn globe uses (#1F3B57 lattice, #162633
+      // land), so the character sphere and the planet that replaces it read as one surface.
+      aCtx.font = '500 9px "JetBrains Mono", monospace';
+      const sphereInks = [
+        { row: 22, c: [31, 59, 87] },
+        { row: 23, c: [22, 38, 51] }
+      ];
+      for (const ink of sphereInks) {
+        aCtx.fillStyle = `rgb(${ink.c[0]}, ${ink.c[1]}, ${ink.c[2]})`;
+        for (let gIdx = 0; gIdx < SPHERE_GLYPHS.length; gIdx++) {
+          aCtx.fillText(SPHERE_GLYPHS[gIdx], gIdx * cellSize + cellSize * 0.5, ink.row * cellSize + cellSize * 0.5 + 0.5);
+        }
+      }
     }
 
     // Offscreen static dot-grid canvas + quarter-res atmospheric water backdrop canvas
@@ -2781,6 +2925,12 @@ const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ 
     let fishTouched = new Int32Array(0);
     // Reading-text proximity per whale cell (0 open water, 1 near a line, 2 behind a line)
     let readingBuf = new Uint8Array(0);
+    // Orbit prelude: per-cell whale strength (depth & occlusion behind the planet), and the
+    // ASCII sphere's once-per-cell stamp plus its land density raster
+    let fadeBuf = new Float32Array(0);
+    let sphereStamp = new Uint32Array(0);
+    let landCount = new Uint8Array(0);
+    let landTouched = new Int32Array(0);
 
     // Pre-allocated 1D separable harmonic tables for the generative ocean shader (zero trig in inner loop)
     let colSin1 = new Float32Array(0);
@@ -2858,6 +3008,14 @@ const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ 
       spineY: Float32Array;
       spineAngle: Float32Array;
       initialized: boolean;
+      // Displayed pose during the orbit prelude: the swim blended onto the orbit, plus each
+      // node's depth on the sphere, width scale and strength (1 / 1 / 1 outside the prelude)
+      dispX: Float32Array;
+      dispY: Float32Array;
+      dispAngle: Float32Array;
+      dispDepth: Float32Array;
+      dispScale: Float32Array;
+      dispFade: Float32Array;
     }
 
     const SPINE_NODES = 64;
@@ -2876,7 +3034,13 @@ const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ 
       spineX: new Float32Array(SPINE_NODES),
       spineY: new Float32Array(SPINE_NODES),
       spineAngle: new Float32Array(SPINE_NODES),
-      initialized: false
+      initialized: false,
+      dispX: new Float32Array(SPINE_NODES),
+      dispY: new Float32Array(SPINE_NODES),
+      dispAngle: new Float32Array(SPINE_NODES),
+      dispDepth: new Float32Array(SPINE_NODES),
+      dispScale: new Float32Array(SPINE_NODES).fill(1),
+      dispFade: new Float32Array(SPINE_NODES).fill(1)
     });
 
     const whales: WhaleAgent[] = [
@@ -2933,6 +3097,10 @@ const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ 
       fishBuf = new Float32Array(total);
       fishTouched = new Int32Array(total);
       readingBuf = new Uint8Array(total);
+      fadeBuf = new Float32Array(total).fill(1);
+      sphereStamp = new Uint32Array(total);
+      landCount = new Uint8Array(total);
+      landTouched = new Int32Array(total);
 
       colSin1 = new Float32Array(oceanCols);
       colCos1 = new Float32Array(oceanCols);
@@ -3602,6 +3770,235 @@ const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ 
 
 
     // ------------------------------------------------------------------------
+    // ORBIT PRELUDE (Global runway) — the whales' orbit forms the planet (orbitHandoff)
+    // ------------------------------------------------------------------------
+    // The swim keeps running underneath; the displayed pose blends it onto the whale's great
+    // circle by `converge`. Angles blend the short way round and the body is rebuilt node by
+    // node from the head, so a whale turning onto its orbit keeps its length and silhouette.
+    const orbX = new Float32Array(SPINE_NODES);
+    const orbY = new Float32Array(SPINE_NODES);
+    const orbitBodyLen = [0, 0];
+    const orbitLanes: Lane[] = [{ x: 0.5, y: 0.5 }, { x: 0.5, y: 0.5 }];
+    let orbitLaneWeight = 0;
+    const orbP = { x: 0, y: 0, z: 0, r: 0 };
+    const lerpAngle = (a: number, b: number, k: number) => {
+      let d = b - a;
+      while (d > Math.PI) d -= Math.PI * 2;
+      while (d < -Math.PI) d += Math.PI * 2;
+      return a + d * k;
+    };
+    /** Viewport point of whale `idx`'s orbit at angle `a` on a sphere of radius `ro` (into orbP) */
+    const projectOrbit = (idx: number, a: number, ro: number) => {
+      const P = ORBIT_PATHS[idx];
+      const c = Math.cos(a);
+      const s = Math.sin(a);
+      const X = P.s[0] * c + P.d[0] * s;
+      const Y = P.s[1] * c + P.d[1] * s;
+      const Z = P.s[2] * c + P.d[2] * s;
+      const k = ro * orbitPerspective(Z);
+      orbP.x = orbitHandoff.cx + X * k;
+      orbP.y = orbitHandoff.cy - Y * k;
+      orbP.z = Z;
+      orbP.r = Math.hypot(X, Y) * k;
+    };
+    /** Strength of a body point: a touch dimmer at the back, hidden as it passes behind the planet */
+    const orbitFade = (z: number, r: number, R: number, sphere: number) => {
+      const depthDim = 0.8 + 0.1 * (z + 1);
+      if (z >= 0) return depthDim;
+      const behind = smoothStepRange(-z, 0, 0.25) * (1 - smoothStepRange(r, R * 0.9, R * 1.04));
+      return depthDim * (1 - behind * (0.45 + 0.45 * sphere));
+    };
+    const composeOrbitPose = (
+      wh: WhaleAgent,
+      idx: number,
+      t: number,
+      conv: number,
+      radius: number,
+      sphere: number,
+      bodyLen: number,
+      simSegLen: number
+    ) => {
+      const R = orbitHandoff.R;
+      const ro = R * radius;
+      const head = orbitAngle(idx, t);
+      const step = bodyLen / (SPINE_NODES - 1) / ro;
+      for (let k = 0; k < SPINE_NODES; k++) {
+        projectOrbit(idx, head - k * step, ro);
+        orbX[k] = orbP.x;
+        orbY[k] = orbP.y;
+        wh.dispDepth[k] = orbP.z * conv;
+        wh.dispScale[k] = 1 + (0.86 + 0.16 * orbP.z - 1) * conv;
+        wh.dispFade[k] = 1 + (orbitFade(orbP.z, orbP.r, R, sphere) - 1) * conv;
+      }
+      wh.dispX[0] = wh.spineX[0] + (orbX[0] - wh.spineX[0]) * conv;
+      wh.dispY[0] = wh.spineY[0] + (orbY[0] - wh.spineY[0]) * conv;
+      wh.dispAngle[0] = lerpAngle(wh.spineAngle[0], Math.atan2(orbY[0] - orbY[1], orbX[0] - orbX[1]), conv);
+      for (let k = 1; k < SPINE_NODES; k++) {
+        const u = k / (SPINE_NODES - 1);
+        const dx = orbX[k - 1] - orbX[k];
+        const dy = orbY[k - 1] - orbY[k];
+        // The orbit keeps the same muscular wave as the swim, so the body stays alive on it
+        const envelope = u < 0.22 ? u * 0.15 : 0.033 + Math.pow((u - 0.22) / 0.78, 1.75) * 0.44;
+        const wave = Math.sin(wh.swimCycle - u * 4.8) * envelope * wh.smoothWaveAmp;
+        const a = lerpAngle(wh.spineAngle[k], Math.atan2(dy, dx) + wave, conv);
+        const seg = simSegLen + (Math.hypot(dx, dy) - simSegLen) * conv;
+        wh.dispAngle[k] = a;
+        wh.dispX[k] = wh.dispX[k - 1] - Math.cos(a) * seg;
+        wh.dispY[k] = wh.dispY[k - 1] - Math.sin(a) * seg;
+      }
+    };
+
+    // The ASCII sphere: the orbit's trails, the globe's own graticule and land, in the globe's
+    // frame and camera, one glyph per cell at most, never over a whale.
+    let landDots: LandDots | null = null;
+    loadLandDots()
+      .then((dots) => {
+        if (!oceanLifeDisposed) landDots = dots;
+      })
+      .catch(() => undefined);
+    const sphereLattice: Vec3[][] = [];
+    for (let lon = -180; lon < 180; lon += 30) {
+      const line: Vec3[] = [];
+      for (let lat = -80; lat <= 80; lat += 2) line.push(lonLatToVec(lon, lat));
+      sphereLattice.push(line);
+    }
+    for (let lat = -60; lat <= 60; lat += 30) {
+      const line: Vec3[] = [];
+      for (let lon = -180; lon <= 180; lon += 2) line.push(lonLatToVec(lon, lat));
+      sphereLattice.push(line);
+    }
+    let stampId = 0;
+    let sphereAlpha = -1;
+    const sphereGlyph = (x: number, y: number, glyph: number, row: number, alpha: number) => {
+      if (x < 0 || y < 0) return;
+      const c = (x / cellSize) | 0;
+      const r = (y / cellSize) | 0;
+      if (c >= gridCols || r >= gridRows) return;
+      const idx = r * gridCols + c;
+      if (sphereStamp[idx] === stampId || occBuf[idx] > 0) return;
+      sphereStamp[idx] = stampId;
+      const a = Math.round(alpha * 20) / 20;
+      if (a <= 0) return;
+      if (a !== sphereAlpha) {
+        ctx.globalAlpha = a;
+        sphereAlpha = a;
+      }
+      ctx.drawImage(atlasCanvas, glyph * tilePx, row * tilePx, tilePx, tilePx, c * cellSize, r * cellSize, cellSize, cellSize);
+    };
+    const drawOrbitSphere = (t: number, s: ReturnType<typeof orbitStages>, waterLevel: number, fluidLive: boolean) => {
+      const { cx, cy, R } = orbitHandoff;
+      const ascii = s.ascii;
+      if (R <= 0 || ascii <= 0) return;
+
+      // The water quiets where the planet forms (the page's own water colour, softly feathered),
+      // so the orbit's trails and the lattice read apart from the current
+      const calm = smoothStepRange(t, 0.26, 0.6) * (1 - smoothStepRange(t, 0.93, 1));
+      if (fluidLive && calm > 0) {
+        const outer = R * 1.5;
+        const halo = ctx.createRadialGradient(cx, cy, 0, cx, cy, outer);
+        const water = `${waterLevel}, ${waterLevel}, ${waterLevel}`;
+        halo.addColorStop(0, `rgba(${water}, 0.94)`);
+        halo.addColorStop(1.04 / 1.5, `rgba(${water}, 0.94)`);
+        halo.addColorStop(1, `rgba(${water}, 0)`);
+        ctx.globalAlpha = calm;
+        ctx.fillStyle = halo;
+        ctx.fillRect(cx - outer, cy - outer, outer * 2, outer * 2);
+        ctx.globalAlpha = 1;
+      }
+      if (s.trails <= 0 && s.sphere <= 0) return;
+      stampId++;
+      sphereAlpha = -1;
+
+      const view = orbitCamera(s.spin);
+      const { east, north } = cameraBasis(view);
+      const ex = east[0], ey = east[1], ez = east[2];
+      const nx = north[0], ny = north[1], nz = north[2];
+      const vx = view[0], vy = view[1], vz = view[2];
+
+      // 1. Land: the globe's dot matrix binned into cells, revealed dot by dot
+      if (landDots && s.land > 0) {
+        const { xyz } = landDots;
+        const n = xyz.length / 3;
+        let touched = 0;
+        for (let d = 0; d < n; d++) {
+          if (((d * 2654435761) >>> 0) / 4294967296 >= s.land) continue;
+          const o = d * 3;
+          const x = xyz[o], y = xyz[o + 1], z = xyz[o + 2];
+          if (x * vx + y * vy + z * vz <= 0.14) continue;
+          const sx = cx + R * (x * ex + y * ey + z * ez);
+          const sy = cy - R * (x * nx + y * ny + z * nz);
+          if (sx < 0 || sy < 0) continue;
+          const c = (sx / cellSize) | 0;
+          const r = (sy / cellSize) | 0;
+          if (c >= gridCols || r >= gridRows) continue;
+          const idx = r * gridCols + c;
+          if (landCount[idx] === 0) landTouched[touched++] = idx;
+          if (landCount[idx] < 255) landCount[idx]++;
+        }
+        for (let i = 0; i < touched; i++) {
+          const idx = landTouched[i];
+          const cnt = landCount[idx];
+          landCount[idx] = 0;
+          // Dots and colons, like the globe's dot matrix; '+' only where the limb crowds them
+          const glyph = cnt >= 5 ? 5 : cnt >= 2 ? 2 : 1;
+          sphereGlyph(
+            (idx % gridCols) * cellSize + 1,
+            ((idx / gridCols) | 0) * cellSize + 1,
+            glyph,
+            23,
+            ascii * (cnt >= 2 ? 0.62 : 0.46)
+          );
+        }
+      }
+
+      // 2. The orbit's trails: where each whale has swum since it met its orbit
+      if (s.trails > 0) {
+        const ro = R * s.radius;
+        const step = (cellSize * 1.25) / ro;
+        for (let idx = 0; idx < 2; idx++) {
+          const tail = orbitAngle(idx, t) - orbitBodyLen[idx] / ro;
+          for (let a = 0; a < tail; a += step) {
+            projectOrbit(idx, a, ro);
+            const front = orbP.z >= 0;
+            let alpha = ascii * s.trails * (front ? 0.3 + 0.4 * orbP.z : 0.16);
+            if (!front && orbP.r < R) alpha *= 1 - s.sphere * 0.7;
+            sphereGlyph(orbP.x, orbP.y, front ? (orbP.z > 0.5 ? 4 : 3) : 0, 22, alpha);
+          }
+        }
+      }
+
+      // 3. Longitude & latitude arcs, each traced in turn; the far side shows faintly at first
+      if (s.sphere > 0) {
+        const back = 0.2 * (1 - smoothStepRange(t, 0.62, 0.82));
+        for (let l = 0; l < sphereLattice.length; l++) {
+          const line = sphereLattice[l];
+          const from = 0.42 + 0.16 * ((l * 0.618) % 1);
+          const shown = Math.floor(smoothStepRange(t, from, from + 0.12) * line.length);
+          for (let j = 0; j < shown; j++) {
+            const v = line[j];
+            const depth = v[0] * vx + v[1] * vy + v[2] * vz;
+            if (depth <= 0 && back <= 0) continue;
+            const sx = cx + R * (v[0] * ex + v[1] * ey + v[2] * ez);
+            const sy = cy - R * (v[0] * nx + v[1] * ny + v[2] * nz);
+            if (depth > 0) sphereGlyph(sx, sy, depth > 0.55 ? 2 : 1, 22, ascii * (0.32 + 0.4 * depth));
+            else sphereGlyph(sx, sy, 0, 22, ascii * back);
+          }
+        }
+
+        // Limb, traced both ways round from where the main whale met its orbit
+        const limbN = Math.ceil((Math.PI * 2 * R) / (cellSize * 1.2));
+        const limbShown = Math.floor(s.sphere * limbN * 0.5);
+        const a0 = Math.atan2(-ORBIT_PATHS[0].s[1], ORBIT_PATHS[0].s[0]);
+        for (let i = 0; i <= limbShown; i++) {
+          const da = (i / limbN) * Math.PI * 2;
+          sphereGlyph(cx + R * Math.cos(a0 + da), cy + R * Math.sin(a0 + da), 1, 22, ascii * 0.5);
+          sphereGlyph(cx + R * Math.cos(a0 - da), cy + R * Math.sin(a0 - da), 1, 22, ascii * 0.5);
+        }
+      }
+      ctx.globalAlpha = 1;
+    };
+
+    // ------------------------------------------------------------------------
     // ASCII BIOLUMINESCENT JELLYFISH (anatomical, multi-species — see asciiOceanLife.ts)
     // ------------------------------------------------------------------------
     // Each creature is evaluated per character cell as a translucent bell with radial canals,
@@ -3712,6 +4109,29 @@ const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ 
       if (fluidLive) syncFluidOcean(abyss);
       const waterLevel = Math.round(255 * (1 - abyss));
       const waterRgb = `rgb(${waterLevel}, ${waterLevel}, ${waterLevel})`;
+
+      // ORBIT PRELUDE — read from the actual scroll position, the same value JourneyGlobe draws
+      // from, so both canvases show one state. `conv` places the whales on their orbits;
+      // `hidden` dissolves them into the sphere, holds them inside the planet for the city
+      // sequence, and lets them condense back out of the dark water once the globe has passed.
+      const orbitOn = !isFocus && orbitHandoff.active && orbitHandoff.R > 0;
+      const orbitT = orbitOn ? orbitProgress(curScrollY) : 0;
+      const os = orbitStages(orbitT);
+      const globeEnd = globeScrollGeometry.start + globeScrollGeometry.travel;
+      const afterGlobe = orbitOn && orbitT >= 1 ? 1 - smoothStepRange(curScrollY - globeEnd, 0, h * 0.6) : 0;
+      const conv = orbitOn && orbitT < 0.92 ? os.converge : 0;
+      const hidden = !orbitOn ? 0 : orbitT < 1 ? os.dissolve : afterGlobe;
+      const orbitEngaged = conv > 0 || hidden > 0;
+      if (conv > 0 || orbitLaneWeight > 0) {
+        // The swim underneath is steered toward the orbit too, so releasing it stays close by
+        for (let i = 0; i < 2; i++) {
+          projectOrbit(i, orbitAngle(i, orbitT), orbitHandoff.R * os.radius);
+          orbitLanes[i].x = orbP.x / Math.max(1, w);
+          orbitLanes[i].y = orbP.y / Math.max(1, h);
+        }
+        directWhales('orbit', conv, orbitLanes);
+        orbitLaneWeight = conv;
+      }
 
       // Reuse the cached backdrop and animation loop for an exact neutral background.
       if (waterBackdropCtx && (!backdropValid || abyss !== lastBackdropDepth)) {
@@ -3871,6 +4291,10 @@ const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ 
       let curMinR = rows - 1;
       let curMaxR = 0;
       let currentWhaleLayer = 1;
+      let currentFade = 1;
+      // Orbit dissolve, body-attached so the holes travel with the whale: tail first, head last
+      const dissolved = (key: number, salt: number, u: number) =>
+        (((key * 2654435761) ^ (salt * 2246822519)) >>> 0) / 4294967296 < hidden * 1.4 - (1 - u) * 0.4;
 
       // Fast squared-distance splat into pre-allocated buffers
       const splatPoint = (
@@ -3906,6 +4330,7 @@ const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ 
                 lumBuf[idx] = shade;
                 toneBuf[idx] = tone;
                 occBuf[idx] = currentWhaleLayer;
+                fadeBuf[idx] = currentFade;
               }
             }
           }
@@ -3924,6 +4349,17 @@ const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ 
 
         updateWhaleKinematics(wh, w, h, baseLen, wIdx, dtScale, entryCalm, rawDepth);
 
+        // Orbit prelude: a little smaller on the orbit, in scale with the planet; fully
+        // dissolved whales are not drawn at all
+        const bodyLen = baseLen * (1 - 0.28 * conv);
+        orbitBodyLen[wIdx] = bodyLen;
+        if (hidden >= 1) continue;
+        const posed = conv > 0;
+        if (posed) composeOrbitPose(wh, wIdx, orbitT, conv, os.radius, os.sphere, bodyLen, baseLen / (SPINE_NODES - 1));
+        const SX = posed ? wh.dispX : wh.spineX;
+        const SY = posed ? wh.dispY : wh.spineY;
+        const SA = posed ? wh.dispAngle : wh.spineAngle;
+
         const rollAngle = Math.max(-0.52, Math.min(0.52, wh.turnRate * 26 + Math.sin(wh.finCycle) * 0.14));
         const sinRoll = Math.sin(rollAngle);
         const cosRoll = Math.cos(rollAngle);
@@ -3933,16 +4369,18 @@ const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ 
           const i0 = f | 0;
           const i1 = i0 < SPINE_NODES - 1 ? i0 + 1 : i0;
           const frac = f - i0;
-          const sx = wh.spineX[i0] + (wh.spineX[i1] - wh.spineX[i0]) * frac;
-          const sy = wh.spineY[i0] + (wh.spineY[i1] - wh.spineY[i0]) * frac;
+          const sx = SX[i0] + (SX[i1] - SX[i0]) * frac;
+          const sy = SY[i0] + (SY[i1] - SY[i0]) * frac;
 
-          let da = wh.spineAngle[i1] - wh.spineAngle[i0];
+          let da = SA[i1] - SA[i0];
           while (da > Math.PI) da -= Math.PI * 2;
           while (da < -Math.PI) da += Math.PI * 2;
-          const ang = wh.spineAngle[i0] + da * frac;
+          const ang = SA[i0] + da * frac;
           const cosA = Math.cos(ang);
           const sinA = Math.sin(ang);
 
+          // Depth on the orbit sphere: width, strength and draw order (front over back)
+          const depth = posed ? wh.dispDepth[i0] + (wh.dispDepth[i1] - wh.dispDepth[i0]) * frac : 0;
           return {
             x: sx,
             y: sy,
@@ -3950,7 +4388,10 @@ const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ 
             tx: cosA,
             ty: sinA,
             nx: -sinA,
-            ny: cosA
+            ny: cosA,
+            scale: posed ? wh.dispScale[i0] + (wh.dispScale[i1] - wh.dispScale[i0]) * frac : 1,
+            fade: posed ? Math.round((wh.dispFade[i0] + (wh.dispFade[i1] - wh.dispFade[i0]) * frac) * 16) / 16 : 1,
+            layerZ: (1 - wIdx) * 5 * (1 - conv) + depth * 7
           };
         };
 
@@ -3963,8 +4404,10 @@ const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ 
         for (let iu = 0; iu <= uBodySteps; iu++) {
           const u = iu / uBodySteps;
           const sp = sampleSpine(u);
-          let halfW = getBodyHalfWidthFast(u) * baseLen;
-          const verticalWave = Math.cos(wh.swimCycle - u * 4.5) * (0.04 + u * 0.08) * baseLen;
+          const Ls = bodyLen * sp.scale;
+          currentFade = sp.fade;
+          let halfW = getBodyHalfWidthFast(u) * Ls;
+          const verticalWave = Math.cos(wh.swimCycle - u * 4.5) * (0.04 + u * 0.08) * Ls;
 
           // FEEDING ANATOMY (main whale): jaws swing apart from the tip, throat pleats balloon
           const mouthAmt = wIdx === 0 ? feed.mouthOpen : 0;
@@ -3975,11 +4418,12 @@ const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ 
           const JAW_LEN = 0.24;
           const jawT = mouthAmt > 0.01 && u < JAW_LEN ? Math.pow(1 - u / JAW_LEN, 1.15) : 0;
           // Half-distance between the parted jaws at this station
-          const gapePx = jawT * mouthAmt * baseLen * 0.085;
-          if (gapePx > 0) halfW = Math.max(halfW, baseLen * 0.03); // jaws keep some thickness at the tip
+          const gapePx = jawT * mouthAmt * Ls * 0.085;
+          if (gapePx > 0) halfW = Math.max(halfW, Ls * 0.03); // jaws keep some thickness at the tip
 
           const latSteps = Math.max(6, Math.ceil((halfW * 2) / (cellSize * 0.58)));
           for (let il = 0; il <= latSteps; il++) {
+            if (hidden > 0 && dissolved(iu * 97 + il, wIdx + 1, u)) continue;
             const localY = (il / latSteps) * 2 - 1;
             const localZ = Math.sqrt(Math.max(0, 1 - localY * localY));
 
@@ -4034,7 +4478,7 @@ const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ 
             splatPoint(
               wx,
               wy,
-              10 + rolledZ * 3 + (1 - wIdx) * 5,
+              10 + rolledZ * 3 + sp.layerZ,
               finalShade,
               tone,
               cellSize * 0.42
@@ -4042,7 +4486,7 @@ const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ 
           }
 
           // Open-mouth interior between the jaws: deep navy cavity with baleen fringe (tone flag 2)
-          if (gapePx > cellSize * 0.3) {
+          if (gapePx > cellSize * 0.3 && hidden < 0.5) {
             const inner = gapePx * 0.9;
             const cavSteps = Math.max(2, Math.ceil((inner * 2) / (cellSize * 0.55)));
             for (let ic = 0; ic <= cavSteps; ic++) {
@@ -4061,7 +4505,9 @@ const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ 
 
         // B. LONG SCALLOPED PECTORAL FINS
         const finRootSp = sampleSpine(0.26);
-        const finLength = baseLen * 0.36;
+        const finL = bodyLen * finRootSp.scale;
+        currentFade = finRootSp.fade;
+        const finLength = finL * 0.36;
         const finSpanSteps = 34;
 
         for (const side of [-1, 1]) {
@@ -4069,7 +4515,7 @@ const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ 
           const turnExtend = 1 + side * wh.turnRate * 14;
           const bankForeshorten = Math.max(0.45, Math.min(1.18, 1 + side * sinRoll * 0.38));
 
-          const rootOffset = getBodyHalfWidthFast(0.26) * baseLen * 0.82;
+          const rootOffset = getBodyHalfWidthFast(0.26) * finL * 0.82;
           const rootX = finRootSp.x + finRootSp.nx * side * rootOffset;
           const rootY = finRootSp.y + finRootSp.ny * side * rootOffset;
 
@@ -4081,7 +4527,7 @@ const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ 
             const finAng = finRootSp.ang + side * (Math.PI * 0.5 + dynamicSweep);
             const dist = s * finLength * bankForeshorten * Math.max(0.7, Math.min(1.25, turnExtend));
 
-            const tipCurveBack = s * s * baseLen * 0.08;
+            const tipCurveBack = s * s * finL * 0.08;
             const cosFA = Math.cos(finAng);
             const sinFA = Math.sin(finAng);
             const fCenterX = rootX + cosFA * dist - finRootSp.tx * tipCurveBack;
@@ -4089,13 +4535,14 @@ const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ 
 
             const tubercleBump = Math.sin(s * Math.PI * 8.5) * 0.08 * (1 - s * 0.4);
             const chordWidth =
-              baseLen * 0.088 * Math.sin(Math.pow(s, 0.42) * Math.PI) * (1 + tubercleBump);
+              finL * 0.088 * Math.sin(Math.pow(s, 0.42) * Math.PI) * (1 + tubercleBump);
 
             const chordSteps = Math.max(4, Math.ceil(chordWidth / (cellSize * 0.52)));
             const fPerpX = -sinFA * side;
             const fPerpY = cosFA * side;
 
             for (let ic = 0; ic <= chordSteps; ic++) {
+              if (hidden > 0 && dissolved(4096 + (side + 1) * 1024 + is * 37 + ic, wIdx + 1, 0.3)) continue;
               const cNorm = ic / chordSteps;
               const offset = (cNorm - 0.35) * chordWidth;
               const wx = fCenterX - fPerpX * offset;
@@ -4107,7 +4554,7 @@ const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ 
                 : 0.62 + Math.sin(s * 6 + cNorm * 4) * 0.15;
               const finTone = isLeadingOrTip ? 0.12 : 0.65;
 
-              const finZ = 9.5 + Math.sin(wh.finCycle - s) * 1.5 + (1 - wIdx) * 5;
+              const finZ = 9.5 + Math.sin(wh.finCycle - s) * 1.5 + finRootSp.layerZ;
               splatPoint(wx, wy, finZ, finShade, finTone, cellSize * 0.38);
             }
           }
@@ -4115,7 +4562,9 @@ const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ 
 
         // C. BUTTERFLY TAIL FLUKES
         const flukeRootSp = sampleSpine(0.92);
-        const flukeSpan = baseLen * 0.29;
+        const flukeL = bodyLen * flukeRootSp.scale;
+        currentFade = flukeRootSp.fade;
+        const flukeSpan = flukeL * 0.29;
         const flukeSteps = 28;
 
         const flukeWhipAngle = Math.cos(wh.swimCycle - 4.8) * 0.32;
@@ -4134,13 +4583,14 @@ const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ 
 
             const notchProfile = s < 0.15 ? s / 0.15 : 1.0;
             const flukeChord =
-              baseLen *
+              flukeL *
               0.095 *
               Math.sin(Math.sqrt(s) * Math.PI) *
               (0.55 + 0.45 * notchProfile);
 
             const chordSteps = Math.max(3, Math.ceil(flukeChord / (cellSize * 0.52)));
             for (let ic = 0; ic <= chordSteps; ic++) {
+              if (hidden > 0 && dissolved(9216 + (side + 1) * 1024 + is * 37 + ic, wIdx + 1, 0.95)) continue;
               const cNorm = ic / chordSteps;
               const wx = fx - flukeRootSp.tx * (cNorm * flukeChord);
               const wy = fy - flukeRootSp.ty * (cNorm * flukeChord);
@@ -4152,14 +4602,14 @@ const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ 
               splatPoint(
                 wx,
                 wy,
-                9.8 + (flukeScale3D - 0.88) * 8 + (1 - wIdx) * 5,
+                9.8 + (flukeScale3D - 0.88) * 8 + flukeRootSp.layerZ,
                 shade,
                 tone,
                 cellSize * 0.4
               );
             }
 
-            if (is === flukeSteps && sm.activity > 0.12 && Math.random() < 0.3 * sm.activity) {
+            if (is === flukeSteps && sm.activity > 0.12 && Math.random() < 0.3 * sm.activity * (1 - conv)) {
               wakeParticles.push({
                 x: fx,
                 y: fy,
@@ -4174,7 +4624,7 @@ const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ 
           }
         }
 
-        if (Math.random() < 0.05 + sm.activity * 0.18) {
+        if (Math.random() < (0.05 + sm.activity * 0.18) * (1 - conv)) {
           const blowSp = sampleSpine(0.17);
           wakeParticles.push({
             x: blowSp.x + (Math.random() - 0.5) * 10,
@@ -4256,13 +4706,32 @@ const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ 
         ctx.fill();
       }
 
-      // 2B. Subtle drifting deep-water particles (restrained count, zero flicker)
+      // 4C. ORBIT SPHERE — the character field the whales' orbit lays down (behind the whales)
+      if (orbitOn && orbitT > 0 && orbitT < 1) drawOrbitSphere(orbitT, os, waterLevel, fluidLive);
+
+      // 2B. Subtle drifting deep-water particles (restrained count, zero flicker). In the orbit
+      // prelude they gather onto the forming sphere and fade into it with the ASCII field; they
+      // drift free again once the globe has passed.
       ambientOffsetY = (ambientOffsetY - sm.velocity * 0.00038 * dtScale + 10) % 1;
       const dotLimit = prefersReducedMotion ? 24 : 48;
+      const gather = orbitOn ? (orbitT < 1 ? smoothStepRange(orbitT, 0.38, 0.62) : afterGlobe) : 0;
+      const gatherAlpha = 1 - gather * (1 - (orbitT < 1 ? os.ascii : 0));
+      if (gather > 0) ctx.globalAlpha = gatherAlpha;
       for (let i = 0; i < dotLimit; i++) {
         const d = ambientDots[i];
-        const cx = (((d.nx + time * d.speedX * 0.65 + 10) % 1) * cols) | 0;
-        const cy = (((d.ny + ambientOffsetY + 10) % 1) * rows) | 0;
+        let cx = (((d.nx + time * d.speedX * 0.65 + 10) % 1) * cols) | 0;
+        let cy = (((d.ny + ambientOffsetY + 10) % 1) * rows) | 0;
+        if (gather > 0) {
+          if (gatherAlpha <= 0) break;
+          // Golden-angle spread over the visible hemisphere
+          const z = 0.12 + (0.86 * (i + 0.5)) / dotLimit;
+          const rr = Math.sqrt(1 - z * z);
+          const ga = i * 2.39996;
+          const tx = (orbitHandoff.cx + orbitHandoff.R * rr * Math.cos(ga)) / cellSize;
+          const ty = (orbitHandoff.cy - orbitHandoff.R * rr * Math.sin(ga)) / cellSize;
+          cx = (cx + (tx - cx) * gather) | 0;
+          cy = (cy + (ty - cy) * gather) | 0;
+        }
         const inAbyss = abyss > 0.004 && ((i * 37) % 100) / 100 < abyss;
         ctx.drawImage(
           atlasCanvas,
@@ -4276,6 +4745,7 @@ const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ 
           cellSize
         );
       }
+      ctx.globalAlpha = 1;
 
       // 2C. DEEP-WATER SILHOUETTE (Stage 5): a distant manta ray glides past now and then,
       // only once the visitor has descended, drawn in the faintest halo glyphs ('.' ':')
@@ -4411,7 +4881,8 @@ const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ 
           }
           if (ready) {
             const headVisible = headX > w * 0.04 && headX < w * 0.96 && headY > h * 0.06 && headY < h * 0.94;
-            if (headVisible && auto.phase !== 'offscreen' && auto.phase !== 'return') {
+            // No feeding while the whales are on their orbit or inside the planet
+            if (headVisible && auto.phase !== 'offscreen' && auto.phase !== 'return' && !orbitEngaged) {
               spawnSchool(headX, headY, hx, hy, w, h, scrollingNow);
             } else if (!feed.firstDone) {
               feed.timer = 0.8; // whale out of view: try again shortly
@@ -4695,6 +5166,7 @@ const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ 
       // Both whales share the deep-blue atlas rows (10..14) at full strength
       const whaleAlpha = 1.0;
       let activeAlpha = 1.0;
+      const neighbours = [-1, 1, -cols, cols, -cols - 1, -cols + 1, cols - 1, cols + 1];
 
       for (let r = boxMinR; r <= boxMaxR; r++) {
         const py = r * cellSize;
@@ -4705,7 +5177,7 @@ const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ 
           const occ = occBuf[idx];
 
           if (occ > 0) {
-            const targetAlpha = whaleAlpha * READING_WHALE_ALPHA[readingBuf[idx]];
+            const targetAlpha = whaleAlpha * READING_WHALE_ALPHA[readingBuf[idx]] * (orbitEngaged ? fadeBuf[idx] : 1);
             if (targetAlpha !== activeAlpha) {
               ctx.globalAlpha = targetAlpha;
               activeAlpha = targetAlpha;
@@ -4755,7 +5227,16 @@ const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ 
               (occBuf[idx + cols + 1] > 0 ? 1 : 0);
 
             if (n > 0) {
-              const haloAlpha = fgWhaleAlpha * READING_WHALE_ALPHA[readingBuf[idx]];
+              // In the orbit prelude the rim takes the strength of the body it outlines
+              let haloFade = 1;
+              if (orbitEngaged) {
+                haloFade = 0;
+                for (let k = 0; k < 8; k++) {
+                  const j = idx + neighbours[k];
+                  if (occBuf[j] > 0 && fadeBuf[j] > haloFade) haloFade = fadeBuf[j];
+                }
+              }
+              const haloAlpha = fgWhaleAlpha * READING_WHALE_ALPHA[readingBuf[idx]] * haloFade;
               if (haloAlpha !== activeAlpha) {
                 ctx.globalAlpha = haloAlpha;
                 activeAlpha = haloAlpha;
@@ -4796,6 +5277,7 @@ const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ 
       window.removeEventListener('wheel', handleWheelDir);
       oceanLifeDisposed = true;
       cancelAnimationFrame(animId);
+      directWhales('orbit', 0, orbitLanes);
     };
   }, [mode]);
 
@@ -5495,15 +5977,17 @@ export default function App() {
             </RevealBlock>
 
             {/* Journey runway: full-width stage stays pinned while the visitor
-                scrolls through this distance — the scroll position IS the journey timeline */}
+                scrolls through this distance — the scroll position IS the journey timeline.
+                Its first 260vh are the prelude in which the whales' orbit forms the planet. */}
             <div
               data-journey-runway
               data-ascii-preserve
-              className="relative mt-8 sm:mt-12 h-[600vh] motion-reduce:h-[100svh] w-full max-w-full overflow-hidden"
+              className="relative mt-8 sm:mt-12 h-[860vh] motion-reduce:h-[100svh] w-full max-w-full overflow-hidden"
             >
               <div className="sticky top-0 h-[100svh] w-full max-w-full overflow-hidden">
                 <JourneyGlobe locations={CV_DATA.locations} />
               </div>
+              <div data-orbit-prelude aria-hidden="true" className="pointer-events-none absolute left-0 top-0 w-px h-[260vh] motion-reduce:h-0" />
             </div>
           </section>
 
