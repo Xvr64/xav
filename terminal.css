@@ -513,6 +513,24 @@ body {
   height: 1px;
   background: var(--rule-46, rgba(23, 23, 23, 0.32));
 }
+/* The datum is taken as the station rises: the line draws from the margin across the measure,
+   tied to scroll (reversible) through the station name's own view timeline. Browsers without
+   scroll-driven animations, and reduced motion, keep the full line. */
+@media (prefers-reduced-motion: no-preference) {
+  @supports (animation-timeline: view()) {
+    .terminal-portfolio .exp-entry .exp-company { view-timeline-name: --station-datum; }
+    .exp-entry .exp-company::after {
+      transform-origin: left center;
+      animation: datum-draw linear both;
+      animation-timeline: --station-datum;
+      animation-range: entry 0% cover 38%;
+    }
+  }
+}
+@keyframes datum-draw {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
 .exp-entry .exp-when {
   grid-column: 8 / span 5;
   grid-row: 1;
