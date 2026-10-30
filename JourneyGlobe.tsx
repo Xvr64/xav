@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { loadLandDots, type LandDots } from './glyphcssGlobe';
 import type { LocationItem } from './cvData';
 import { abyssFromProgress, globeScrollGeometry, globeScrollProgress, lerpN } from './abyssPalette';
+import { setGlobeZone } from './oceanDirection';
 
 const PlainText = ({ text }: { text: string }) => <>{text}</>;
 
@@ -105,6 +106,7 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
   const stageRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const progressFillRef = useRef<HTMLDivElement | null>(null);
+  const captionRef = useRef<HTMLDivElement | null>(null);
   const activeIdRef = useRef(activeId);
   activeIdRef.current = activeId;
   const goToCityRef = useRef<(id: string) => void>((id) => setActiveId(id));
@@ -547,10 +549,30 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
       }
     };
 
+    // While the stage is on screen, its disc and caption are calm zones for the ocean layers
+    // (fluid, whales, jellyfish), so nothing swims across the globe or the city name
+    const publishZone = (st: JourneyState) => {
+      const sr = stage.getBoundingClientRect();
+      if (sr.bottom <= 0 || sr.top >= window.innerHeight) {
+        setGlobeZone([]);
+        return;
+      }
+      const { cx, cy, baseR } = globeFrame(W, H);
+      const R = baseR * st.zoom;
+      const rects = [{ left: sr.left + cx - R, top: sr.top + cy - R, width: R * 2, height: R * 2 }];
+      const caption = captionRef.current?.getBoundingClientRect();
+      if (caption && caption.width > 0) {
+        rects.push({ left: caption.left, top: caption.top, width: caption.width, height: caption.height });
+      }
+      setGlobeZone(rects);
+    };
+
     let raf = 0;
     const frame = () => {
       raf = 0;
-      apply(prefersReduced ? reducedState() : stateAt(measureProgress()));
+      const st = prefersReduced ? reducedState() : stateAt(measureProgress());
+      apply(st);
+      publishZone(st);
     };
     const requestRender = () => {
       if (!raf) raf = requestAnimationFrame(frame);
@@ -567,6 +589,7 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
               for (const entry of entries) {
                 globeInView = entry.isIntersecting;
               }
+              if (!globeInView) setGlobeZone([]);
               if (globeInView) {
                 resize();
                 requestRender();
@@ -618,6 +641,7 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
       window.removeEventListener('scroll', onScroll);
       window.removeEventListener('resize', onResize);
       if (raf) cancelAnimationFrame(raf);
+      setGlobeZone([]);
       requestRenderRef.current = () => {};
       goToCityRef.current = (id) => setActiveId(id);
     };
@@ -654,6 +678,7 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
 
       {/* Current destination — all 7 captions pre-mounted in a grid stack (zero DOM childList mutations on city change) */}
       <div
+        ref={captionRef}
         className="grid items-center absolute left-5 right-5 bottom-24 md:right-auto md:left-[6vw] md:bottom-auto md:top-1/2 md:-translate-y-1/2 md:w-[min(28vw,440px)]"
         aria-live="polite"
       >

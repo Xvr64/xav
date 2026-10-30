@@ -5,8 +5,9 @@
  */
 import type { HeroRect } from './heroCurrent';
 
-/** Whale tile strength in open water, beside a line of text, and right behind it. */
-export const READING_WHALE_ALPHA = [1, 0.62, 0.34];
+/** Whale tile strength in open water, beside a line of text, and right behind it (or behind the
+ * Globe): low enough behind the copy that a passing whale never competes with a line it crosses. */
+export const READING_WHALE_ALPHA = [1, 0.5, 0.16];
 /** Viewport line boxes of the page's reading text, shared by the fluid clear map and the whales. */
 export const readingZones: { read: () => readonly { left: number; top: number; width: number; height: number }[] } = {
   read: () => []
@@ -70,6 +71,15 @@ export function smoothStepRange(value: number, start: number, end: number): numb
 
 /** Calm zones of the hero typography (viewport px), read by the fluid clear map and the whales. */
 export const heroZone: { rects: HeroRect[]; version: number } = { rects: [], version: 0 };
+
+/** Calm zones of the Globe stage while it is on screen (viewport px): the disc and the city
+ * caption. The fluid quiets there and the whales and jellyfish draw faintly behind them. */
+export const globeZone: { rects: HeroRect[]; version: number } = { rects: [], version: 0 };
+export const setGlobeZone = (rects: HeroRect[]) => {
+  if (rects.length === 0 && globeZone.rects.length === 0) return;
+  globeZone.rects = rects;
+  globeZone.version++;
+};
 
 export type Lane = { x: number; y: number };
 export const mixLane = (a: Lane, b: Lane, t: number): Lane => ({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });

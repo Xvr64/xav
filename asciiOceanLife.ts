@@ -294,6 +294,11 @@ export interface JellyfishField {
     maxTier: number
   ) => void;
   rebake: () => void;
+  /**
+   * Optional: how much of a creature may show where it sits (viewport box → 0..1), so a jellyfish
+   * drifting behind reading text or the Globe fades out instead of competing with it.
+   */
+  setOcclusion: (fn: ((left: number, top: number, width: number, height: number) => number) | null) => void;
   stats: { cells: number; visible: number; pos: Float32Array; ms: number };
 }
 
@@ -352,7 +357,10 @@ export function createAsciiJellyfishField(atlasScale: number): JellyfishField {
     vis: number;
     glowR: number;
     glowY: number;
+    /** Eased share of the creature allowed to show where it sits (see setOcclusion). */
+    clear: number;
   }
+  let occlusion: ((left: number, top: number, width: number, height: number) => number) | null = null;
   const dims = { w: 0, h: 0, top: 0 }; // reused result (no per-frame allocation)
   const spriteDims = (sp: JellySpec, sizeScale: number, mobile: boolean) => {
     const S = SPECIES[sp.species];
@@ -387,7 +395,7 @@ export function createAsciiJellyfishField(atlasScale: number): JellyfishField {
       }
       sprites[i] = {
         group: gI, rx: x, ry: y, rw: d.w, rh: d.h, w: 0, h: 0, offX: 0, offY: 0, next: 0, sB: -1,
-        valid: false, show: false, ox: 0, oy: 0, vis: 0, glowR: 0, glowY: 0
+        valid: false, show: false, ox: 0, oy: 0, vis: 0, glowR: 0, glowY: 0, clear: 1
       };
       x += d.w + 2;
       rowH = Math.max(rowH, d.h);
@@ -528,16 +536,20 @@ export function createAsciiJellyfishField(atlasScale: number): JellyfishField {
       const sp = JELLY_SPECS[i];
       const spr = sprites[i];
       if (sp.tier < minTier || sp.tier > maxTier || !spr.show || !spr.valid) continue;
+      const clearTarget = occlusion ? occlusion(spr.ox - spr.offX, spr.oy - spr.offY, spr.w, spr.h) : 1;
+      spr.clear += (clearTarget - spr.clear) * 0.08;
+      const vis = spr.vis * spr.clear;
+      if (vis < 0.01) continue;
       if (glowMode) {
         // Soft luminous falloff behind the creature (deep water only; glyphs stay crisp on top)
         ctx.globalCompositeOperation = 'screen';
-        ctx.globalAlpha = spr.vis * 0.22 * ((sB - 1) / 2);
+        ctx.globalAlpha = vis * 0.22 * ((sB - 1) / 2);
         const gr = spr.glowR;
         ctx.drawImage(glowSprites[sp.pal], spr.ox - gr, spr.glowY - gr, gr * 2, gr * 2);
         ctx.globalCompositeOperation = 'source-over';
       }
       // Snap to device pixels so the cached glyphs stay crisp while drifting
-      ctx.globalAlpha = spr.vis;
+      ctx.globalAlpha = vis;
       const bx0 = Math.round((spr.ox - spr.offX) * pxScale) / pxScale;
       const by0 = Math.round((spr.oy - spr.offY) * pxScale) / pxScale;
       ctx.drawImage(sheets[spr.group], spr.rx * pxScale, spr.ry * pxScale, spr.w * pxScale, spr.h * pxScale, bx0, by0, spr.w, spr.h);
@@ -1087,7 +1099,11 @@ export function createAsciiJellyfishField(atlasScale: number): JellyfishField {
     for (let i = 0; i < sprites.length; i++) sprites[i].valid = false;
   };
 
-  return { render, rebake, stats };
+  const setOcclusion: JellyfishField['setOcclusion'] = (fn) => {
+    occlusion = fn;
+  };
+
+  return { render, rebake, setOcclusion, stats };
 }
 
 // Part B (ASCII fishing boat) removed.

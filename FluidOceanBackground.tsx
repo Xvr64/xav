@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { background, fluid, type BackgroundHandle } from 'asciify-engine/kit';
 import { lerpN, type AbyssRGB } from './abyssPalette';
-import { heroZone, readingZones } from './oceanDirection';
+import { globeZone, heroZone, readingZones } from './oceanDirection';
 
 // ============================================================================
 // ASCIIFY FLUID OCEAN — one shared field for the whole page
@@ -93,6 +93,7 @@ export const FluidOceanBackground: React.FC = React.memo(() => {
     let readGeneration = -1;
     let readScrollY = NaN;
     let readHeroVersion = -1;
+    let readGlobeVersion = -1;
     const range = document.createRange();
     const measure = () => {
       const sy = window.scrollY;
@@ -120,10 +121,17 @@ export const FluidOceanBackground: React.FC = React.memo(() => {
     };
     const readClear = () => {
       const sy = window.scrollY;
-      if (sy === readScrollY && generation === readGeneration && heroZone.version === readHeroVersion) return viewRects;
+      if (
+        sy === readScrollY &&
+        generation === readGeneration &&
+        heroZone.version === readHeroVersion &&
+        globeZone.version === readGlobeVersion
+      )
+        return viewRects;
       readScrollY = sy;
       readGeneration = generation;
       readHeroVersion = heroZone.version;
+      readGlobeVersion = globeZone.version;
       const vh = window.innerHeight;
       viewRects = [];
       for (const r of docRects) {
@@ -133,6 +141,8 @@ export const FluidOceanBackground: React.FC = React.memo(() => {
       }
       // The pinned hero supplies its own live rects (headline, then the gathering name)
       for (const r of heroZone.rects) viewRects.push(r);
+      // The Globe's disc and caption, while its stage is on screen
+      for (const r of globeZone.rects) viewRects.push(r);
       return viewRects;
     };
     let measureTimer = 0;
@@ -154,9 +164,9 @@ export const FluidOceanBackground: React.FC = React.memo(() => {
       opacity: FLUID_OPACITY_SURFACE,
       lazy: false,
       clear: readClear,
-      clearPadding: 10,
+      clearPadding: 14,
       clearSoftness: 36,
-      clearStrength: 0.85,
+      clearStrength: 0.95,
       // Full-bleed field behind everything: a lower backing-store ratio than the preset's 1.5
       // keeps its per-frame GPU draw and canvas copy cheap next to the whales and the Globe.
       look: { maxPixelRatio: 1, shade: FLUID_SHADE_SURFACE }

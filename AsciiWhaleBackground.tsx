@@ -439,6 +439,18 @@ export const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.m
     // Rendered by this component's single RAF loop through pre-baked glyph atlases
     // (see asciiOceanLife.ts) — no extra loop, no per-glyph fillText, no shadowBlur.
     const jellyfishField = createAsciiJellyfishField(atlasScale);
+    // A jellyfish drifting behind reading text or the Globe fades with the share of it covered
+    jellyfishField.setOcclusion((left, top, width, height) => {
+      const pad = 16;
+      let covered = 0;
+      for (const r of readingZones.read()) {
+        const ix = Math.min(left + width, r.left + r.width + pad) - Math.max(left, r.left - pad);
+        const iy = Math.min(top + height, r.top + r.height + pad) - Math.max(top, r.top - pad);
+        if (ix > 0 && iy > 0) covered += ix * iy;
+      }
+      const share = covered / Math.max(1, width * height);
+      return share < 0.02 ? 1 : Math.max(0.06, 1 - share * 4);
+    });
     let oceanLifeDisposed = false;
     // Re-bake glyph atlases once the web font is ready (first bake may use the fallback face)
     if (typeof document !== 'undefined' && document.fonts && document.fonts.ready) {
