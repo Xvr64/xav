@@ -366,7 +366,7 @@ export default function App() {
               {CV_DATA.interests.map((interest, idx) => (
                 <RevealBlock key={interest.id} delayMs={idx * 80} className="interest">
                   <h3 className="ocean-h3 text-[#171717]">
-                    <BioWords text={interest.title} />
+                    <BioWords text={toTitleCase(interest.title)} />
                   </h3>
                   <ul>
                     {interest.bullets.map((b, bIdx) => (

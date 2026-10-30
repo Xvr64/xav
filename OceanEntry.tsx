@@ -249,7 +249,9 @@ export const ProgressiveOceanEntry: React.FC<ProgressiveOceanEntryProps> = React
     <section id="home" data-editorial-section className="hero-runway relative">
       <div className="hero-stage" data-hero-stage data-ascii-preserve>
         <div className="minimal-hero ed-grid">
-          <h1 className="display" aria-label="A journey without horizons">
+          {/* The cover's line is the page's epigraph; the name below is its one h1 */}
+          <p className="display cover-title">
+            <span className="sr-only">A journey without horizons</span>
             <span className="cover-line" aria-hidden="true">
               {heroLetters('A journey without')}
               <span className="hero-horizon" data-hero-horizon>
@@ -257,7 +259,7 @@ export const ProgressiveOceanEntry: React.FC<ProgressiveOceanEntryProps> = React
               </span>
             </span>
             <span className="cover-line cover-line--drift" aria-hidden="true">{heroLetters('horizons')}</span>
-          </h1>
+          </p>
         </div>
         {/* The type the ASCII name resolves into; the semantic heading stays in the introduction */}
         <p className="hero-name ed-grid" data-hero-name aria-hidden="true">
@@ -270,10 +272,10 @@ export const ProgressiveOceanEntry: React.FC<ProgressiveOceanEntryProps> = React
         here (visually clipped, so it is excluded from the word system). The rest of the spread
         uses the shared ASCII word reveal like every other section. */}
     <section id="introduction" data-editorial-section className="terminal-overview ed-grid relative">
-      <h2 className="intro-name intro-name--carried" data-ascii-preserve>
+      <h1 className="intro-name intro-name--carried" data-ascii-preserve>
         <span className="intro-name-first"><AsciiText text="Xavier" /></span>{' '}
         <span className="intro-name-last"><AsciiText text="Hery" /></span>
-      </h2>
+      </h1>
       <p className="depth-mark" aria-hidden="true"><AsciiText text="10 m — sunlit zone" /></p>
       <p className="lead" data-text-rank="2"><AsciiText text={CV_DATA.heroIntroConcise} /></p>
       <p className="intro-support" data-text-rank="3"><AsciiText text={CV_DATA.heroIntroSecondary} /></p>

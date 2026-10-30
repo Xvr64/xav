@@ -59,11 +59,12 @@ export const GLOBAL_PORTFOLIO_CSS = `
 
   /* Fluid typography & oceanic scales */
   .ocean-h2 {
-    font-family: var(--font-sans);
+    font-family: var(--font-display);
+    font-variation-settings: 'opsz' 72;
     font-size: var(--text-h2);
     line-height: var(--leading-h2);
     letter-spacing: var(--tracking-h2);
-    font-weight: 400;
+    font-weight: 300;
     color: var(--ink-primary);
     text-wrap: balance;
   }
