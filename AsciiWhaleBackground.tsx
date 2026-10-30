@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { createAsciiJellyfishField } from './asciiOceanLife';
 import { playSonarPing, setSoundDepth } from './decodeAudio';
+import { createGlyphBatchGL } from './glyphBatchGL';
 import { MAX_PINGS, arrivalTime, echoStrength, isOpenWaterClick, pingRadius, pingStrength } from './sonarPing';
 import { waterShade } from './terminalMotion';
 import {
@@ -51,6 +52,9 @@ export interface AsciiWhaleBackgroundProps {
 
 export const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ mode }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  // The whale tiles' WebGL layer and the 2D layer drawn above it (sonar echoes, foreground jellyfish)
+  const glCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const overCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const mouseRef = useRef<{ x: number; y: number; active: boolean }>({ x: 0.5, y: 0.5, active: false });
   const scrollMotionRef = useRef<{
     targetScrollY: number;
@@ -583,6 +587,16 @@ export const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.m
       migration: migrationStats
     };
 
+    // The whale tiles and halos (one cell each, the bulk of the frame's draw calls) go to a WebGL2
+    // batch in a single instanced draw; what the 2D canvas drew after them moves to a 2D layer
+    // above it, so the stacking is unchanged. Without WebGL2, or once its context is lost, every
+    // layer stays on the 2D canvas exactly as before.
+    const glCanvas = glCanvasRef.current;
+    const overCanvas = overCanvasRef.current;
+    const overCtx = overCanvas ? overCanvas.getContext('2d', { alpha: true }) : null;
+    let glyphBatch = glCanvas && overCtx ? createGlyphBatchGL(glCanvas, cellSize) : null;
+    glyphBatch?.setAtlas(atlasCanvas, tilePx);
+
     const handleResize = () => {
       const w = window.innerWidth;
       const h = window.innerHeight;
@@ -592,6 +606,12 @@ export const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.m
       canvas.width = w * dpr;
       canvas.height = h * dpr;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      glyphBatch?.resize(w, h, dpr);
+      if (overCanvas && overCtx) {
+        overCanvas.width = w * dpr;
+        overCanvas.height = h * dpr;
+        overCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      }
 
       gridCols = Math.ceil(w / cellSize);
       gridRows = Math.ceil(h / cellSize);
@@ -1646,11 +1666,12 @@ export const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.m
       abyss: number,
       surfaceBaseY: number,
       minTier: number,
-      maxTier: number
+      maxTier: number,
+      target: CanvasRenderingContext2D = ctx
     ) => {
       if (isFocus) return;
       jellyfishField.render(
-        ctx,
+        target,
         w,
         h,
         time,
@@ -1712,6 +1733,14 @@ export const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.m
       sm.dirBlend += (sm.direction - sm.dirBlend) * (1 - Math.exp(-dt * 9.0));
 
       ctx.clearRect(0, 0, w, h);
+      if (glyphBatch && !glyphBatch.alive) {
+        // The GPU context was lost: back to the 2D path for good, nothing left above it
+        glyphBatch = null;
+        overCtx?.clearRect(0, 0, w, h);
+      }
+      // Where what is drawn after the whale tiles goes: the layer above the WebGL tiles, or the 2D canvas
+      const topCtx = glyphBatch && overCtx ? overCtx : ctx;
+      if (topCtx !== ctx) topCtx.clearRect(0, 0, w, h);
 
       // Continuous ocean immersion factor: 1.0 on the entry screen, easing smoothly into restrained ambient currents in CV sections
       const scrollViewports = h > 0 ? curScrollY / h : 0;
@@ -3117,6 +3146,20 @@ export const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.m
       // Both whales share the deep-blue atlas rows (10..14) at full strength
       const whaleAlpha = migActive ? mig.whales : 1;
       let activeAlpha = 1.0;
+      const batch = glyphBatch;
+      batch?.begin();
+      /** One atlas tile into the cell at (px, py): batched for WebGL, or drawn on the 2D canvas */
+      const blit = (col: number, row: number, px: number, py: number, alpha: number) => {
+        if (batch) {
+          batch.push(col, row, px, py, alpha);
+          return;
+        }
+        if (alpha !== activeAlpha) {
+          ctx.globalAlpha = alpha;
+          activeAlpha = alpha;
+        }
+        ctx.drawImage(atlasCanvas, col * tilePx, row * tilePx, tilePx, tilePx, px, py, cellSize, cellSize);
+      };
 
       for (let r = boxMinR; r <= boxMaxR; r++) {
         const py = r * cellSize;
@@ -3128,10 +3171,6 @@ export const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.m
 
           if (occ > 0) {
             const targetAlpha = whaleAlpha * READING_WHALE_ALPHA[readingBuf[idx]];
-            if (targetAlpha !== activeAlpha) {
-              ctx.globalAlpha = targetAlpha;
-              activeAlpha = targetAlpha;
-            }
 
             const shade = lumBuf[idx];
             const tone = toneBuf[idx];
@@ -3170,16 +3209,12 @@ export const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.m
               }
             }
 
-            ctx.drawImage(
-              atlasCanvas,
-              (contour >= 0 ? contour : tone > 1.5 ? (c * 7 + r * 13 + shimmerTick) & 3 : glyphIdx) * tilePx,
-              (contour >= 0 ? 24 : tone > 1.5 ? 18 : !isFocus ? styleRow + 10 : styleRow) * tilePx,
-              tilePx,
-              tilePx,
+            blit(
+              contour >= 0 ? contour : tone > 1.5 ? (c * 7 + r * 13 + shimmerTick) & 3 : glyphIdx,
+              contour >= 0 ? 24 : tone > 1.5 ? 18 : !isFocus ? styleRow + 10 : styleRow,
               px,
               py,
-              cellSize,
-              cellSize
+              targetAlpha
             );
           } else {
             const n =
@@ -3194,22 +3229,7 @@ export const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.m
 
             if (n > 0) {
               const haloAlpha = fgWhaleAlpha * whaleAlpha * READING_WHALE_ALPHA[readingBuf[idx]];
-              if (haloAlpha !== activeAlpha) {
-                ctx.globalAlpha = haloAlpha;
-                activeAlpha = haloAlpha;
-              }
-              const haloCol = n >= 3 ? 2 : n >= 2 ? 1 : 0;
-              ctx.drawImage(
-                atlasCanvas,
-                haloCol * tilePx,
-                5 * tilePx,
-                tilePx,
-                tilePx,
-                px,
-                py,
-                cellSize,
-                cellSize
-              );
+              blit(n >= 3 ? 2 : n >= 2 ? 1 : 0, 5, px, py, haloAlpha);
             }
           }
         }
@@ -3217,6 +3237,7 @@ export const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.m
       if (activeAlpha !== 1.0) {
         ctx.globalAlpha = 1.0;
       }
+      batch?.flush();
 
       // 6B. SONAR ECHOES — each whale and visible jellyfish the ring reaches answers with a brief
       // bracket of glyphs around it, the moment the ring arrives
@@ -3230,10 +3251,10 @@ export const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.m
         for (let j = 0; j < jp.length; j += 4) {
           if (jp[j + 3] > 0.08) echoTargets.push(jp[j], jp[j + 1], jp[j + 2] * 1.5);
         }
-        ctx.font = '500 12px "JetBrains Mono", monospace';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillStyle = sonarInk;
+        topCtx.font = '500 12px "JetBrains Mono", monospace';
+        topCtx.textAlign = 'center';
+        topCtx.textBaseline = 'middle';
+        topCtx.fillStyle = sonarInk;
         for (const ping of pings) {
           const age = nowS - ping.at;
           for (let ti = 0; ti < echoTargets.length; ti += 3) {
@@ -3246,18 +3267,18 @@ export const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.m
             // An open bracket facing back toward the click, widening a little as it fades
             const facing = Math.atan2(ping.y - ty, ping.x - tx);
             const rr = tr * (1 + since * 0.35);
-            ctx.globalAlpha = strength * 0.85;
+            topCtx.globalAlpha = strength * 0.85;
             for (let k = -4; k <= 4; k++) {
               const a = facing + k * 0.17;
-              ctx.fillText(Math.abs(k) === 4 ? '.' : ':', tx + Math.cos(a) * rr, ty + Math.sin(a) * rr);
+              topCtx.fillText(Math.abs(k) === 4 ? '.' : ':', tx + Math.cos(a) * rr, ty + Math.sin(a) * rr);
             }
           }
         }
-        ctx.globalAlpha = 1;
+        topCtx.globalAlpha = 1;
       }
 
       // 7. DEEP-OCEAN BIOLUMINESCENT JELLYFISH — Foreground-margin plane
-      if (!migActive) renderJellyfishPlanes(w, h, rawDepth, abyss, surfaceBaseY, 2, 2);
+      if (!migActive) renderJellyfishPlanes(w, h, rawDepth, abyss, surfaceBaseY, 2, 2, topCtx);
 
       migrationStats.frameMs += (performance.now() - frameStart - migrationStats.frameMs) * 0.1;
       animId = requestAnimationFrame(render);
@@ -3274,6 +3295,7 @@ export const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.m
       window.removeEventListener('click', handleSonarClick);
       oceanLifeDisposed = true;
       cancelAnimationFrame(animId);
+      glyphBatch?.destroy();
       directWhales('migration', 0, migLanes);
     };
   }, [mode]);
@@ -3289,6 +3311,8 @@ export const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.m
       }`}
     >
       <canvas ref={canvasRef} className="w-full max-w-full h-full block" />
+      <canvas ref={glCanvasRef} className="absolute inset-0 w-full h-full block" />
+      <canvas ref={overCanvasRef} className="absolute inset-0 w-full h-full block" />
     </div>
   );
 });
