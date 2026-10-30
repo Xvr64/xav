@@ -271,11 +271,12 @@ export default function App() {
               data-ascii-preserve
               className="journey-runway relative mt-8 sm:mt-12 w-full max-w-full overflow-hidden"
             >
-              <div data-journey-lead aria-hidden="true" className="journey-lead absolute top-0 left-0 w-px pointer-events-none" />
               <div className="sticky top-0 h-[100svh] w-full max-w-full overflow-hidden">
                 <WhaleConvergence firstCity={CV_DATA.locations[0]} />
                 <JourneyGlobe locations={CV_DATA.locations} />
               </div>
+              {/* The convergence's length; after the stage, which JourneyGlobe finds as the first child */}
+              <div data-journey-lead aria-hidden="true" className="journey-lead absolute top-0 left-0 w-px pointer-events-none" />
             </div>
           </section>
 
