@@ -1,0 +1,5 @@
+/* Tailwind's layers, imported ahead of terminal.css so the page's own rules keep the last word,
+   as they did when the Play CDN injected these before it. */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
