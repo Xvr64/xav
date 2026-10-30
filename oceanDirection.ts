@@ -20,6 +20,8 @@ export const readingZones: { read: () => readonly { left: number; top: number; w
  */
 export const whaleDirection = {
   weight: 0,
+  /** Drawn size of the whales (1 = their own): below 1 while they dive into the Globe. */
+  size: 1,
   surfaceY: -Infinity,
   lanes: [
     { x: 0.79, y: 0.8 },

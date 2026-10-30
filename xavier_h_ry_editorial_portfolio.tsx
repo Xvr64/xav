@@ -8,6 +8,7 @@ import { FluidOceanBackground } from './FluidOceanBackground';
 import { JourneyGlobe } from './JourneyGlobe';
 import { AsciiWhaleBackground } from './AsciiWhaleBackground';
 import {
+  GlobeDive,
   HeroCurrentLayer,
   LANES_EXPERIENCE,
   LANES_EXPERIENCE_NARROW,
@@ -174,6 +175,7 @@ export default function App() {
       <FluidOceanBackground />
       <HeroCurrentLayer />
       <WhaleStretch sectionId="experience" lanes={LANES_EXPERIENCE} narrowLanes={LANES_EXPERIENCE_NARROW} />
+      <GlobeDive />
       <AsciiWhaleBackground mode="ambient" />
       <DecodeSoundToggle />
 

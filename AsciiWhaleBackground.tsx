@@ -1959,8 +1959,9 @@ export const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.m
         currentWhaleLayer = wIdx + 1;
         const wh = whales[wIdx];
         // Whales grow slightly more present as the visitor descends (up to +10%)
+        // whaleDirection.size < 1 while they dive into the Globe (GlobeDive in OceanEntry.tsx)
         const baseLen =
-          Math.min(w, h) * (isFocus ? 0.66 : 0.58 * entryDistanceScale) * wh.scale * (1 + depth * 0.1);
+          Math.min(w, h) * (isFocus ? 0.66 : 0.58 * entryDistanceScale) * wh.scale * (1 + depth * 0.1) * whaleDirection.size;
         if (wIdx === 0) mainBodyLen = baseLen;
 
         // Freeze the ambient entry pose while this scroll sequence owns the animals.

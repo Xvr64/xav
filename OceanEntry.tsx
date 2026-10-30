@@ -5,6 +5,7 @@ import { createHorizonRipple } from './horizonRipple';
 import { CV_DATA } from './cvData';
 import {
   directWhales,
+  globeZone,
   heroZone,
   migrationRunway,
   mixLane,
@@ -168,6 +169,57 @@ export const HeroCurrentLayer: React.FC = React.memo(() => {
 // screen, beneath the eye line, where the next station is only rising into view.
 export const LANES_EXPERIENCE: Lane[] = [{ x: 0.17, y: 0.91 }, { x: 0.88, y: 0.96 }];
 export const LANES_EXPERIENCE_NARROW: Lane[] = [{ x: 0.86, y: 0.95 }, { x: 0.12, y: 0.97 }];
+
+/**
+ * The whales dive into the Globe: as its runway rises they steer toward the centre of the disc and
+ * shrink to a third of their size, swimming deep into the planet behind it (a calm zone, so they
+ * draw faintly there) for the whole city sequence, and grow back as the pinned stage lets go.
+ * Every value follows the runway's position, so scrolling back plays it in reverse.
+ */
+export const GlobeDive: React.FC = () => {
+  useEffect(() => {
+    const runway = document.querySelector<HTMLElement>('[data-journey-runway]');
+    if (!runway || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const lanes: Lane[] = [
+      { x: 0.64, y: 0.47 },
+      { x: 0.6, y: 0.53 }
+    ];
+    let frame = 0;
+    const update = () => {
+      frame = 0;
+      const vh = window.innerHeight;
+      const r = runway.getBoundingClientRect();
+      const dive = Math.min(
+        smoothStepRange(vh - r.top, vh * 0.15, vh * 0.95),
+        smoothStepRange(r.bottom, vh * 0.35, vh * 1.0)
+      );
+      // The disc's centre as the Globe publishes it; the desktop framing until it does
+      const disc = globeZone.rects[0];
+      if (disc) {
+        const cx = (disc.left + disc.width / 2) / Math.max(1, window.innerWidth);
+        const cy = (disc.top + disc.height / 2) / Math.max(1, vh);
+        lanes[0] = { x: cx, y: cy };
+        lanes[1] = { x: cx - 0.04, y: cy + 0.06 };
+      }
+      whaleDirection.size = 1 - 0.68 * dive;
+      directWhales('globe', dive, lanes);
+    };
+    const schedule = () => {
+      if (!frame) frame = requestAnimationFrame(update);
+    };
+    window.addEventListener('scroll', schedule, { passive: true });
+    window.addEventListener('resize', schedule);
+    update();
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener('scroll', schedule);
+      window.removeEventListener('resize', schedule);
+      whaleDirection.size = 1;
+      directWhales('globe', 0, lanes);
+    };
+  }, []);
+  return null;
+};
 
 /**
  * Holds the whales in composed lanes while a section is on screen: the hold builds as the
