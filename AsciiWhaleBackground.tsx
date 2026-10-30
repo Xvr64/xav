@@ -362,6 +362,43 @@ export const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.m
       return BODY_WIDTH_LUT[idx];
     };
 
+    // Side profile of a humpback (fractions of body length, head at u = 0): how far the back
+    // rises above the spine and the belly hangs below it. A flat rostrum, the deep pleated throat,
+    // the small dorsal fin on its hump, and the slender tail stock.
+    const PROFILE_POINTS: readonly [number, number, number][] = [
+      // u, dorsal, ventral
+      [0.0, 0.008, 0.01],
+      [0.03, 0.028, 0.036],
+      [0.08, 0.05, 0.07],
+      [0.14, 0.066, 0.095],
+      [0.22, 0.08, 0.11],
+      [0.32, 0.09, 0.113],
+      [0.45, 0.09, 0.1],
+      [0.56, 0.084, 0.08],
+      [0.6, 0.088, 0.072],
+      [0.635, 0.112, 0.066],
+      [0.665, 0.09, 0.06],
+      [0.7, 0.07, 0.052],
+      [0.8, 0.042, 0.035],
+      [0.88, 0.025, 0.022],
+      [0.94, 0.016, 0.015],
+      [1.0, 0.01, 0.01]
+    ];
+    const DORSAL_LUT = new Float32Array(LUT_SIZE);
+    const VENTRAL_LUT = new Float32Array(LUT_SIZE);
+    for (let i = 0, p = 0; i < LUT_SIZE; i++) {
+      const u = i / (LUT_SIZE - 1);
+      while (p < PROFILE_POINTS.length - 2 && u > PROFILE_POINTS[p + 1][0]) p++;
+      const [u0, d0, v0] = PROFILE_POINTS[p];
+      const [u1, d1, v1] = PROFILE_POINTS[p + 1];
+      const t = Math.max(0, Math.min(1, (u - u0) / (u1 - u0)));
+      const s = t * t * (3 - 2 * t);
+      DORSAL_LUT[i] = d0 + (d1 - d0) * s;
+      VENTRAL_LUT[i] = v0 + (v1 - v0) * s;
+    }
+    const profileAt = (lut: Float32Array, u: number) =>
+      lut[Math.max(0, Math.min(LUT_SIZE - 1, (u * (LUT_SIZE - 1)) | 0))];
+
     interface WakeParticle {
       x: number;
       y: number;
@@ -396,9 +433,15 @@ export const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.m
       dispY: Float32Array;
       dispAngle: Float32Array;
       dispScale: Float32Array;
+      /** Side-view turn: -1 just turned (drawn still facing the old way) → 1 settled. */
+      turnS: number;
     }
 
     const SPINE_NODES = 64;
+    /** Steepest climb or dive of a swimming whale (rad, ~20°): they travel, they do not stand. */
+    const SWIM_PITCH_MAX = 0.35;
+    /** Most any part of the body may angle away from the head's line (rad, ~23°). */
+    const SIDE_BODY_BEND = 0.4;
     const createWhaleAgent = (scale: number, cycleOffset: number): WhaleAgent => ({
       x: 0,
       y: 0,
@@ -418,8 +461,33 @@ export const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.m
       dispX: new Float32Array(SPINE_NODES),
       dispY: new Float32Array(SPINE_NODES),
       dispAngle: new Float32Array(SPINE_NODES),
-      dispScale: new Float32Array(SPINE_NODES).fill(1)
+      dispScale: new Float32Array(SPINE_NODES).fill(1),
+      turnS: 1
     });
+
+    /** Seconds a whale takes to turn around, seen from the side. */
+    const SIDE_TURN_SECONDS = 1.1;
+    /**
+     * Turning around in side view is a yaw, not a loop in the page's plane: the body is mirrored
+     * about its middle at once, and the drawing (turnS) foreshortens it from the old facing,
+     * through head-on, to the new one, so the whale is never seen standing on its tail.
+     */
+    const turnAround = (wh: WhaleAgent) => {
+      const c = wh.spineX[SPINE_NODES >> 1];
+      for (let k = 0; k < SPINE_NODES; k++) {
+        wh.spineX[k] = 2 * c - wh.spineX[k];
+        wh.spineAngle[k] = Math.PI - wh.spineAngle[k];
+      }
+      wh.x = wh.spineX[0];
+      wh.heading = Math.PI - wh.heading;
+      wh.turnRate = -wh.turnRate;
+      wh.turnS = -1;
+    };
+    /** The drawn facing during a turn: -1 old facing … 1 new, never fully edge-on. */
+    const sideTurnScale = (wh: WhaleAgent) => {
+      const s = Math.sin(Math.max(-1, Math.min(1, wh.turnS)) * Math.PI * 0.5);
+      return Math.abs(s) < 0.12 ? (s < 0 ? -0.12 : 0.12) : s;
+    };
 
     const whales: WhaleAgent[] = [
       createWhaleAgent(1.0, 0),
@@ -1041,17 +1109,15 @@ export const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.m
         wh.finCycle += wh.CycleSpeed * 0.56 * cruiseBeat;
       }
 
+      // Scrolling sets the whales travelling, never diving head-first: they keep swimming across
+      // the screen, facing their lane, and only pitch gently down (scrolling down) or up
+      // (scrolling up). The scroll's pace shows in the stroke, not in a vertical heading.
       const cosCurr = Math.cos(wh.heading);
-      const horizontalError = Math.max(-0.35, Math.min(0.35, ((laneCenterX - wh.x) / Math.max(300, w)) * 1.1));
-      const downH = Math.PI * 0.5 - horizontalError;
-      const upH = -Math.PI * 0.5 + horizontalError;
-      const downW = (sm.dirBlend + 1) * 0.5;
-      const upW = 1 - downW;
-      const bridgeX = (cosCurr >= 0 ? 1 : -1) * (1 - Math.abs(sm.dirBlend)) * 0.45;
-      const verticalScrollHeading = Math.atan2(
-        downW * Math.sin(downH) + upW * Math.sin(upH),
-        downW * Math.cos(downH) + upW * Math.cos(upH) + bridgeX
-      );
+      const laneDx = laneCenterX - wh.x;
+      const scrollFacing: 1 | -1 =
+        Math.abs(laneDx) > w * 0.08 ? (laneDx > 0 ? 1 : -1) : cosCurr >= 0 ? 1 : -1;
+      const scrollPitch = sm.dirBlend * SWIM_PITCH_MAX * 0.7;
+      const verticalScrollHeading = scrollFacing > 0 ? scrollPitch : Math.PI - scrollPitch;
 
       const idleHorizontalHeading =
         cosCurr >= 0
@@ -1073,7 +1139,16 @@ export const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.m
         targetVecX = targetVecX * (1 - feedPull) + feedDirX * feedPull;
         targetVecY = targetVecY * (1 - feedPull) + feedDirY * feedPull;
       }
-      const desiredAngle = Math.atan2(targetVecY, targetVecX);
+      // Whatever steers (scroll, idle drift, autonomy), the body stays within a shallow pitch
+      // of horizontal, so the side profile always reads as a whale swimming through water
+      const desiredFacing = targetVecX >= 0 ? 1 : -1;
+      const desiredPitch = Math.max(
+        -SWIM_PITCH_MAX,
+        Math.min(SWIM_PITCH_MAX, Math.atan2(targetVecY, Math.abs(targetVecX) + 1e-6))
+      );
+      const desiredAngle = desiredFacing > 0 ? desiredPitch : Math.PI - desiredPitch;
+      if (wh.turnS < 1) wh.turnS = Math.min(1, wh.turnS + dtScale / 60 / (SIDE_TURN_SECONDS * 0.5));
+      else if ((Math.cos(wh.heading) >= 0 ? 1 : -1) !== desiredFacing) turnAround(wh);
 
       let angleDiff = desiredAngle - wh.heading;
       while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
@@ -1089,7 +1164,9 @@ export const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.m
 
       const pivotBoostPx = Math.abs(angleDiff) * sm.activity * 2.1 * wh.scale;
       const idleDriftPx = (0.13 + (1 - entryCalm) * 0.05) * wh.scale * motionScale;
-      const scrollSwimPx = Math.min(8.5, scrollSpeedPx * 0.38 + pivotBoostPx) * wh.scale;
+      // Horizontal travel is held near the lane's own drift so a long scroll does not carry the
+      // whales off-screen; the faster stroke above carries the sense of speed
+      const scrollSwimPx = Math.min(8.5, scrollSpeedPx * 0.38 + pivotBoostPx) * wh.scale * 0.45;
       let stepPx = (idleDriftPx * (1 - sm.activity * 0.5) + scrollSwimPx) * dtScale;
       if (autoStep) {
         stepPx = stepPx * (1 - autoW) + autoStep.speed * dtScale * autoW;
@@ -1128,6 +1205,13 @@ export const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.m
         const maxBend = 0.12;
         if (diff > maxBend) segAngle = wh.spineAngle[k - 1] + maxBend;
         if (diff < -maxBend) segAngle = wh.spineAngle[k - 1] - maxBend;
+        // Seen from the side, a whale's body flexes only a little up and down: no point of it
+        // strays far from the head's line, so the tail never curls over the back
+        let fromHead = segAngle - wh.spineAngle[0];
+        while (fromHead > Math.PI) fromHead -= Math.PI * 2;
+        while (fromHead < -Math.PI) fromHead += Math.PI * 2;
+        if (fromHead > SIDE_BODY_BEND) segAngle = wh.spineAngle[0] + SIDE_BODY_BEND;
+        else if (fromHead < -SIDE_BODY_BEND) segAngle = wh.spineAngle[0] - SIDE_BODY_BEND;
 
         wh.spineAngle[k] = segAngle;
         wh.spineX[k] = wh.spineX[k - 1] - Math.cos(segAngle) * segLen;
@@ -1919,6 +2003,179 @@ export const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.m
         const lightDirY = -0.65;
         const lightDirZ = 0.52;
 
+        if (!posed) {
+          // SIDE PROFILE — the whale seen from the side as it swims across the page: dark back,
+          // pale pleated throat, mouth line and eye, one long pectoral fin and the flukes edge-on.
+          // (The migration's overhead camera keeps the dorsal view drawn in A–C below.)
+          const headAng = SA[0];
+          // The back faces up the screen whichever way the whale swims
+          const dorsalSign = Math.cos(headAng) >= 0 ? -1 : 1;
+          // While turning around, the body is drawn foreshortened about its middle (see turnAround)
+          const turnScale = sideTurnScale(wh);
+          const pivotX = SX[SPINE_NODES >> 1];
+          const sideX = (x: number) => pivotX + (x - pivotX) * turnScale;
+          const splatSide = (x: number, y: number, z: number, shade: number, tone: number, r: number) =>
+            splatPoint(sideX(x), y, z, shade, tone, r);
+
+          // A'. BODY — one column of cells per station, from the belly edge to the back edge
+          const uSteps = 84;
+          for (let iu = 0; iu <= uSteps; iu++) {
+            const u = iu / uSteps;
+            const sp = sampleSpine(u);
+            const Ls = bodyLen * sp.scale;
+            const dorsal = profileAt(DORSAL_LUT, u) * Ls;
+            const ventral = profileAt(VENTRAL_LUT, u) * Ls;
+            const upX = sp.nx * dorsalSign;
+            const upY = sp.ny * dorsalSign;
+            // The stroke rides through the body as a gentle rise and fall toward the tail
+            const heave = Math.cos(wh.swimCycle - u * 4.5) * u * u * 0.035 * Ls;
+            const centre = (dorsal - ventral) * 0.5 + heave;
+            const half = (dorsal + ventral) * 0.5;
+            const steps = Math.max(4, Math.ceil((half * 2) / (cellSize * 0.58)));
+            for (let il = 0; il <= steps; il++) {
+              // -1 belly edge … +1 back edge
+              const localY = (il / steps) * 2 - 1;
+              const localZ = Math.sqrt(Math.max(0, 1 - localY * localY));
+              const off = centre + localY * half;
+              const wx = sp.x + upX * off;
+              const wy = sp.y + upY * off;
+
+              let anatomyShade: number;
+              let tone: number;
+              if (localY > 0.15) {
+                // Dark back
+                anatomyShade = 0.88;
+                tone = 0.88;
+                // Knobbed rostrum: the tubercles along the top of the head
+                if (u < 0.15 && localY > 0.72 && Math.sin(u * 140) > 0.45) {
+                  anatomyShade = 0.3;
+                  tone = 0.3;
+                }
+              } else if (localY > -0.3 || u < 0.06 || u > 0.55) {
+                // Flank
+                anatomyShade = 0.66 - (0.15 - localY) * 0.18;
+                tone = 0.6;
+              } else {
+                // Pale throat with its long ventral pleats, running along the body
+                const pleat = Math.sin(localY * 30) * 0.5 + 0.5;
+                anatomyShade = 0.22 + pleat * 0.3;
+                tone = 0.18;
+              }
+              // Mouth line: from the tip of the jaw, curving down and back past the eye
+              const mouthY = 0.02 - u * 1.9;
+              if (u < 0.18 && Math.abs(localY - mouthY) < 0.1) {
+                anatomyShade = 0.14;
+                tone = 0.1;
+              }
+              // Eye, just above the corner of the mouth
+              if (Math.abs(u - 0.17) < 0.012 && Math.abs(localY + 0.18) < 0.13) {
+                anatomyShade = 0.12;
+                tone = 0.1;
+              }
+
+              const worldNX = upX * localY;
+              const worldNY = upY * localY;
+              const diffuse = Math.max(0, worldNX * lightDirX + worldNY * lightDirY + Math.max(0.1, localZ) * lightDirZ);
+              const caustic = Math.sin(wx * 0.045 + fx * 2.8) * Math.cos(wy * 0.045 - fx * 2.2) * 0.11;
+              const finalShade = Math.max(0.08, Math.min(0.98, anatomyShade * 0.72 + (1 - diffuse) * 0.32 + caustic));
+              splatSide(wx, wy, 10 + localZ * 3 + sp.layerZ, finalShade, tone, cellSize * 0.42);
+            }
+          }
+
+          // B'. PECTORAL FIN — the near fin, long and pale, sweeping down and back from below the
+          // throat; it rows slowly with the fin cycle. The far fin is hidden behind the body.
+          {
+            const root = sampleSpine(0.28);
+            const Lr = bodyLen * root.scale;
+            const upX = root.nx * dorsalSign;
+            const upY = root.ny * dorsalSign;
+            const rootOff = -profileAt(VENTRAL_LUT, 0.28) * Lr * 0.45;
+            const rootX = root.x + upX * rootOff;
+            const rootY = root.y + upY * rootOff;
+            const sweep = 0.68 + Math.sin(wh.finCycle) * 0.14 + wh.turnRate * 6;
+            // Tailward and downward directions in the screen plane
+            const backX = -root.tx;
+            const backY = -root.ty;
+            const finLen = Lr * 0.3;
+            const finSteps = 30;
+            for (let is = 0; is <= finSteps; is++) {
+              const s = is / finSteps;
+              // The fin curves slightly further back toward its tip
+              const a = sweep - s * s * 0.22;
+              const dirX = backX * Math.cos(a) - upX * Math.sin(a);
+              const dirY = backY * Math.cos(a) - upY * Math.sin(a);
+              const cx = rootX + dirX * s * finLen;
+              const cy = rootY + dirY * s * finLen;
+              // Scalloped leading edge (the knobs of a humpback's flipper)
+              const tubercle = Math.sin(s * Math.PI * 8.5) * 0.08 * (1 - s * 0.4);
+              const chord = Lr * 0.062 * Math.sin(Math.pow(s, 0.42) * Math.PI) * (1 + tubercle);
+              const chordSteps = Math.max(3, Math.ceil(chord / (cellSize * 0.52)));
+              // Across the fin, toward its trailing (tailward) edge
+              const perpX = -dirY;
+              const perpY = dirX;
+              const toTrail = perpX * backX + perpY * backY >= 0 ? 1 : -1;
+              for (let ic = 0; ic <= chordSteps; ic++) {
+                const c = ic / chordSteps;
+                const off = (c - 0.3) * chord * toTrail;
+                const leading = c < 0.35 || s > 0.8;
+                splatSide(
+                  cx + perpX * off,
+                  cy + perpY * off,
+                  14 + root.layerZ,
+                  leading ? 0.2 + c * 0.2 : 0.5 + Math.sin(s * 6 + c * 4) * 0.12,
+                  leading ? 0.12 : 0.5,
+                  cellSize * 0.38
+                );
+              }
+            }
+          }
+
+          // C'. FLUKES, EDGE-ON — the tail stock ends in the flukes seen from the side: a thin,
+          // slightly forked blade that tilts up and down with each stroke.
+          {
+            const tail = sampleSpine(1);
+            const Lt = bodyLen * tail.scale;
+            const upX = tail.nx * dorsalSign;
+            const upY = tail.ny * dorsalSign;
+            const tilt = Math.cos(wh.swimCycle - 4.8) * 0.42;
+            const span = Lt * 0.13;
+            const steps = 18;
+            for (const lobe of [-1, 1]) {
+              const a = tilt + lobe * 0.12;
+              const dirX = -tail.tx * Math.cos(a) + upX * Math.sin(a);
+              const dirY = -tail.ty * Math.cos(a) + upY * Math.sin(a);
+              for (let is = 0; is <= steps; is++) {
+                const s = is / steps;
+                const x = tail.x + dirX * s * span;
+                const y = tail.y + dirY * s * span;
+                const thick = Lt * 0.016 * (1 - s * 0.7);
+                const tipEdge = s > 0.75;
+                for (const side of [-1, 0, 1]) {
+                  splatSide(
+                    x + upX * side * thick,
+                    y + upY * side * thick,
+                    9.8 + tail.layerZ,
+                    tipEdge ? 0.26 : 0.78,
+                    tipEdge ? 0.16 : 0.8,
+                    cellSize * 0.38
+                  );
+                }
+                if (!migActive && is === steps && sm.activity > 0.12 && Math.random() < 0.3 * sm.activity) {
+                  wakeParticles.push({
+                    x: sideX(x),
+                    y,
+                    vx: -tail.tx * 0.6 + (Math.random() - 0.5) * 0.5,
+                    vy: -tail.ty * 0.6 + (Math.random() - 0.5) * 0.5,
+                    age: 0,
+                    maxAge: 45 + Math.random() * 35,
+                    size: (11 + Math.random() * 14) * wh.scale,
+                    kind: 'vortex'
+                  });
+                }
+              }
+            }
+          }
+        } else {
         // A. MAIN BODY
         const uBodySteps = 78;
         for (let iu = 0; iu <= uBodySteps; iu++) {
@@ -2136,6 +2393,7 @@ export const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.m
               });
             }
           }
+        }
         }
 
         if (!migActive && Math.random() < (0.05 + sm.activity * 0.18) * (1 - eng)) {
