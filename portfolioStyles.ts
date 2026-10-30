@@ -64,7 +64,7 @@ export const GLOBAL_PORTFOLIO_CSS = `
     font-size: var(--text-h2);
     line-height: var(--leading-h2);
     letter-spacing: var(--tracking-h2);
-    font-weight: 300;
+    font-weight: var(--display-weight, 300);
     color: var(--ink-primary);
     text-wrap: balance;
   }

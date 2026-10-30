@@ -62,6 +62,9 @@ export const inkMixFromAbyss = (abyss: number) => {
 
 export function applyAbyssPalette(t: number) {
   const root = document.documentElement.style;
+  // How far the page's ink has turned light (0 on white water, 1 on black): read by CSS to set
+  // light type a little thinner and more open on dark water, where it reads heavier
+  root.setProperty('--ink-light', t.toFixed(3));
   for (const c of ABYSS_TEXT) {
     root.setProperty(
       `--ink-${c.hex}`,
