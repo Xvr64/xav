@@ -14,9 +14,7 @@ import {
   charOpacity,
   lineProgress,
   entryEndFor,
-  waterShade,
-  orbitStages,
-  ORBIT_SPIN
+  waterShade
 } from './terminalMotion.ts';
 import { ClickGate, CLICK_GAP_MS, MIN_ACTIVITY } from './decodeAudio.ts';
 
@@ -170,47 +168,4 @@ test('background remains white before the globe and black after its exact end', 
     assert.ok(shade <= previous);
     previous = shade;
   }
-});
-
-test('whale-to-globe prelude: deterministic, reversible and fully formed at the handoff', () => {
-  const start = orbitStages(0);
-  assert.equal(start.converge, 0);
-  assert.equal(start.dissolve, 0);
-  assert.equal(start.sphere, 0);
-  assert.equal(start.globeDisc, 0);
-  assert.equal(start.globeMarks, 0);
-  assert.equal(start.ascii, 1);
-
-  // The handoff frame is exactly the globe's own first frame: no spin left, nothing ASCII
-  const end = orbitStages(1);
-  for (const key of ['converge', 'dissolve', 'globeGrid', 'globeLand', 'globeDisc', 'globeMarks', 'caption']) {
-    assert.equal(end[key], 1, key);
-  }
-  assert.equal(end.ascii, 0);
-  assert.equal(end.spin, 0);
-
-  // Storyboard order: the sphere is legible before the whales are gone, the planet after
-  assert.equal(orbitStages(0.2).converge, 1);
-  assert.ok(orbitStages(0.66).sphere === 1 && orbitStages(0.66).dissolve < 0.05);
-  assert.ok(orbitStages(0.7).globeDisc === 0);
-  assert.equal(orbitStages(0.88).dissolve, 1);
-  assert.equal(orbitStages(0.9).globeMarks, 0);
-
-  // Same t, same state — scrolling back replays the exact frames
-  const samples = Array.from({ length: 201 }, (_, i) => i / 200);
-  const down = samples.map((t) => JSON.stringify(orbitStages(t)));
-  const up = [...samples].reverse().map((t) => JSON.stringify(orbitStages(t))).reverse();
-  assert.deepEqual(down, up);
-
-  // Every stage moves one way only, and the spin eases to rest
-  let prev = orbitStages(0);
-  for (const t of samples.slice(1)) {
-    const s = orbitStages(t);
-    for (const key of ['converge', 'trails', 'sphere', 'land', 'dissolve', 'globeGrid', 'globeLand', 'globeDisc', 'globeMarks', 'caption']) {
-      assert.ok(s[key] >= prev[key], `${key} at ${t}`);
-    }
-    assert.ok(s.ascii <= prev.ascii && s.spin <= prev.spin && s.radius <= prev.radius);
-    prev = s;
-  }
-  assert.ok(orbitStages(0.995).spin < 0.001 * ORBIT_SPIN);
 });

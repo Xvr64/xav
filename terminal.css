@@ -357,6 +357,16 @@ body {
   .hero-name, .hero-horizon { display: none; }
 }
 
+/* Migration: an empty runway whose scroll is the journey's timeline (drawn by the whale
+   canvas). Without motion there is no journey, and no runway. */
+.migration-runway { height: 0; }
+@media (prefers-reduced-motion: no-preference) {
+  .migration-runway { height: 460svh; }
+}
+@media (prefers-reduced-motion: no-preference) and (max-width: 767px) {
+  .migration-runway { height: 400svh; }
+}
+
 /* ---------------------------------------------------------------------------
    02 · Introduction — a statement spread under the name
    --------------------------------------------------------------------------- */
