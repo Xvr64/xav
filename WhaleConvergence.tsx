@@ -35,7 +35,9 @@ export const WhaleConvergence: React.FC<{ firstCity: { lon: number; lat: number 
       const H = Math.max(1, r.height);
       const { cx, cy, baseR } = globeFrame(W, H);
       // The Globe's framing at the first city of its journey (its dwell zoom is 1.08)
-      layer.setView({ width: W, height: H, globeX: cx, globeY: cy, globeR: baseR * 1.08 }, Math.min(window.devicePixelRatio || 1, 1.5));
+      // Pixel ratio capped like the Globe's canvas (lower on phones, where fill rate is scarcer)
+      const dpr = Math.min(window.devicePixelRatio || 1, W < 768 ? 1.25 : 1.5);
+      layer.setView({ width: W, height: H, globeX: cx, globeY: cy, globeR: baseR * 1.08 }, dpr);
     };
     const frame = () => {
       raf = 0;
@@ -94,7 +96,20 @@ export const WhaleConvergence: React.FC<{ firstCity: { lon: number; lat: number 
           if ((import.meta as unknown as { env?: { DEV?: boolean } }).env?.DEV) {
             (window as unknown as { __convergence: unknown }).__convergence = {
               state: convergence,
-              seek: (p: number) => window.scrollTo(0, convergence.start + p * convergence.length)
+              seek: (p: number) => window.scrollTo(0, convergence.start + p * convergence.length),
+              /** Mean ms per frame for n renders across [from, to], GPU work included. */
+              profile: (n = 60, from = 0.2, to = 0.9) => {
+                if (!layer) return null;
+                layer.finish();
+                const t0 = performance.now();
+                for (let i = 0; i < n; i++) {
+                  layer.render(from + ((to - from) * i) / Math.max(1, n - 1));
+                  layer.finish();
+                }
+                const ms = (performance.now() - t0) / n;
+                frame();
+                return ms;
+              }
             };
           }
           schedule();

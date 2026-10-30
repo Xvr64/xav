@@ -214,6 +214,8 @@ export interface ConvergenceLayer {
   /** Draw the scene at progress p (0 … 1); returns the frame's handoff values. */
   render(p: number): { globeReveal: number; layer: number };
   clear(): void;
+  /** Development: wait for the GPU to finish the frames issued so far (for timing). */
+  finish(): void;
   readonly lost: boolean;
   onContextLost: (() => void) | null;
   destroy(): void;
@@ -458,6 +460,11 @@ export function createConvergenceLayer(canvas: HTMLCanvasElement, firstCity: { l
     },
     clear() {
       ascii.clear();
+    },
+    finish() {
+      const gl = ascii.renderer.getContext();
+      const px = new Uint8Array(4);
+      gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
     },
     get lost() {
       return ascii.lost;

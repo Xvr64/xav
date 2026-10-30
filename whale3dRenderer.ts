@@ -287,6 +287,16 @@ float strokeGlyph(float a) {
 void main() {
   vec2 cellIx = floor(gl_FragCoord.xy);              // x = column, y = row counted from the top
   vec2 px0 = cellIx * uCell;                         // cell's top-left, device px from the top-left
+  // Most cells are open water: a 3 × 3 probe of coverage (one texel beyond the cell) skips them
+  float probe = 0.0;
+  for (int j = 0; j < 3; j++) {
+    for (int i = 0; i < 3; i++) {
+      vec2 sp = px0 + vec2(float(i), float(j)) * 0.5 * uCell;
+      vec2 uv = vec2(sp.x / uCanvas.x, 1.0 - sp.y / uCanvas.y) + (vec2(float(i), float(j)) - 1.0) * uTexel * vec2(1.0, -1.0);
+      probe = max(probe, texture(uMask, uv).a);
+    }
+  }
+  if (probe <= 0.0) { outCell = vec4(0.0); return; }
   const int SX = 4;
   const int SY = 5;
   float covSum = 0.0, inkSum = 0.0, depthSum = 0.0, eyeSum = 0.0, mouthSum = 0.0;
@@ -744,6 +754,8 @@ export class WhaleAsciiRenderer {
       u.uInvert.value = this.style.invert ? 1 : 0;
     }
 
+    const anyWhale = this.whales.some((w) => w.mesh.visible);
+
     // 1. G-buffer
     r.setRenderTarget(this.gbuffer);
     r.setClearColor(0x000000, 0);
@@ -756,7 +768,9 @@ export class WhaleAsciiRenderer {
     r.setClearColor(0x000000, 0);
     r.clear(true, true, true);
     if (drawOverlay && this.underlay.children.length) r.render(this.underlay, this.camera);
-    if (this.style.mode === 'raw') {
+    if (!anyWhale) {
+      // Nothing to engrave: skip the cell and composite passes
+    } else if (this.style.mode === 'raw') {
       const u = this.rawMaterial.uniforms;
       u.uInk.value = inkTex;
       u.uMask.value = maskTex;
