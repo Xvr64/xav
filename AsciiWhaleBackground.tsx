@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from 'react';
+import { AmbientWhaleLayer } from './AmbientWhaleLayer';
 import { createAsciiJellyfishField } from './asciiOceanLife';
 import { playSonarPing, setSoundDepth } from './decodeAudio';
 import { createGlyphBatchGL } from './glyphBatchGL';
@@ -14,6 +15,7 @@ import {
 import { fluidOceanLive, syncFluidOcean } from './FluidOceanBackground';
 import {
   READING_WHALE_ALPHA,
+  ambientWhalesLive,
   diveWake,
   directWhales,
   migrationRunway,
@@ -83,7 +85,7 @@ export const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.m
     const ctx = canvas.getContext('2d', { alpha: true });
     if (!ctx) return;
 
-    const prefersReducedMotion =
+    let prefersReducedMotion =
       typeof window !== 'undefined' &&
       window.matchMedia &&
       window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -594,7 +596,9 @@ export const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.m
     const glCanvas = glCanvasRef.current;
     const overCanvas = overCanvasRef.current;
     const overCtx = overCanvas ? overCanvas.getContext('2d', { alpha: true }) : null;
-    let glyphBatch = glCanvas && overCtx ? createGlyphBatchGL(glCanvas, cellSize) : null;
+    // Only the archived migration uses the old tile renderer. Ambient animals use the shared
+    // 3D context, so there is no second WebGL whale engine running behind it.
+    let glyphBatch = migrationRunway.height > 1 && glCanvas && overCtx ? createGlyphBatchGL(glCanvas, cellSize) : null;
     glyphBatch?.setAtlas(atlasCanvas, tilePx);
 
     const handleResize = () => {
@@ -1692,13 +1696,15 @@ export const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.m
     let prevMaxR = 0;
 
     const render = (now: number) => {
+      animId = 0;
+      if (document.hidden) return;
       const frameStart = performance.now();
       const rawDt = (now - lastFrameTime) * 0.001;
       lastFrameTime = now;
       const dt = Math.max(0.004, Math.min(0.033, rawDt || 0.0166));
       const dtScale = dt * 60;
 
-      time += prefersReducedMotion ? dt * 0.15 : dt;
+      time += prefersReducedMotion ? 0 : dt;
 
       const sm = scrollMotionRef.current;
       const curScrollY = window.scrollY;
@@ -1739,7 +1745,7 @@ export const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.m
         overCtx?.clearRect(0, 0, w, h);
       }
       // Where what is drawn after the whale tiles goes: the layer above the WebGL tiles, or the 2D canvas
-      const topCtx = glyphBatch && overCtx ? overCtx : ctx;
+      const topCtx = overCtx ?? ctx;
       if (topCtx !== ctx) topCtx.clearRect(0, 0, w, h);
 
       // Continuous ocean immersion factor: 1.0 on the entry screen, easing smoothly into restrained ambient currents in CV sections
@@ -2030,6 +2036,20 @@ export const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.m
       for (let wIdx = 0; wIdx < whales.length; wIdx++) {
         currentWhaleLayer = wIdx + 1;
         const wh = whales[wIdx];
+        if (!migActive) {
+          // Feeding and sonar follow the projected anatomical spine of the actual 3D animal.
+          // No mirrored 2D body or its independent kinematics run in the permanent ocean.
+          const spine = ambientWhalesLive.spines[wIdx];
+          for (let k = 0; k < SPINE_NODES; k++) {
+            const n = Math.round(k * 47 / (SPINE_NODES - 1));
+            wh.spineX[k] = spine[n * 2]; wh.spineY[k] = spine[n * 2 + 1];
+            const tail = Math.min(47, n + 1);
+            wh.spineAngle[k] = Math.atan2(spine[n * 2 + 1] - spine[tail * 2 + 1], spine[n * 2] - spine[tail * 2]);
+          }
+          wh.x = wh.spineX[0]; wh.y = wh.spineY[0]; wh.heading = wh.spineAngle[0];
+          if (wIdx === 0) mainBodyLen = Math.min(w, h) * 0.51;
+          continue;
+        }
         // Whales grow slightly more present as the visitor descends (up to +10%)
         // whaleDirection.size < 1 while they dive into the Globe (GlobeDive in OceanEntry.tsx)
         const baseLen =
@@ -2512,7 +2532,7 @@ export const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.m
       }
 
       // 4. (end) The dive's wake: record the lead whale's head while it dives into the Globe
-      if (!migActive && whaleDirection.size < 0.97) {
+      if (!migActive && ambientWhalesLive.presence > 0.1 && whaleDirection.size < 0.97) {
         const hx = whales[0].spineX[0];
         const hy = whales[0].spineY[0];
         const last = wakeCount - 1;
@@ -2839,7 +2859,7 @@ export const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.m
       const scrollDeltaPx = sm.smoothScrollY - lastSmoothScrollY;
       lastSmoothScrollY = sm.smoothScrollY;
       // Paused while the migration holds the whales: the scene owns their path
-      if (!prefersReducedMotion && !isFocus && !migActive) {
+      if (!prefersReducedMotion && !isFocus && !migActive && ambientWhalesLive.presence > 0.1) {
         const mainWh = whales[0];
         const headX = mainWh.spineX[0];
         const headY = mainWh.spineY[0];
@@ -3242,7 +3262,7 @@ export const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.m
 
       // 6B. SONAR ECHOES — each whale and visible jellyfish the ring reaches answers with a brief
       // bracket of glyphs around it, the moment the ring arrives
-      if (pings.length) {
+      if (pings.length && ambientWhalesLive.presence > 0.1) {
         const echoTargets: number[] = [];
         for (const wh of whales) {
           const mid = SPINE_NODES >> 1;
@@ -3282,9 +3302,21 @@ export const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.m
       if (!migActive) renderJellyfishPlanes(w, h, rawDepth, abyss, surfaceBaseY, 2, 2, topCtx);
 
       migrationStats.frameMs += (performance.now() - frameStart - migrationStats.frameMs) * 0.1;
-      animId = requestAnimationFrame(render);
+      if (!prefersReducedMotion) animId = requestAnimationFrame(render);
     };
 
+    const scheduleOcean = () => {
+      if (!animId && !document.hidden) { lastFrameTime = performance.now(); animId = requestAnimationFrame(render); }
+    };
+    const onVisibility = () => {
+      cancelAnimationFrame(animId); animId = 0; scheduleOcean();
+    };
+    const motionQuery = matchMedia('(prefers-reduced-motion: reduce)');
+    const onMotion = () => { prefersReducedMotion = motionQuery.matches; scheduleOcean(); };
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('scroll', scheduleOcean, { passive: true });
+    window.addEventListener('resize', scheduleOcean);
+    motionQuery.addEventListener('change', onMotion);
     animId = requestAnimationFrame(render);
 
     return () => {
@@ -3296,6 +3328,10 @@ export const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.m
       window.removeEventListener('click', handleSonarClick);
       oceanLifeDisposed = true;
       cancelAnimationFrame(animId);
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('scroll', scheduleOcean);
+      window.removeEventListener('resize', scheduleOcean);
+      motionQuery.removeEventListener('change', onMotion);
       glyphBatch?.destroy();
       directWhales('migration', 0, migLanes);
     };
@@ -3313,6 +3349,7 @@ export const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.m
     >
       <canvas ref={canvasRef} className="w-full max-w-full h-full block" />
       <canvas ref={glCanvasRef} className="absolute inset-0 w-full h-full block" />
+      <AmbientWhaleLayer />
       <canvas ref={overCanvasRef} className="absolute inset-0 w-full h-full block" />
     </div>
   );

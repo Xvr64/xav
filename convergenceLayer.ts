@@ -229,8 +229,8 @@ function earthBasis(lon: number, lat: number): THREE.Matrix3 {
   return new THREE.Matrix3().set(east[0], east[1], east[2], north[0], north[1], north[2], view[0], view[1], view[2]);
 }
 
-export function createConvergenceLayer(canvas: HTMLCanvasElement, firstCity: { lon: number; lat: number }): ConvergenceLayer {
-  const ascii = new WhaleAsciiRenderer(canvas, { maxWhales: 2, gbufferScale: 0.75 });
+export function createConvergenceLayer(canvas: HTMLCanvasElement, firstCity: { lon: number; lat: number }, shared?: WhaleAsciiRenderer): ConvergenceLayer {
+  const ascii = shared ?? new WhaleAsciiRenderer(canvas, { maxWhales: 2, gbufferScale: 0.75 });
   let view: ConvergenceView = { width: 1, height: 1, globeX: 0, globeY: 0, globeR: 1 };
   let dpr = 1;
   const base = earthBasis(firstCity.lon, firstCity.lat);
@@ -400,6 +400,8 @@ export function createConvergenceLayer(canvas: HTMLCanvasElement, firstCity: { l
       ascii.setStyle({ mode: 'shape', cellW: 6, cellH: 10 });
     },
     render(p) {
+      ascii.setReadingZones([], 0);
+      ascii.setStyle({ ink: [31, 59, 87], inkFar: [118, 140, 156], invert: false, gamma: 1.45, waterOpacity: 0 });
       const f = sampleConvergence(p, view);
       f.whales.forEach((w, i) =>
         ascii.setWhale(i, { visible: w.visible, position: w.position, quaternion: w.quaternion, scale: w.scale, articulation: w.articulation, dissolve: w.dissolve })
@@ -476,9 +478,11 @@ export function createConvergenceLayer(canvas: HTMLCanvasElement, firstCity: { l
       particleMat.dispose();
       disc.geometry.dispose();
       discMat.dispose();
-      ascii.dispose();
+      ascii.overlay.remove(particles);
+      ascii.underlay.remove(disc);
+      if (!shared) ascii.dispose();
     }
   };
-  ascii.onContextLost = () => layer.onContextLost?.();
+  if (!shared) ascii.onContextLost = () => layer.onContextLost?.();
   return layer;
 }

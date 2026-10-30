@@ -90,6 +90,9 @@ export const setGlobeZone = (rects: HeroRect[], origin: { x: number; y: number }
   if (rects.length === 0 && globeZone.rects.length === 0) return;
   globeZone.rects = rects;
   globeZone.version++;
+  // A zone can clear in an IntersectionObserver after the scroll frame. Wake a held/reduced
+  // whale frame too, so a stale Globe mask never leaves ambient animals almost invisible.
+  whaleStage.refresh?.();
 };
 
 /** The dive's wake as the Globe should land it: the lead whale's latest wake point (viewport px)
@@ -111,6 +114,20 @@ export const convergence = {
 };
 export const convergenceProgress = (scrollY: number) =>
   convergence.length > 0 ? Math.max(0, Math.min(1, (scrollY - convergence.start) / convergence.length)) : 1;
+
+/** The cinematic stage borrows the ambient renderer's canvas and the very same two meshes. */
+export const whaleStage: {
+  host: HTMLElement | null;
+  firstCity: { lon: number; lat: number } | null;
+  refresh: (() => void) | null;
+} = { host: null, firstCity: null, refresh: null };
+
+/** Projected 3D spine for the existing ocean's feeding/sonar effects. No second whale simulation. */
+export const ambientWhalesLive = {
+  active: true,
+  presence: 0,
+  spines: [new Float32Array(96), new Float32Array(96)]
+};
 /** How visible the Globe's own canvas and caption are (it takes over from the convergence's Earth). */
 export const globeRevealAt = (p: number) => {
   if (!convergence.ready || convergence.length <= 0) return 1;

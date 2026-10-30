@@ -1,0 +1,224 @@
+import * as THREE from 'three';
+import { WhaleAsciiRenderer, type WhaleState } from './whale3dRenderer';
+import { createConvergenceLayer, type ConvergenceLayer } from './convergenceLayer';
+import { sampleConvergence } from './convergenceScene';
+import { globeFrame } from './JourneyGlobe';
+import { ambientWhalesLive, convergence, convergenceProgress, globeZone, heroZone, readingZones, smoothStepRange, whaleDirection, whaleStage } from './oceanDirection';
+import { AMBIENT_CAMERA_Z, AMBIENT_FOV, sampleAmbientWhale, type AmbientComposition } from './ambientWhaleScene';
+import { qConj, qMul, qRotate, qSlerp, vLerp, skinFrames, type Articulation, type Quat } from './whale3dPose';
+import { globeScrollGeometry, inkMixFromAbyss } from './abyssPalette';
+import { waterShade } from './terminalMotion';
+
+const mix = (a: number, b: number, t: number) => a + (b - a) * t;
+function blendArticulation(a: Articulation, b: Articulation, t: number): Articulation {
+  const fin = (x: Articulation['flipperL'], y: Articulation['flipperL']) => ({ sweep: mix(x.sweep, y.sweep, t), dihedral: mix(x.dihedral, y.dihedral, t), twist: mix(x.twist, y.twist, t) });
+  const strokeDelta = Math.atan2(Math.sin(b.stroke - a.stroke), Math.cos(b.stroke - a.stroke));
+  return { stroke: a.stroke + strokeDelta * t, amplitude: mix(a.amplitude, b.amplitude, t), bendYaw: mix(a.bendYaw, b.bendYaw, t), bendPitch: mix(a.bendPitch, b.bendPitch, t), flipperL: fin(a.flipperL, b.flipperL), flipperR: fin(a.flipperR, b.flipperR), fluke: mix(a.fluke, b.fluke, t), flukeFlex: mix(a.flukeFlex, b.flukeFlex, t) };
+}
+
+/** One context, geometry and atlas; two skinned meshes; independent ambient/cinematic conductors. */
+export function mountAmbientWhales(host: HTMLElement): () => void {
+  const canvas = document.createElement('canvas');
+  canvas.className = 'absolute inset-0 w-full h-full block pointer-events-none';
+  canvas.dataset.whaleRenderer = 'shared-3d';
+  host.appendChild(canvas);
+  let ascii: WhaleAsciiRenderer;
+  try { ascii = new WhaleAsciiRenderer(canvas, { gbufferScale: innerWidth < 768 ? 0.5 : 0.65 }); }
+  catch { canvas.remove(); return () => undefined; }
+  let cinematic: ConvergenceLayer | null = null;
+  let cityKey = '';
+  let disposed = false;
+  let raf = 0;
+  let last = performance.now();
+  let lastDraw = 0;
+  let seconds = 0;
+  let dirty = true;
+  let maskDirty = true;
+  let lastZones: ReturnType<typeof readingZones.read> | null = null;
+  let lastHeroVersion = -1;
+  let lastGlobeVersion = -1;
+  let frameCount = 0;
+  let meanMs = 0;
+  let quality = innerWidth < 768 ? 0.5 : 0.65;
+  let viewKey = '';
+  let inCinema = false;
+  let anchor: WhaleState[] | null = null;
+  let current: WhaleState[] = [];
+  let handoff = 0;
+  let debugTime: number | null = null;
+  let debugAngles: { whale: number; yaw: number; pitch: number; roll: number } | null = null;
+  let forceReduced = false;
+  let qa: { update(): void; destroy(): void } | undefined;
+  const motion = matchMedia('(prefers-reduced-motion: reduce)');
+  const reduced = () => motion.matches || forceReduced;
+  const composition: AmbientComposition = { width: innerWidth, height: innerHeight, scroll: scrollY / innerHeight, weight: whaleDirection.weight, lanes: whaleDirection.lanes.map(l => ({ ...l })), surfaceY: whaleDirection.surfaceY };
+  const notify = () => convergence.listeners.forEach(fn => fn());
+  const setReady = () => {
+    const ready = !!cinematic && !!whaleStage.host && !ascii.lost && !reduced();
+    if (convergence.ready !== ready) { convergence.ready = ready; notify(); }
+  };
+  const stageView = () => {
+    const r = whaleStage.host!.getBoundingClientRect();
+    const { cx, cy, baseR } = globeFrame(r.width, r.height);
+    return { r, view: { width: r.width, height: r.height, globeX: cx, globeY: cy, globeR: baseR * 1.08 } };
+  };
+  const prepareCinema = () => {
+    const city = whaleStage.firstCity;
+    if (city && whaleStage.host && cityKey !== `${city.lon}:${city.lat}`) {
+      cinematic?.destroy();
+      cinematic = createConvergenceLayer(canvas, city, ascii);
+      cityKey = `${city.lon}:${city.lat}`;
+    }
+    setReady();
+  };
+  const resize = (w: number, h: number, cinema: boolean) => {
+    const dpr = Math.min(devicePixelRatio || 1, w < 768 ? 1 : 1.25);
+    const key = `${w}:${h}:${dpr}:${cinema}`;
+    if (key === viewKey) return false;
+    viewKey = key;
+    ascii.resize(w, h, dpr);
+    ascii.setStyle({ mode: 'shape', cellW: 6, cellH: 10 });
+    maskDirty = true;
+    return true;
+  };
+  const publishSpines = () => {
+    ascii.camera.updateMatrixWorld();
+    const p = new THREE.Vector3();
+    current.forEach((w, i) => {
+      const frames = skinFrames(w.articulation);
+      for (let n = 0; n < 48; n++) {
+        const local = qRotate(w.quaternion, [frames.p[n * 4] * w.scale, frames.p[n * 4 + 1] * w.scale, frames.p[n * 4 + 2] * w.scale]);
+        p.set(local[0] + w.position[0], local[1] + w.position[1], local[2] + w.position[2]).project(ascii.camera);
+        ambientWhalesLive.spines[i][n * 2] = (p.x + 1) * innerWidth / 2;
+        ambientWhalesLive.spines[i][n * 2 + 1] = (1 - p.y) * innerHeight / 2;
+      }
+    });
+  };
+  const drawAmbient = (dt: number, h: number) => {
+    if (canvas.parentElement !== host) host.appendChild(canvas);
+    resize(innerWidth, innerHeight, false);
+    const ease = reduced() ? 1 : 1 - Math.exp(-dt * 1.3);
+    composition.width = innerWidth; composition.height = innerHeight;
+    composition.scroll += (scrollY / innerHeight - composition.scroll) * ease;
+    composition.weight += (whaleDirection.weight - composition.weight) * ease;
+    composition.lanes.forEach((l, i) => { l.x += (whaleDirection.lanes[i].x - l.x) * ease; l.y += (whaleDirection.lanes[i].y - l.y) * ease; });
+    composition.surfaceY = whaleDirection.surfaceY;
+    const sampled = [0, 1].map(i => ({ ...sampleAmbientWhale(i, debugTime ?? seconds, composition), dissolve: 0, visible: true }));
+    if (h <= 0 || !anchor) anchor = sampled;
+    current = h > 0 ? anchor.map(w => ({ ...w })) : sampled;
+    const cam = ascii.camera;
+    cam.position.set(0, 0, AMBIENT_CAMERA_Z); cam.up.set(0, 1, 0); cam.lookAt(0, 0, 0);
+    cam.fov = AMBIENT_FOV; cam.clearViewOffset();
+    if (h > 0 && whaleStage.host) {
+      const { r, view } = stageView();
+      const f = sampleConvergence(0, view);
+      const sourceCam = new THREE.PerspectiveCamera(f.camera.fov, view.width / view.height);
+      sourceCam.position.set(...f.camera.position); sourceCam.up.set(...f.camera.up); sourceCam.lookAt(0, 0, 0);
+      const inv = qConj(sourceCam.quaternion.toArray() as Quat);
+      const k = AMBIENT_CAMERA_Z / sourceCam.position.length();
+      current = current.map((a, i) => {
+        const b = f.whales[i];
+        const p = qRotate(inv, [b.position[0] - f.camera.position[0], b.position[1] - f.camera.position[1], b.position[2] - f.camera.position[2]]);
+        return { ...a, position: vLerp(a.position, [p[0] * k, p[1] * k, p[2] * k + AMBIENT_CAMERA_Z], h), quaternion: qSlerp(a.quaternion, qMul(inv, b.quaternion), h), scale: mix(a.scale, b.scale * k, h), articulation: blendArticulation(a.articulation, b.articulation, h) };
+      });
+      const targetFov = Math.atan(Math.tan(f.camera.fov * Math.PI / 360) * innerHeight / view.height) * 360 / Math.PI;
+      cam.fov = mix(AMBIENT_FOV, targetFov, h);
+      cam.setViewOffset(innerWidth, innerHeight, (innerWidth / 2 - r.left - f.camera.centerX) * h, (innerHeight / 2 - r.top - f.camera.centerY) * h, innerWidth, innerHeight);
+    }
+    cam.updateProjectionMatrix();
+    ascii.setOccluder([0, 0, 0], 0, 0);
+    const abyss = 1 - waterShade(scrollY, globeScrollGeometry.start, globeScrollGeometry.travel, innerHeight) / 255;
+    const ink = inkMixFromAbyss(abyss);
+    const water = (1 - abyss) * 255;
+    const presence = reduced() ? (globeZone.rects.length ? 0.35 : 0.8) : h > 0 ? 1 : whaleDirection.presence;
+    ascii.setStyle({ opacity: presence * mix(0.94, 1, h), gamma: 1.45, invert: ink > 0.5, water: [water, water, water], waterOpacity: 0.7 * (1 - h),
+      ink: [mix(31, 178, ink), mix(59, 204, ink), mix(87, 214, ink)], inkFar: [mix(mix(82, 118, h), 112, ink), mix(mix(111, 140, h), 151, ink), mix(mix(135, 156, h), 165, ink)] });
+    const zones = readingZones.read();
+    if (maskDirty || h > 0 || zones !== lastZones || lastHeroVersion !== heroZone.version || lastGlobeVersion !== globeZone.version) {
+      ascii.setReadingZones([...zones, ...heroZone.rects, ...(h > 0 ? [] : globeZone.rects)], 1 - h);
+      lastZones = zones; lastHeroVersion = heroZone.version; lastGlobeVersion = globeZone.version;
+      maskDirty = false;
+    }
+    if (debugAngles) {
+      const d = debugAngles;
+      const qy = new THREE.Quaternion().setFromEuler(new THREE.Euler(d.pitch, d.yaw, d.roll, 'YXZ'));
+      current[d.whale].quaternion = qy.toArray() as Quat;
+    }
+    current.forEach((w, i) => ascii.setWhale(i, w));
+    ambientWhalesLive.presence = presence;
+    ascii.render(false);
+    publishSpines();
+  };
+  const frame = (now: number) => {
+    raf = 0;
+    if (disposed || document.hidden || ascii.lost) return;
+    const dt = Math.min(0.05, Math.max(0, (now - last) / 1000)); last = now;
+    prepareCinema();
+    const p = convergenceProgress(scrollY);
+    const hasStage = convergence.ready && !!whaleStage.host && convergence.length > 0;
+    handoff = hasStage ? smoothStepRange(scrollY, convergence.start - innerHeight * 0.95, convergence.start) : 0;
+    const cinemaNow = hasStage && scrollY >= convergence.start && p < 1;
+    const approaching = hasStage && scrollY < convergence.start && handoff > 0;
+    const hiddenByJourney = hasStage && p >= 1 && whaleDirection.presence < 0.002;
+    const running = !reduced() && !cinemaNow && !approaching && !hiddenByJourney && debugTime === null;
+    if (running) seconds += dt * (1 + Math.min(0.18, Math.abs(scrollY / innerHeight - composition.scroll) * 0.04));
+    if ((dirty || running) && (dirty || now - lastDraw >= 1000 / 30)) {
+      const start = performance.now();
+      if (cinemaNow) {
+        if (canvas.parentElement !== whaleStage.host) whaleStage.host!.appendChild(canvas);
+        const { view } = stageView();
+        if (resize(view.width, view.height, true)) cinematic!.setView(view, Math.min(devicePixelRatio || 1, view.width < 768 ? 1 : 1.25));
+        cinematic!.render(p);
+        ambientWhalesLive.presence = 0;
+      } else if (hiddenByJourney) {
+        ascii.clear(); ambientWhalesLive.presence = 0;
+      } else drawAmbient(dt, approaching ? handoff : 0);
+      inCinema = cinemaNow;
+      dirty = false; lastDraw = now; frameCount++;
+      meanMs += (performance.now() - start - meanMs) * 0.06;
+      if (frameCount % 90 === 0 && meanMs > 19 && quality > 0.36) { quality = Math.max(0.35, quality - 0.1); ascii.setResolution(quality); }
+      qa?.update();
+    }
+    if (running) raf = requestAnimationFrame(frame);
+  };
+  const schedule = () => { dirty = true; maskDirty = true; if (!raf && !document.hidden && !disposed) { last = performance.now(); raf = requestAnimationFrame(frame); } };
+  const visibility = () => { cancelAnimationFrame(raf); raf = 0; last = performance.now(); if (!document.hidden) schedule(); };
+  const onMotion = () => { anchor = null; setReady(); schedule(); };
+  ascii.onContextLost = () => { canvas.style.visibility = 'hidden'; setReady(); cancelAnimationFrame(raf); raf = 0; ambientWhalesLive.presence = 0; };
+  const restored = () => { canvas.style.visibility = ''; setReady(); viewKey = ''; schedule(); };
+  canvas.addEventListener('webglcontextrestored', restored);
+  window.addEventListener('scroll', schedule, { passive: true }); window.addEventListener('resize', schedule);
+  document.addEventListener('visibilitychange', visibility); motion.addEventListener('change', onMotion);
+  convergence.listeners.add(schedule); whaleStage.refresh = schedule;
+  const ro = new ResizeObserver(schedule); ro.observe(document.body);
+  document.fonts?.ready.then(() => { if (!disposed) { ascii.invalidateAtlas(); schedule(); } });
+  if ((import.meta as unknown as { env?: { DEV?: boolean } }).env?.DEV) {
+    const win = window as unknown as Record<string, unknown>;
+    const api = {
+      seek: (t: number | null) => { debugTime = t; debugAngles = null; anchor = null; schedule(); },
+      orient: (whale: number, yaw: number, pitch = 0, roll = 0) => { debugAngles = { whale: Math.max(0, Math.min(1, whale)), yaw, pitch, roll }; schedule(); },
+      release: () => { debugAngles = null; debugTime = null; schedule(); },
+      reduced: (value: boolean) => { forceReduced = value; onMotion(); },
+      cinematic: (p: number) => { debugAngles = null; window.scrollTo(0, convergence.start + p * convergence.length); },
+      state: () => ({ seconds, current, handoff, inCinema, frameCount, meanMs, quality, reduced: reduced(), contexts: 1, parent: canvas.parentElement?.dataset, presence: ambientWhalesLive.presence }),
+      renderer: ascii
+    };
+    win.__ambientWhales = api;
+    if (new URLSearchParams(location.search).has('whaleqa')) import('./ambientWhaleQA').then(({ mountWhaleQA }) => {
+      if (!disposed) { qa = mountWhaleQA(api); qa.update(); }
+    });
+    win.__convergence = { state: convergence, seek: (p: number) => window.scrollTo(0, convergence.start + p * convergence.length) };
+  }
+  schedule();
+  return () => {
+    disposed = true; cancelAnimationFrame(raf); ro.disconnect();
+    qa?.destroy();
+    window.removeEventListener('scroll', schedule); window.removeEventListener('resize', schedule);
+    document.removeEventListener('visibilitychange', visibility); motion.removeEventListener('change', onMotion);
+    canvas.removeEventListener('webglcontextrestored', restored); convergence.listeners.delete(schedule);
+    if (whaleStage.refresh === schedule) whaleStage.refresh = null;
+    cinematic?.destroy(); ascii.dispose(); canvas.remove();
+    convergence.ready = false; ambientWhalesLive.presence = 0; notify();
+    if ((import.meta as unknown as { env?: { DEV?: boolean } }).env?.DEV) { delete (window as unknown as Record<string, unknown>).__ambientWhales; delete (window as unknown as Record<string, unknown>).__convergence; }
+  };
+}

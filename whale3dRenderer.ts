@@ -38,6 +38,9 @@ export interface AsciiStyle {
   invert: boolean;
   /** Ink response: >1 keeps more of the body sparse. */
   gamma: number;
+  /** Optional ocean displacement under the true silhouette, never under rectangular tiles. */
+  water: [number, number, number];
+  waterOpacity: number;
 }
 
 export interface WhaleState {
@@ -60,7 +63,9 @@ export const DEFAULT_STYLE: AsciiStyle = {
   inkFar: [118, 140, 156],
   opacity: 1,
   invert: false,
-  gamma: 1.45
+  gamma: 1.45,
+  water: [255, 255, 255],
+  waterOpacity: 0
 };
 
 // ---- Glyph atlas -----------------------------------------------------------------------------
@@ -427,20 +432,30 @@ uniform float uCanvasH;
 uniform vec3 uInk;
 uniform vec3 uInkFar;
 uniform float uOpacity;
+uniform sampler2D uReadingMask;
+uniform vec2 uMaskCanvas;
+uniform float uMaskStrength;
+uniform sampler2D uGeometryMask;
+uniform vec3 uWater;
+uniform float uWaterOpacity;
 out vec4 outColor;
 void main() {
   vec2 fc = vec2(gl_FragCoord.x, uCanvasH - gl_FragCoord.y);
   ivec2 cell = ivec2(floor(fc / uCell));
   vec4 c = texelFetch(uCells, cell, 0);
   float gi = floor(c.r * 255.0 + 0.5);
-  if (c.g <= 0.0 || gi < 0.5) discard;
+  float protection = mix(1.0, texture(uReadingMask, fc / uMaskCanvas).r, uMaskStrength);
+  float silhouette = texture(uGeometryMask, gl_FragCoord.xy / uMaskCanvas).a;
+  float waterAlpha = silhouette * uWaterOpacity * uOpacity * protection;
+  if ((c.g <= 0.0 || gi < 0.5) && waterAlpha <= 0.003) discard;
   vec2 local = floor(fc - vec2(cell) * uCell);
   vec2 tile = vec2(mod(gi, uAtlasCols), floor(gi / uAtlasCols));
   float a = texelFetch(uAtlas, ivec2(tile * uTile + min(local, uTile - 1.0)), 0).a * c.g * uOpacity;
-  if (a <= 0.003) discard;
+  if (gi < 0.5) a = 0.0;
   a *= 1.0 - 0.45 * c.b;
+  a *= protection;
   vec3 col = mix(uInk, uInkFar, c.b);
-  outColor = vec4(col * a, a);
+  outColor = vec4(col * a + uWater * waterAlpha * (1.0 - a), a + waterAlpha * (1.0 - a));
 }
 `;
 
@@ -502,7 +517,9 @@ export class WhaleAsciiRenderer {
   private cssW = 1;
   private cssH = 1;
   private dpr = 1;
-  private readonly gscale: number;
+  private gscale: number;
+  private readonly readingCanvas = document.createElement('canvas');
+  private readonly readingTexture = new THREE.CanvasTexture(this.readingCanvas);
   private readonly occluder = { center: new THREE.Vector3(), radius: 0, amount: 0 };
   private readonly light = new THREE.Vector3(-0.5, 0.62, 0.6).normalize();
   private readonly tmp = new THREE.Vector3();
@@ -520,6 +537,10 @@ export class WhaleAsciiRenderer {
 
   constructor(canvas: HTMLCanvasElement, opts: WhaleAsciiRendererOptions = {}) {
     this.canvas = canvas;
+    this.readingCanvas.width = this.readingCanvas.height = 1;
+    this.readingCanvas.getContext('2d')!.fillRect(0, 0, 1, 1);
+    this.readingTexture.flipY = false;
+    this.readingTexture.generateMipmaps = false;
     const maxWhales = opts.maxWhales ?? 2;
     this.gscale = opts.gbufferScale ?? 0.75;
     this.renderer = new THREE.WebGLRenderer({ canvas, alpha: true, premultipliedAlpha: true, antialias: false, powerPreference: 'high-performance' });
@@ -623,7 +644,13 @@ export class WhaleAsciiRenderer {
         uCanvasH: { value: 1 },
         uInk: { value: new THREE.Vector3() },
         uInkFar: { value: new THREE.Vector3() },
-        uOpacity: { value: 1 }
+        uOpacity: { value: 1 },
+        uReadingMask: { value: this.readingTexture },
+        uMaskCanvas: { value: new THREE.Vector2(1, 1) },
+        uMaskStrength: { value: 0 },
+        uGeometryMask: { value: null },
+        uWater: { value: new THREE.Vector3(1, 1, 1) },
+        uWaterOpacity: { value: 0 }
       }
     });
     this.rawMaterial = new THREE.ShaderMaterial({
@@ -667,6 +694,33 @@ export class WhaleAsciiRenderer {
 
   setStyle(style: Partial<AsciiStyle>) {
     Object.assign(this.style, style);
+  }
+
+  /** Lower sampling cost on slow devices; topology and quaternion motion stay unchanged. */
+  setResolution(scale: number) {
+    this.gscale = Math.max(0.35, Math.min(0.75, scale));
+    this.gbuffer.setSize(Math.max(1, Math.round(this.cssW * this.gscale)), Math.max(1, Math.round(this.cssH * this.gscale)));
+  }
+
+  /** Stage 1 line boxes, feathered at quarter resolution and sampled once per output pixel. */
+  setReadingZones(rects: readonly { left: number; top: number; width: number; height: number }[], strength = 1) {
+    const u = this.compositeMaterial.uniforms;
+    u.uMaskStrength.value = strength;
+    if (strength <= 0) return;
+    const w = Math.ceil(this.cssW / 4), h = Math.ceil(this.cssH / 4);
+    if (this.readingCanvas.width !== w || this.readingCanvas.height !== h) {
+      this.readingCanvas.width = w; this.readingCanvas.height = h;
+    }
+    const ctx = this.readingCanvas.getContext('2d')!;
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h);
+    ctx.fillStyle = 'rgb(41,41,41)';
+    ctx.shadowColor = 'rgb(41,41,41)'; ctx.shadowBlur = 4;
+    for (const r of rects) {
+      if (r.top > this.cssH || r.top + r.height < 0) continue;
+      ctx.fillRect((r.left - 5) / 4, (r.top - 4) / 4, (r.width + 10) / 4, (r.height + 8) / 4);
+    }
+    ctx.shadowBlur = 0;
+    this.readingTexture.needsUpdate = true;
   }
 
   setWhale(i: number, state: WhaleState | null) {
@@ -801,6 +855,10 @@ export class WhaleAsciiRenderer {
       pu.uCell.value.set(cw, ch);
       pu.uTile.value.set(cw, ch);
       pu.uCanvasH.value = H;
+      pu.uMaskCanvas.value.set(W, H);
+      pu.uGeometryMask.value = maskTex;
+      setRgb(pu.uWater.value, this.style.water);
+      pu.uWaterOpacity.value = this.style.waterOpacity;
       setRgb(pu.uInk.value, this.style.ink);
       setRgb(pu.uInkFar.value, this.style.inkFar);
       pu.uOpacity.value = this.style.opacity;
@@ -825,6 +883,7 @@ export class WhaleAsciiRenderer {
     this.cells.dispose();
     this.atlasTexture?.dispose();
     this.skinTexture.dispose();
+    this.readingTexture.dispose();
     this.whales[0]?.mesh.geometry.dispose();
     for (const w of this.whales) w.material.dispose();
     this.cellMaterial.dispose();
