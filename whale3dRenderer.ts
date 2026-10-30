@@ -462,7 +462,8 @@ void main() {
 }
 `;
 
-const rgb = (c: [number, number, number]) => new THREE.Vector3(c[0] / 255, c[1] / 255, c[2] / 255);
+/** Write a 0–255 RGB colour into a shader vec3 (no allocation per frame). */
+const setRgb = (v: THREE.Vector3, c: [number, number, number]) => v.set(c[0] / 255, c[1] / 255, c[2] / 255);
 
 // ---- Renderer -----------------------------------------------------------------------------------
 
@@ -775,7 +776,7 @@ export class WhaleAsciiRenderer {
       u.uInk.value = inkTex;
       u.uMask.value = maskTex;
       u.uCanvas.value.set(W, H);
-      u.uInk3.value.copy(rgb(this.style.ink));
+      setRgb(u.uInk3.value, this.style.ink);
       this.quad.material = this.rawMaterial;
       r.render(this.quadScene, this.quadCamera);
     } else {
@@ -800,8 +801,8 @@ export class WhaleAsciiRenderer {
       pu.uCell.value.set(cw, ch);
       pu.uTile.value.set(cw, ch);
       pu.uCanvasH.value = H;
-      pu.uInk.value.copy(rgb(this.style.ink));
-      pu.uInkFar.value.copy(rgb(this.style.inkFar));
+      setRgb(pu.uInk.value, this.style.ink);
+      setRgb(pu.uInkFar.value, this.style.inkFar);
       pu.uOpacity.value = this.style.opacity;
       this.quad.material = this.compositeMaterial;
       r.render(this.quadScene, this.quadCamera);
