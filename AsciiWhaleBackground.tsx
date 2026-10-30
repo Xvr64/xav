@@ -440,8 +440,8 @@ export const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.m
     const SPINE_NODES = 64;
     /** Steepest climb or dive of a swimming whale (rad, ~20°): they travel, they do not stand. */
     const SWIM_PITCH_MAX = 0.35;
-    /** Most any part of the body may angle away from the head's line (rad, ~23°). */
-    const SIDE_BODY_BEND = 0.4;
+    /** Most any part of the body may angle away from the head's line (rad, ~17°). */
+    const SIDE_BODY_BEND = 0.3;
     const createWhaleAgent = (scale: number, cycleOffset: number): WhaleAgent => ({
       x: 0,
       y: 0,
@@ -1141,14 +1141,17 @@ export const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.m
       }
       // Whatever steers (scroll, idle drift, autonomy), the body stays within a shallow pitch
       // of horizontal, so the side profile always reads as a whale swimming through water
-      const desiredFacing = targetVecX >= 0 ? 1 : -1;
+      // Facing changes only by a side-view turn, and only on a clear pull the other way; while a
+      // turn plays out the whale holds its new facing, so steering never rotates it through vertical
+      const facingNow: 1 | -1 = Math.cos(wh.heading) >= 0 ? 1 : -1;
+      if (wh.turnS < 1) wh.turnS = Math.min(1, wh.turnS + dtScale / 60 / (SIDE_TURN_SECONDS * 0.5));
+      else if (targetVecX * facingNow < -0.2) turnAround(wh);
+      const desiredFacing: 1 | -1 = Math.cos(wh.heading) >= 0 ? 1 : -1;
       const desiredPitch = Math.max(
         -SWIM_PITCH_MAX,
         Math.min(SWIM_PITCH_MAX, Math.atan2(targetVecY, Math.abs(targetVecX) + 1e-6))
       );
       const desiredAngle = desiredFacing > 0 ? desiredPitch : Math.PI - desiredPitch;
-      if (wh.turnS < 1) wh.turnS = Math.min(1, wh.turnS + dtScale / 60 / (SIDE_TURN_SECONDS * 0.5));
-      else if ((Math.cos(wh.heading) >= 0 ? 1 : -1) !== desiredFacing) turnAround(wh);
 
       let angleDiff = desiredAngle - wh.heading;
       while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
