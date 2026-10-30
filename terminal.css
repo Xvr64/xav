@@ -799,29 +799,41 @@ body {
   white-space: pre;
 }
 
-/* The decoding sound's only control: a quiet speaker in the corner, in the page's own ink. */
+/* The decoding sound's only control: a quiet mono label in the top-right corner, on the cover
+   colophon's row and in the page's own ink. Text at the very top of the viewport is in the
+   invisible band of the decode, so the control never sits over readable copy. */
+.terminal-portfolio { --sound-toggle-space: 112px; }
 .decode-sound-toggle {
   position: fixed;
-  left: max(16px, calc(var(--page-margin) - 10px));
-  bottom: max(14px, env(safe-area-inset-bottom));
+  top: calc(clamp(22px, 3.6vh, 40px) - 7px);
+  /* The right edge of the page grid (main is centred at 1440px with --page-margin padding) */
+  right: max(var(--page-margin), calc((100vw - 1440px) / 2 + var(--page-margin)));
   z-index: 40;
-  display: grid;
-  place-items: center;
-  width: 32px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   height: 32px;
   padding: 0;
   border: 0;
-  border-radius: 50%;
   background: transparent;
+  font-family: var(--font-mono);
+  font-size: var(--text-meta);
+  line-height: var(--leading-meta);
+  letter-spacing: var(--tracking-mono);
   color: var(--ink-52595E, var(--ink-muted));
-  opacity: 0.55;
+  opacity: 0.7;
   cursor: pointer;
   transition: opacity 0.2s ease;
 }
-.decode-sound-toggle svg { width: 15px; height: 15px; }
+.decode-sound-toggle svg { width: 14px; height: 14px; flex: none; }
+.decode-sound-state { min-width: 3ch; text-align: left; }
 .decode-sound-toggle:hover,
-.decode-sound-toggle[aria-pressed='true'] { opacity: 0.9; }
-.decode-sound-toggle:focus-visible { outline: 1px solid currentColor; outline-offset: 2px; opacity: 1; }
+.decode-sound-toggle[aria-pressed='true'] { opacity: 1; }
+.decode-sound-toggle:focus-visible { outline: 1px solid currentColor; outline-offset: 3px; opacity: 1; }
+@media (prefers-reduced-motion: no-preference) {
+  /* The cover's depth reading steps left to make room for the control */
+  .hero-colophon .colophon-depth { padding-right: var(--sound-toggle-space); }
+}
 
 .terminal-portfolio [data-journey-runway] { overflow: visible; }
 .terminal-portfolio #global { overflow: visible; }

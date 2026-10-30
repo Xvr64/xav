@@ -384,7 +384,7 @@ export function useEditorialScroll() {
 }
 
 /**
- * The decoding sound's only control: a small speaker in the corner. Off on every visit; it shows
+ * The decoding sound's only control: a small "sound on/off" label in the top-right corner. Off on every visit; it shows
  * "on" only once the audio context is actually running, and turns itself back off if the browser
  * takes the audio away.
  */
@@ -414,10 +414,13 @@ export function DecodeSoundToggle() {
       className="decode-sound-toggle"
       onClick={toggle}
       aria-pressed={on}
-      aria-label={on ? 'Mute decoding sound' : 'Play decoding sound'}
-      title={on ? 'Sound on' : 'Sound off'}
+      title={on ? 'Mute the decoding sound' : 'Play the decoding sound'}
     >
       <Icon aria-hidden="true" strokeWidth={1.5} />
+      sound
+      <span className="decode-sound-state" aria-hidden="true">
+        {on ? 'on' : 'off'}
+      </span>
     </button>
   );
 }
