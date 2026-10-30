@@ -10,21 +10,26 @@ import { background, fluid, type BackgroundHandle } from 'asciify-engine/kit';
 import { createHeroCurrent, type HeroRect } from './heroCurrent';
 import {
   cameraAt,
-  earthFor,
-  earthView,
+  crestsAt,
+  densityAt,
+  earthToLane,
+  migrationAt,
   headY,
-  horizonY,
-  project,
+  oceanHit,
+  PLANET_R,
+  projectLane,
+  seaBaseAt,
+  seaStateAt,
   spineAlongLane,
   stagesAt,
   strokeAt,
-  swellAt,
   travelAt,
   TRAIL_FROM,
+  whaleWake,
   WHALES,
   type Camera,
-  type Earth,
-  type Projected
+  type Projected,
+  type V3 as SceneV3
 } from './migrationScene';
 
 // ============================================================================
@@ -1673,7 +1678,8 @@ const fluidOcean = {
   handle: null as BackgroundHandle | null,
   ink: '',
   shade: -1,
-  opacity: -1
+  opacity: -1,
+  paused: false
 };
 /** True while the GPU fluid is mounted; otherwise the canvas keeps its own water as a fallback. */
 const fluidOceanLive = () => !!fluidOcean.handle?.supported;
@@ -1685,6 +1691,12 @@ const fluidOceanLive = () => !!fluidOcean.handle?.supported;
 function syncFluidOcean(abyss: number, presence = 1) {
   const { host, handle } = fluidOcean;
   if (!host || !handle) return;
+  const paused = presence === 0;
+  if (paused !== fluidOcean.paused) {
+    if (paused) handle.pause();
+    else handle.play();
+    fluidOcean.paused = paused;
+  }
   const s = Math.max(0, Math.min(1, (abyss - 0.42) / 0.24));
   const t = s * s * (3 - 2 * s);
   const ink = rgbHex(FLUID_INK_SURFACE.map((v, i) => lerpN(v, FLUID_INK_ABYSS[i], t)));
@@ -1859,6 +1871,7 @@ const FluidOceanBackground: React.FC = React.memo(() => {
     fluidOcean.ink = '';
     fluidOcean.shade = -1;
     fluidOcean.opacity = -1;
+    fluidOcean.paused = false;
 
     // The host never takes pointer events (content stays clickable), so real pointer moves are
     // forwarded to it for the fluid's cursor wake; over links and controls the wake lets go.
@@ -2857,15 +2870,10 @@ const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ 
     let fishTouched = new Int32Array(0);
     // Reading-text proximity per whale cell (0 open water, 1 near a line, 2 behind a line)
     let readingBuf = new Uint8Array(0);
-    // Migration scene: once-per-cell stamp and glyph queue, plus the Earth's land rasters
-    // (dot count, light and depth per cell)
+    // Migration scene: once-per-cell stamp and glyph queue
     let sceneStamp = new Uint32Array(0);
     let sceneQueue = new Int32Array(0);
     let sceneOrder = new Int32Array(0);
-    let landCount = new Uint8Array(0);
-    let landLight = new Float32Array(0);
-    let landDepth = new Float32Array(0);
-    let landTouched = new Int32Array(0);
 
     // Pre-allocated 1D separable harmonic tables for the generative ocean shader (zero trig in inner loop)
     let colSin1 = new Float32Array(0);
@@ -3034,10 +3042,6 @@ const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ 
       sceneStamp = new Uint32Array(total);
       sceneQueue = new Int32Array(total * 2);
       sceneOrder = new Int32Array(total);
-      landCount = new Uint8Array(total);
-      landLight = new Float32Array(total);
-      landDepth = new Float32Array(total);
-      landTouched = new Int32Array(total);
 
       colSin1 = new Float32Array(oceanCols);
       colCos1 = new Float32Array(oceanCols);
@@ -3713,8 +3717,8 @@ const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ 
     // ------------------------------------------------------------------------
     // MIGRATION — the cinematic interval between the cover's name and the introduction
     // ------------------------------------------------------------------------
-    // migrationScene.ts turns one scroll value into a camera, the whales' lanes, the trails
-    // they leave, a world-anchored ocean and a separate Earth ahead of them; it is all drawn
+    // migrationScene.ts turns one scroll value into a camera, the whales' lanes on a spherical
+    // ocean, the wakes and trails they leave and the planet's turn beneath them; it is all drawn
     // here, in the same character grid as the whales. The swim keeps running underneath and
     // the displayed pose blends onto the scene's by `engage`, so the whales arrive from where
     // they are and are handed back to their own swim once the introduction rises.
@@ -3728,8 +3732,7 @@ const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ 
     const proj: Projected = { x: 0, y: 0, scale: 0, depth: 0 };
     const migLanes: Lane[] = [{ x: 0.5, y: 0.5 }, { x: 0.5, y: 0.5 }];
     let migLaneWeight = 0;
-    let migEarth: Earth | null = null;
-    let migEarthKey = '';
+    let wasMigrationActive = false;
     // Exactly b once fully blended, so a held scene frame never depends on the swim behind it
     const lerpAngle = (a: number, b: number, k: number) => {
       if (k >= 1) return b;
@@ -3756,7 +3759,7 @@ const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ 
     ) => {
       spineAlongLane(idx, headY(idx, travel), SPINE_NODES, laneX, laneY, laneZ);
       for (let k = 0; k < SPINE_NODES; k++) {
-        project(cam, laneX[k], laneY[k], laneZ[k], proj);
+        projectLane(cam, laneX[k], laneY[k], laneZ[k], proj);
         tgtX[k] = proj.x;
         tgtY[k] = proj.y;
         tgtS[k] = proj.scale;
@@ -3791,23 +3794,6 @@ const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ 
     };
 
     // The scene's character field: one glyph per cell at most, never over a whale or its rim
-    let landDots: LandDots | null = null;
-    loadLandDots()
-      .then((dots) => {
-        if (!oceanLifeDisposed) landDots = dots;
-      })
-      .catch(() => undefined);
-    const earthLattice: Vec3[][] = [];
-    for (let lon = -180; lon < 180; lon += 30) {
-      const line: Vec3[] = [];
-      for (let lat = -78; lat <= 78; lat += 3) line.push(lonLatToVec(lon, lat));
-      earthLattice.push(line);
-    }
-    for (let lat = -60; lat <= 60; lat += 30) {
-      const line: Vec3[] = [];
-      for (let lon = -180; lon < 180; lon += 3) line.push(lonLatToVec(lon, lat));
-      earthLattice.push(line);
-    }
     let stampId = 0;
     const cellHash = (a: number, b: number) => (((a * 73856093) ^ (b * 19349663)) >>> 0) / 4294967296;
     // Glyphs are queued and drawn grouped by strength, so the canvas changes its alpha a few
@@ -3859,154 +3845,133 @@ const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ 
       ctx.globalAlpha = 1;
     };
 
-    // Light on the Earth: from the upper left, a little in front (screen x right, y up, z out)
-    const EARTH_LIGHT: Vec3 = vecNormalize([-0.42, 0.5, 0.76]);
     /**
-     * The Earth as characters: land binned from the globe's own dot matrix and shaded by the
-     * light it catches, a faint graticule that shows the turn over open ocean, a quiet limb
-     * that keeps the silhouette crisp, and the sea's surface in an ordered dither, densest where
-     * the light falls, so the sphere reads as a volume and not a disc.
-     */
-    const drawEarth = (ex: number, ey: number, R: number, view: Vec3, alpha: number) => {
-      const { east, north } = cameraBasis(view);
-      const ex0 = east[0], ex1 = east[1], ex2 = east[2];
-      const nx0 = north[0], nx1 = north[1], nx2 = north[2];
-      const vx = view[0], vy = view[1], vz = view[2];
-      const L0 = EARTH_LIGHT[0], L1 = EARTH_LIGHT[1], L2 = EARTH_LIGHT[2];
-
-      // 1. Land
-      if (landDots) {
-        const { xyz } = landDots;
-        const n = xyz.length / 3;
-        let touched = 0;
-        for (let d = 0; d < n; d++) {
-          const o = d * 3;
-          const x = xyz[o], y = xyz[o + 1], z = xyz[o + 2];
-          const depth = x * vx + y * vy + z * vz;
-          if (depth <= 0.06) continue;
-          const lx = x * ex0 + y * ex1 + z * ex2;
-          const ly = x * nx0 + y * nx1 + z * nx2;
-          const sx = ex + R * lx;
-          const sy = ey - R * ly;
-          if (sx < 0 || sy < 0) continue;
-          const c = (sx / cellSize) | 0;
-          const r = (sy / cellSize) | 0;
-          if (c >= gridCols || r >= gridRows) continue;
-          const idx = r * gridCols + c;
-          if (landCount[idx] === 0) landTouched[touched++] = idx;
-          if (landCount[idx] < 255) landCount[idx]++;
-          landLight[idx] += Math.max(0, lx * L0 + ly * L1 + depth * L2);
-          landDepth[idx] += depth;
-        }
-        // A cell's land cover: its dots against the dots a cell of solid land would hold there
-        // (each dot stands for about 0.9° × 0.9°; the limb crowds them by 1 / depth). Lit land
-        // reads ':', land toward the terminator and along coasts '.', '+' only at the highlight.
-        const cellArea = (cellSize / Math.max(1, R)) * (cellSize / Math.max(1, R));
-        const DOT_AREA = 2.47e-4;
-        for (let i = 0; i < touched; i++) {
-          const idx = landTouched[i];
-          const cnt = landCount[idx];
-          const lit = landLight[idx] / cnt;
-          const cover = Math.min(1, (cnt * DOT_AREA * (landDepth[idx] / cnt)) / cellArea);
-          landCount[idx] = 0;
-          landLight[idx] = 0;
-          landDepth[idx] = 0;
-          const v = cover * (0.25 + 0.75 * lit);
-          sceneGlyph(idx % gridCols, (idx / gridCols) | 0, v >= 0.86 ? 5 : v >= 0.42 ? 2 : v >= 0.18 ? 1 : 0, 23, alpha * (0.46 + 0.54 * lit));
-        }
-      }
-
-      // 2. Graticule, every 30°
-      for (let l = 0; l < earthLattice.length; l++) {
-        const line = earthLattice[l];
-        for (let j = 0; j < line.length; j++) {
-          const v = line[j];
-          const depth = v[0] * vx + v[1] * vy + v[2] * vz;
-          if (depth <= 0.12) continue;
-          const lx = v[0] * ex0 + v[1] * ex1 + v[2] * ex2;
-          const ly = v[0] * nx0 + v[1] * nx1 + v[2] * nx2;
-          const lit = Math.max(0, lx * L0 + ly * L1 + depth * L2);
-          sceneGlyph(((ex + R * lx) / cellSize) | 0, ((ey - R * ly) / cellSize) | 0, 0, 22, alpha * (0.1 + 0.2 * lit));
-        }
-      }
-
-      // 3. Limb, brighter on the lit side
-      const limbN = Math.max(24, Math.ceil((Math.PI * 2 * R) / (cellSize * 0.9)));
-      for (let i = 0; i < limbN; i++) {
-        const a = (i / limbN) * Math.PI * 2;
-        const ca = Math.cos(a);
-        const sa = Math.sin(a);
-        const lit = Math.max(0, ca * L0 + sa * L1);
-        sceneGlyph(((ex + R * ca) / cellSize) | 0, ((ey - R * sa) / cellSize) | 0, lit > 0.3 ? 2 : 1, 22, alpha * (0.4 + 0.4 * lit));
-      }
-
-      // 4. The sea's surface: an ordered dither anchored on the Earth's centre cell
-      const ec = (ex / cellSize) | 0;
-      const er = (ey / cellSize) | 0;
-      const c0 = Math.max(1, Math.floor((ex - R) / cellSize));
-      const c1 = Math.min(gridCols - 2, Math.ceil((ex + R) / cellSize));
-      const r0 = Math.max(1, Math.floor((ey - R) / cellSize));
-      const r1 = Math.min(gridRows - 2, Math.ceil((ey + R) / cellSize));
-      const invR = 1 / Math.max(1, R);
-      for (let r = r0; r <= r1; r++) {
-        const ny = (ey - (r * cellSize + cellSize * 0.5)) * invR;
-        for (let c = c0; c <= c1; c++) {
-          const nx = (c * cellSize + cellSize * 0.5 - ex) * invR;
-          const d2 = nx * nx + ny * ny;
-          if (d2 >= 0.94) continue;
-          const lit = Math.max(0, nx * L0 + ny * L1 + Math.sqrt(1 - d2) * L2);
-          if (cellHash(c - ec + 4096, r - er + 4096) < 0.03 + 0.16 * lit * lit) sceneGlyph(c, r, 0, 22, alpha * (0.12 + 0.22 * lit));
-        }
-      }
-    };
-
-    /**
-     * The ocean in the world, one ray per lattice point (every other cell, staggered row to row,
-     * so it stays light on the page and cheap): long swells on the surface, and in the tracking
-     * shots a sparse deep layer of drifting particles that passes more slowly (true parallax).
-     * Far water fades, and the chop with it before it can alias; cells inside `clearR` around
-     * the Earth stay open.
+     * The ocean, one ray per cell, each meeting the planet's sphere. What a ray finds there is
+     * fixed to the Earth, so the sea passes beneath the whales as they swim and the camera rides
+     * its curve. Everything that varies slowly across the screen (where a ray lands, the swell's
+     * grouping, the water's depth variations, the offsets from the whales' lanes, the deep shell)
+     * is sampled every few cells and interpolated; only the crests themselves are per cell. In
+     * order of priority: the whales' wakes, the faint meridians and parallels of the long
+     * migration, the crests (thinned by the water's depth variations, rougher in the southern
+     * latitudes), and in the open cells a sparse deep layer of particles on a shell below the
+     * surface, which passes more slowly (true parallax).
      */
     const DEEP_Z = -2.4;
     const SNOW_GRID = 0.42;
-    const drawSceneWater = (cam: Camera, p: number, water: number, snow: number, ex: number, ey: number, clearR: number) => {
+    /** Degrees between chart lines */
+    const CHART_STEP = 10;
+    const RAD = 180 / Math.PI;
+    /** Cells between samples of the sphere, and the values kept per sample */
+    const SAMPLE = 4;
+    const NV = 14;
+    let samples = new Float64Array(0);
+    let sampleRow = new Float64Array(0);
+    const hit: SceneV3 = [0, 0, 0];
+    const laneAt: [number, number] = [0, 0];
+    const seaBase: [number, number] = [0, 0];
+    const drawSceneWater = (cam: Camera, p: number, travel: number, st: ReturnType<typeof stagesAt>) => {
       const F = cam.focal;
-      const f = cam.f;
-      const rv = cam.r;
-      const uv = cam.u;
-      const hor = horizonY(cam);
-      const firstRow = Math.max(1, Math.ceil((hor + cellSize * 2) / cellSize));
-      const clearR2 = clearR * clearR;
-      for (let row = firstRow + (firstRow & 1); row < gridRows - 1; row += 2) {
-        const sy = row * cellSize + cellSize * 0.5;
-        const b = (sy - cam.oy) / F;
-        const dz = f[2] - b * uv[2];
-        if (dz > -1e-3) continue;
-        // Ray parameter to the surface: also the depth along the view axis
-        const t = -cam.z / dz;
-        const foot = (t * cellSize) / F;
-        const fog = 1 - smoothStepRange(foot, 0.2, 0.75);
-        if (fog <= 0.01) continue;
-        const fine = 1 - smoothStepRange(foot, 0.05, 0.14);
-        const rowX = f[0] - b * uv[0];
-        const rowY = f[1] - b * uv[1];
-        const td = (DEEP_Z - cam.z) / dz;
-        const dy2 = clearR > 0 ? (sy - ey) * (sy - ey) : 0;
-        for (let col = 1 + ((row >> 1) & 1); col < gridCols - 1; col += 2) {
-          const sx = col * cellSize + cellSize * 0.5;
-          if (clearR > 0 && (sx - ex) * (sx - ex) + dy2 < clearR2) continue;
-          const a = (sx - cam.ox) / F;
-          const dxr = rowX + a * rv[0];
-          const dyr = rowY + a * rv[1];
-          const v = swellAt(cam.x + t * dxr, cam.y + t * dyr, p, fine);
-          if (v > 0.32) {
-            const lv = (v - 0.32) / 0.68;
-            sceneGlyph(col, row, lv < 0.28 ? 0 : lv < 0.55 ? 1 : lv < 0.8 ? 3 : 4, 22, water * fog * (0.13 + 0.27 * lv));
+      const water = st.water;
+      const sCols = Math.ceil((gridCols - 1) / SAMPLE) + 1;
+      const sRows = Math.ceil((gridRows - 1) / SAMPLE) + 1;
+      if (samples.length < sCols * sRows * NV) samples = new Float64Array(sCols * sRows * NV);
+      if (sampleRow.length < sCols * NV) sampleRow = new Float64Array(sCols * NV);
+      for (let sr = 0; sr < sRows; sr++) {
+        const sy = sr * SAMPLE * cellSize + cellSize * 0.5;
+        for (let sc = 0; sc < sCols; sc++) {
+          const sx = sc * SAMPLE * cellSize + cellSize * 0.5;
+          const o = (sr * sCols + sc) * NV;
+          const t = oceanHit(cam, sx, sy, PLANET_R, hit);
+          samples[o] = t > 0 ? 1 : 0;
+          if (t <= 0) continue;
+          earthToLane(hit[0], hit[1], hit[2], laneAt);
+          const lx = laneAt[0];
+          const ly = laneAt[1];
+          seaBaseAt(lx, ly, p, seaBase);
+          samples[o + 1] = lx;
+          samples[o + 2] = ly;
+          samples[o + 3] = Math.asin(hit[2] / PLANET_R) * RAD;
+          samples[o + 4] = Math.atan2(hit[1], hit[0]) * RAD;
+          // Water covered by one cell
+          samples[o + 5] = (t * cellSize) / F;
+          samples[o + 6] = seaBase[0];
+          samples[o + 7] = seaBase[1];
+          samples[o + 8] = densityAt(lx, ly);
+          samples[o + 9] = lx - WHALES[0].x(ly);
+          samples[o + 10] = lx - WHALES[1].x(ly);
+          const td = oceanHit(cam, sx, sy, PLANET_R + DEEP_Z, hit);
+          samples[o + 13] = 0;
+          if (td > 0) {
+            earthToLane(hit[0], hit[1], hit[2], laneAt);
+            samples[o + 11] = laneAt[0];
+            samples[o + 12] = laneAt[1];
+            samples[o + 13] = F / td;
+          }
+        }
+      }
+
+      const head0 = headY(0, travel);
+      const head1 = headY(1, travel);
+      // Interpolated value `k` between the samples either side of a cell
+      const at = (o: number, k: number, fx: number) => sampleRow[o + k] + (sampleRow[o + NV + k] - sampleRow[o + k]) * fx;
+      for (let row = 1; row < gridRows - 1; row++) {
+        const sr = (row / SAMPLE) | 0;
+        const fy = (row - sr * SAMPLE) / SAMPLE;
+        const a0 = sr * sCols * NV;
+        const a1 = a0 + sCols * NV;
+        for (let k = 0; k < sCols * NV; k++) sampleRow[k] = samples[a0 + k] + (samples[a1 + k] - samples[a0 + k]) * fy;
+        for (let col = 1; col < gridCols - 1; col++) {
+          const sc = (col / SAMPLE) | 0;
+          const fx = (col - sc * SAMPLE) / SAMPLE;
+          const o = sc * NV;
+          // Every ray around this cell met the water
+          if (sampleRow[o] < 1 || sampleRow[o + NV] < 1) continue;
+          const lx = at(o, 1, fx);
+          const ly = at(o, 2, fx);
+          const foot = at(o, 5, fx);
+
+          if (st.wake > 0) {
+            const wk = Math.max(whaleWake(0, at(o, 9, fx), ly, head0), whaleWake(1, at(o, 10, fx), ly, head1));
+            if (wk > 0.12) {
+              // Foam where the water is most churned, then the wake's ridges
+              sceneGlyph(col, row, wk > 0.72 ? 5 : wk > 0.38 ? 4 : 3, 22, st.wake * water * (0.46 + 0.5 * wk));
+              continue;
+            }
+          }
+
+          const lat = at(o, 3, fx);
+          if (st.chart > 0) {
+            // A fine rule within half a cell of the line, in a narrow channel of calm water, so
+            // it reads apart from the crests that run beside it
+            const cellDeg = (foot / PLANET_R) * RAD;
+            const dLat = Math.abs(lat - Math.round(lat / CHART_STEP) * CHART_STEP);
+            const lon = at(o, 4, fx);
+            const dLon = Math.abs(lon - Math.round(lon / CHART_STEP) * CHART_STEP) * Math.cos(lat / RAD);
+            const d = Math.min(dLat, dLon);
+            if (d < cellDeg * 0.5) {
+              sceneGlyph(col, row, 0, 22, st.chart * water * 0.62);
+              continue;
+            }
+            if (d < cellDeg * 1.6 * st.chart) continue;
+          }
+
+          // The finest train fades before it can alias
+          const fine = 1 - smoothStepRange(foot, 0.035, 0.065);
+          const storm = seaStateAt(lat);
+          const dens = at(o, 8, fx);
+          const v = crestsAt(lx, ly, p, fine, storm, at(o, 6, fx), at(o, 7, fx));
+          // Only the crests are drawn: the troughs between them leave the page open. Denser
+          // water draws each crest a little wider
+          const cut = 0.03 - 0.07 * dens;
+          if (v > cut) {
+            const lv = Math.min(1, (v - cut) / 0.3);
+            sceneGlyph(col, row, lv < 0.18 ? 1 : lv < 0.5 ? 3 : 4, 22, water * (0.44 + 0.46 * lv) * (0.82 + 0.18 * dens));
             continue;
           }
-          if (snow <= 0.01) continue;
-          const Xd = cam.x + td * dxr;
-          const Yd = cam.y + td * dyr;
+
+          if (st.snow <= 0.01 || sampleRow[o + 13] <= 0 || sampleRow[o + NV + 13] <= 0) continue;
+          const Xd = at(o, 11, fx);
+          const Yd = at(o, 12, fx);
           const gi = Math.floor(Xd / SNOW_GRID);
           const gj = Math.floor(Yd / SNOW_GRID);
           const hsh = cellHash(gi, gj);
@@ -4014,10 +3979,9 @@ const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ 
           // Each patch of deep water holds at most one particle, at its own fixed spot
           const jx = (gi + 0.2 + 0.6 * cellHash(gj + 911, gi)) * SNOW_GRID;
           const jy = (gj + 0.2 + 6 * hsh) * SNOW_GRID;
-          const k = F / td;
-          // A lattice point stands for the two-cell patch around it
-          if (Math.abs(Xd - jx) * k < cellSize && Math.abs(Yd - jy) * k < cellSize) {
-            sceneGlyph(col, row, hsh < 0.03 ? 1 : 0, 22, snow * 0.3);
+          const k = at(o, 13, fx);
+          if (Math.abs(Xd - jx) * k < cellSize * 0.5 && Math.abs(Yd - jy) * k < cellSize * 0.5) {
+            sceneGlyph(col, row, hsh < 0.03 ? 1 : 0, 22, st.snow * water * 0.32);
           }
         }
       }
@@ -4025,15 +3989,14 @@ const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ 
 
     /**
      * Thin traces behind each whale: sparse characters along the exact path it swam, fading with
-     * age. Samples sit at fixed places in the water; as the camera pulls back they thin out by
-     * halves (each halving fades), so the spacing on screen stays under two cells and nothing
-     * crawls along the line.
+     * age. Samples sit at fixed places in the water; as the camera rises they thin out by halves
+     * (each halving fades), so the spacing on screen stays under two cells and nothing crawls
+     * along the line.
      */
     const TRAIL_STEP = 0.08;
     // Mostly '·' and '.', now and then ':' or '-', rarely '+'
     const TRAIL_GLYPHS = [0, 0, 0, 0, 0, 0, 1, 1, 1, 2, 2, 3, 0, 1, 0, 5];
-    const drawTrails = (cam: Camera, travel: number, trails: number, ex: number, ey: number, clearR: number) => {
-      const clearR2 = clearR * clearR;
+    const drawTrails = (cam: Camera, travel: number, trails: number) => {
       for (let i = 0; i < 2; i++) {
         const lane = WHALES[i];
         const tail = headY(i, travel) - lane.length * 1.08;
@@ -4046,12 +4009,12 @@ const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ 
           const age = tail - y;
           let alpha =
             trails *
-            (i === 0 ? 0.5 : 0.38) *
+            (i === 0 ? 0.5 : 0.4) *
             Math.exp(-age / 11) *
             (1 - smoothStepRange(age, 17, 24)) *
             smoothStepRange(y - TRAIL_FROM, 0, 3);
           if (alpha < 0.02) continue;
-          project(cam, lane.x(y) + 0.06 * Math.sin(j * 0.9 + i * 2.1), y, -0.02, proj);
+          projectLane(cam, lane.x(y) + 0.06 * Math.sin(j * 0.9 + i * 2.1), y, -0.02, proj);
           const want = Math.max(1, (cellSize * 1.7) / Math.max(1e-3, proj.scale * TRAIL_STEP));
           const lod = Math.log2(want);
           const level = Math.min(10, Math.ceil(lod));
@@ -4059,59 +4022,17 @@ const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ 
             if (level === 0 || j % (1 << (level - 1)) !== 0) continue;
             alpha *= level - lod;
           }
-          if (clearR > 0 && (proj.x - ex) * (proj.x - ex) + (proj.y - ey) * (proj.y - ey) < clearR2) continue;
           sceneGlyph((proj.x / cellSize) | 0, (proj.y / cellSize) | 0, TRAIL_GLYPHS[(cellHash(j, i + 7) * 16) | 0], 22, alpha);
         }
       }
     };
 
-    /** The whole field, behind the whales: Earth first (it claims its cells), then trails, then water */
-    const drawMigrationScene = (
-      cam: Camera,
-      p: number,
-      travel: number,
-      st: ReturnType<typeof stagesAt>,
-      waterLevel: number,
-      w: number,
-      h: number
-    ) => {
+    /** The whole field, behind the whales: trails first (they claim their cells), then the water */
+    const drawMigrationScene = (cam: Camera, p: number, travel: number, st: ReturnType<typeof stagesAt>) => {
       stampId++;
       sceneQueued = 0;
-      let ex = 0;
-      let ey = 0;
-      let eR = 0;
-      if (st.earth > 0 && migEarth) {
-        project(cam, migEarth.x, migEarth.y, migEarth.z, proj);
-        ex = proj.x;
-        ey = proj.y;
-        eR = migEarth.r * proj.scale;
-      }
-      const clearR = eR > 0 ? eR + cellSize * 1.2 : 0;
-
-      // The horizon, once the camera looks far enough ahead: the cover's own hairline, far out
-      const hor = horizonY(cam);
-      if (st.water > 0 && hor > 0 && hor < h * 0.5) {
-        ctx.globalAlpha = st.water * 0.3 * (1 - smoothStepRange(hor, h * 0.3, h * 0.5));
-        ctx.fillStyle = 'rgb(23, 23, 23)';
-        ctx.fillRect(0, Math.round(hor), w, 1);
-      }
-      if (eR > 0) {
-        // Calm water under the Earth (the page's own water colour, feathered): the planet reads
-        // apart from the current, and hides the horizon behind it
-        const outer = eR * 1.32;
-        const halo = ctx.createRadialGradient(ex, ey, 0, ex, ey, outer);
-        const water = `${waterLevel}, ${waterLevel}, ${waterLevel}`;
-        halo.addColorStop(0, `rgba(${water}, 1)`);
-        halo.addColorStop(1.04 / 1.32, `rgba(${water}, 1)`);
-        halo.addColorStop(1, `rgba(${water}, 0)`);
-        ctx.globalAlpha = st.earth;
-        ctx.fillStyle = halo;
-        ctx.fillRect(ex - outer, ey - outer, outer * 2, outer * 2);
-        const ev = earthView(p);
-        drawEarth(ex, ey, eR, lonLatToVec(ev.lon, ev.lat), st.earth);
-      }
-      if (st.trails > 0) drawTrails(cam, travel, st.trails, ex, ey, clearR);
-      if (st.water > 0) drawSceneWater(cam, p, st.water, st.snow, ex, ey, clearR);
+      if (st.trails > 0) drawTrails(cam, travel, st.trails);
+      drawSceneWater(cam, p, travel, st);
       flushSceneGlyphs();
     };
 
@@ -4196,11 +4117,11 @@ const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ 
       ctx.clearRect(0, 0, w, h);
 
       // Continuous ocean immersion factor: 1.0 on the entry screen, easing smoothly into restrained ambient currents in CV sections
-      const scrollViewports = h > 0 ? sm.smoothScrollY / h : 0;
+      const scrollViewports = h > 0 ? curScrollY / h : 0;
       const entryCalm = Math.max(0, Math.min(1, 1 - scrollViewports / 1.85));
 
       // Preserve overall page progress for creature movement and ocean texture.
-      const rawDepth = Math.max(0, Math.min(1, sm.smoothScrollY / docScrollable));
+      const rawDepth = Math.max(0, Math.min(1, curScrollY / docScrollable));
       const depth = rawDepth;
       const surfaceBaseY = -999;
       // Actual scroll (not the lagging creature position) guarantees white on upward return.
@@ -4225,28 +4146,34 @@ const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ 
       // own generative water below is kept only as the fallback without WebGL2.
       const fluidLive = !isFocus && fluidOceanLive();
 
-      // MIGRATION — read from the smoothed scroll (the whales' own clock for motion), so a wheel
-      // notch glides; the same scroll position always settles on the same frame.
+      // MIGRATION — one scroll clock, including the final handoff. No elapsed-time easing.
+      // Stop scrolling and every scene layer holds its exact frame immediately.
       const migOn = !isFocus && !prefersReducedMotion && migrationRunway.height > 1;
-      const migP = migOn ? Math.max(0, Math.min(1, (sm.smoothScrollY - (migrationRunway.top - h)) / migrationRunway.height)) : 0;
-      const migHandoff = migOn
-        ? Math.max(0, Math.min(1, (sm.smoothScrollY - (migrationRunway.top + migrationRunway.height - h)) / h))
-        : 0;
+      const migTimeline = migrationAt(curScrollY, migrationRunway.top, migrationRunway.height, h);
+      const migP = migOn ? migTimeline.p : 0;
+      const migHandoff = migOn ? migTimeline.handoff : 0;
       const migActive = migOn && migP > 0 && migHandoff < 1;
       const mig = stagesAt(migActive ? migP : 0, migHandoff);
       const eng = migActive ? mig.engage : 0;
+      if (wasMigrationActive && !migActive && migHandoff >= 1) {
+        // Resume ambient swimming from the departing tracked pose, above the copy.
+        for (const wh of whales) {
+          wh.spineX.set(wh.dispX);
+          wh.spineY.set(wh.dispY);
+          wh.spineAngle.set(wh.dispAngle);
+          wh.x = wh.dispX[0];
+          wh.y = wh.dispY[0];
+          wh.heading = wh.dispAngle[0];
+        }
+      }
+      wasMigrationActive = migActive;
       // The main whale's length on screen, as the swim draws it
       const mainPx = Math.min(w, h) * 0.58 * (1 - entryCalm * 0.16) * (1 + depth * 0.1);
       let migCam: Camera | null = null;
       let migTravel = 0;
       if (migActive) {
         const vp = { w, h, whalePx: Math.min(w, h) * 0.58 };
-        const key = `${w}x${h}`;
-        if (key !== migEarthKey || !migEarth) {
-          migEarth = earthFor(vp);
-          migEarthKey = key;
-        }
-        migCam = cameraAt(migP, vp, migEarth.x);
+        migCam = cameraAt(migP, vp);
         // Once the stage releases, the scene leaves with the page as the introduction rises
         migCam.oy -= migHandoff * h;
         migTravel = travelAt(migP);
@@ -4256,7 +4183,7 @@ const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ 
         if (migCam) {
           for (let i = 0; i < 2; i++) {
             const hy = headY(i, migTravel);
-            project(migCam, WHALES[i].x(hy), hy, WHALES[i].z(hy), proj);
+            projectLane(migCam, WHALES[i].x(hy), hy, WHALES[i].z(hy), proj);
             migLanes[i].x = proj.x / Math.max(1, w);
             migLanes[i].y = proj.y / Math.max(1, h);
           }
@@ -4268,8 +4195,8 @@ const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ 
       // whales entirely, a function of p alone, so scrolling back shows the very same frames
       fxClock += dt * (1 - eng) + Math.abs(migP - lastMigP) * 24 * eng;
       lastMigP = migP;
-      const fx = eng >= 1 ? migP * 24 : fxClock;
-      if (fluidLive) syncFluidOcean(abyss, 1 - 0.88 * mig.water);
+      const fx = migActive ? migP * 24 : fxClock;
+      if (fluidLive) syncFluidOcean(abyss, migActive ? 0 : 1);
       const waterLevel = Math.round(255 * (1 - abyss));
       const waterRgb = `rgb(${waterLevel}, ${waterLevel}, ${waterLevel})`;
 
@@ -4337,7 +4264,7 @@ const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ 
       const crestThreshold = 0.38 + depth * 0.5;
 
       // Skipped entirely while the Asciify fluid draws the water
-      const minOceanRow = fluidLive ? oRows : 0;
+      const minOceanRow = fluidLive || migActive ? oRows : 0;
       for (let or = minOceanRow; or < oRows; or++) {
         const rs1 = rowSin1[or];
         const rc1 = rowCos1[or];
@@ -4482,7 +4409,9 @@ const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ 
           Math.min(w, h) * (isFocus ? 0.66 : 0.58 * entryDistanceScale) * wh.scale * (1 + depth * 0.1);
         if (wIdx === 0) mainBodyLen = baseLen;
 
-        updateWhaleKinematics(wh, w, h, baseLen, wIdx, dtScale, entryCalm, rawDepth);
+        // Freeze the ambient entry pose while this scroll sequence owns the animals.
+        // In particular, a partly blended entrance must not keep swimming on a held page.
+        if (!migActive || !wh.initialized) updateWhaleKinematics(wh, w, h, baseLen, wIdx, dtScale, entryCalm, rawDepth);
 
         // Migration: the displayed pose is the scene's, and so is the stroke (set by the distance
         // swum, so the tail stops with the scroll); the swim's own phases are restored after drawing
@@ -4551,7 +4480,7 @@ const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ 
 
           // FEEDING ANATOMY (main whale): jaws swing apart from the tip, throat pleats balloon
           const mouthAmt = wIdx === 0 ? feed.mouthOpen * (1 - eng) : 0;
-          if (wIdx === 0 && (mouthAmt > 0.01 || feed.gulp > 0.01)) {
+          if (!migActive && wIdx === 0 && (mouthAmt > 0.01 || feed.gulp > 0.01)) {
             const throat = Math.exp(-((u - 0.27) * (u - 0.27)) / 0.012);
             halfW *= 1 + (mouthAmt * 0.22 + feed.gulp * 0.32) * throat;
           }
@@ -4744,7 +4673,7 @@ const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ 
               );
             }
 
-            if (is === flukeSteps && sm.activity > 0.12 && Math.random() < 0.3 * sm.activity * (1 - eng)) {
+            if (!migActive && is === flukeSteps && sm.activity > 0.12 && Math.random() < 0.3 * sm.activity * (1 - eng)) {
               wakeParticles.push({
                 x: fx,
                 y: fy,
@@ -4759,7 +4688,7 @@ const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ 
           }
         }
 
-        if (Math.random() < (0.05 + sm.activity * 0.18) * (1 - eng)) {
+        if (!migActive && Math.random() < (0.05 + sm.activity * 0.18) * (1 - eng)) {
           const blowSp = sampleSpine(0.17);
           wakeParticles.push({
             x: blowSp.x + (Math.random() - 0.5) * 10,
@@ -4844,17 +4773,17 @@ const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ 
         ctx.fill();
       }
 
-      // 4C. MIGRATION SCENE — the world-anchored ocean, the trails and the Earth (behind the whales)
-      if (migCam && (mig.water > 0 || mig.earth > 0)) {
+      // 4C. MIGRATION SCENE — the spherical ocean, its wakes and the trails (behind the whales)
+      if (migCam && mig.water > 0) {
         const t0 = performance.now();
-        drawMigrationScene(migCam, migP, migTravel, mig, waterLevel, w, h);
+        drawMigrationScene(migCam, migP, migTravel, mig);
         migrationStats.sceneMs += (performance.now() - t0 - migrationStats.sceneMs) * 0.1;
       }
 
       // 2B. Subtle drifting deep-water particles (restrained count, zero flicker). Screen-space,
       // so they give way while the migration's world-anchored water is on screen.
       ambientOffsetY = (ambientOffsetY - sm.velocity * 0.00038 * dtScale + 10) % 1;
-      const dotLimit = prefersReducedMotion ? 24 : mig.water > 0.99 ? 0 : 48;
+      const dotLimit = migActive ? 0 : prefersReducedMotion ? 24 : 48;
       if (mig.water > 0) ctx.globalAlpha = 1 - mig.water;
       for (let i = 0; i < dotLimit; i++) {
         const d = ambientDots[i];
@@ -4877,7 +4806,7 @@ const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ 
 
       // 2C. DEEP-WATER SILHOUETTE (Stage 5): a distant manta ray glides past now and then,
       // only once the visitor has descended, drawn in the faintest halo glyphs ('.' ':')
-      const rayVis = isFocus || prefersReducedMotion ? 0 : Math.max(0, Math.min(1, (depth - 0.35) / 0.25));
+      const rayVis = isFocus || prefersReducedMotion || migActive ? 0 : Math.max(0, Math.min(1, (depth - 0.35) / 0.25));
       if (!mantaRay.active) {
         mantaRay.wait -= dt;
         if (mantaRay.wait <= 0 && rayVis > 0.25) {
@@ -4935,10 +4864,10 @@ const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ 
       }
 
       // 2D. DEEP-OCEAN BIOLUMINESCENT JELLYFISH — Far & Mid depth planes (behind the whales)
-      if (eng === 0) renderJellyfishPlanes(w, h, rawDepth, abyss, surfaceBaseY, 0, 1);
+      if (!migActive) renderJellyfishPlanes(w, h, rawDepth, abyss, surfaceBaseY, 0, 1);
 
       // 5. Render Wake Vortices & Bubble Trails
-      for (let i = wakeParticles.length - 1; i >= 0; i--) {
+      for (let i = migActive ? -1 : wakeParticles.length - 1; i >= 0; i--) {
         const pt = wakeParticles[i];
         pt.x += pt.vx * dtScale;
         pt.y += (pt.vy - sm.velocity * 0.18) * dtScale;
@@ -4988,7 +4917,7 @@ const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ 
       const scrollDeltaPx = sm.smoothScrollY - lastSmoothScrollY;
       lastSmoothScrollY = sm.smoothScrollY;
       // Paused while the migration holds the whales: the scene owns their path
-      if (!prefersReducedMotion && !isFocus && eng === 0) {
+      if (!prefersReducedMotion && !isFocus && !migActive) {
         const mainWh = whales[0];
         const headX = mainWh.spineX[0];
         const headY = mainWh.spineY[0];
@@ -5292,7 +5221,7 @@ const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ 
       const shimmerTick = (fx * 2.2) | 0;
       const fgWhaleAlpha = isFocus ? 1.0 : 0.60 + (1 - entryCalm) * 0.18;
       // Both whales share the deep-blue atlas rows (10..14) at full strength
-      const whaleAlpha = 1.0;
+      const whaleAlpha = migActive ? mig.whales : 1;
       let activeAlpha = 1.0;
 
       for (let r = boxMinR; r <= boxMaxR; r++) {
@@ -5354,7 +5283,7 @@ const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ 
               (occBuf[idx + cols + 1] > 0 ? 1 : 0);
 
             if (n > 0) {
-              const haloAlpha = fgWhaleAlpha * READING_WHALE_ALPHA[readingBuf[idx]];
+              const haloAlpha = fgWhaleAlpha * whaleAlpha * READING_WHALE_ALPHA[readingBuf[idx]];
               if (haloAlpha !== activeAlpha) {
                 ctx.globalAlpha = haloAlpha;
                 activeAlpha = haloAlpha;
@@ -5380,7 +5309,7 @@ const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ 
       }
 
       // 7. DEEP-OCEAN BIOLUMINESCENT JELLYFISH — Foreground-margin plane
-      if (eng === 0) renderJellyfishPlanes(w, h, rawDepth, abyss, surfaceBaseY, 2, 2);
+      if (!migActive) renderJellyfishPlanes(w, h, rawDepth, abyss, surfaceBaseY, 2, 2);
 
       migrationStats.frameMs += (performance.now() - frameStart - migrationStats.frameMs) * 0.1;
       animId = requestAnimationFrame(render);
@@ -5629,7 +5558,7 @@ const WhaleStretch: React.FC<{ sectionId: string; lanes: readonly Lane[]; narrow
 /**
  * The migration's runway: an empty interval of scroll between the cover and the introduction.
  * It never moves the page; its length is the migration's timeline, which the whale canvas draws
- * (camera, whales, trails and the Earth — see migrationScene.ts). Collapsed for reduced motion.
+ * (camera, whales, wakes and the spherical ocean — see migrationScene.ts). Collapsed for reduced motion.
  */
 const MigrationRunway: React.FC = React.memo(() => {
   const ref = useRef<HTMLDivElement | null>(null);
@@ -5680,8 +5609,8 @@ const ProgressiveOceanEntry: React.FC<ProgressiveOceanEntryProps> = React.memo((
         </p>
       </div>
     </section>
-    {/* Migration: after the name, the camera follows the two whales across the ocean toward a
-        distant Earth; the introduction begins once the journey has settled. */}
+    {/* Migration: after the name, the camera follows the two whales across the ocean of a
+        turning planet, never seen whole; the introduction begins once the journey has settled. */}
     <MigrationRunway />
     {/* Introduction: the name resolved above carries the heading visually; the semantic name stays
         here (visually clipped, so it is excluded from the word system). The rest of the spread

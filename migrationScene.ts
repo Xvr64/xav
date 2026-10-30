@@ -2,21 +2,29 @@
  * The migration: the cinematic interval between the cover's name and the introduction.
  *
  * One scroll value p ∈ [0, 1] yields everything: a perspective camera, the two whales' swim
- * through one ocean, the trails they leave and a separate, rotating Earth ahead of them.
- * Every function here is pure: the same p always produces the same frame, so stopping holds
- * one exact frame and scrolling back replays the same frames in reverse.
+ * across one ocean, the wakes they leave and the turn of the planet beneath them. Every
+ * function here is pure: the same p always produces the same frame, so stopping holds one
+ * exact frame and scrolling back replays the same frames in reverse.
  *
- * World: the ocean surface is the plane z = 0, x runs east, y ahead (the way the whales swim),
- * z up. One unit is the main whale's length. The whales keep their own bodies throughout: the
- * Earth is its own object, a sphere ahead of them that they swim toward and never reach.
+ * The planet is a real sphere of radius PLANET_R (one unit is the main whale's length) whose
+ * surface is the ocean. It has two frames:
+ *   - the Earth's own: x toward 0°N 0°E, z the north pole. The water, its swell and its chart
+ *     lines are fixed here, and so are the whales' positions (latitude and longitude);
+ *   - the world, in which the camera sits: world = spin(p) · earth, a turn about the pole.
+ * The whales swim a great circle from the South Atlantic, past the Cape and through the
+ * Roaring Forties, into the Indian Ocean: about 110° of the globe. Their lanes are written in
+ * route coordinates (y the distance along the route, x the offset to its right, z the depth)
+ * and laneToEarth places them on the sphere. The Earth's spin is the whales' own progress in
+ * longitude, so the planet turns beneath a camera that holds its meridian of the world while
+ * the whales cross it. The camera stays low, in the ocean's local frame, looking down: every
+ * ray from it meets the water, so there is no rim, no horizon and no planet to see — only sea.
  *
  * Storyboard (p):
- *   01  0.00–0.12  the name leaves; the camera settles above the water
- *   02  0.12–0.35  overhead tracking, the ocean moving past the whales
- *   03  0.35–0.60  the long migration, thin trails left in the water
- *   04  0.60–0.80  the camera pulls back and tilts toward the horizon; the Earth appears on it
- *   05  0.80–0.93  wide: the camera tilts back down onto the Earth, the whales small before it
- *   06  0.93–1.00  the camera settles; the introduction follows
+ *   01  0.00–0.15  the name leaves; the camera settles above the two whales, already swimming
+ *   02  0.15–0.40  overhead tracking: the water moves past them, wakes open behind them
+ *   03  0.40–0.75  the long migration: faster, a little higher; the sea changes as they go
+ *   04  0.75–0.90  the final shot: the camera lowers and reframes them, ocean edge to edge
+ *   05  0.90–1.00  they glide; the introduction follows as the scene leaves with the page
  */
 
 export type V3 = [number, number, number];
@@ -42,13 +50,14 @@ const DEG = Math.PI / 180;
 // ---------------------------------------------------------------------------------------------
 
 /** Whale lengths covered over the whole migration */
-export const TRAVEL = 46;
+export const TRAVEL = 52;
 /**
- * Swim speed through the storyboard: a gradual start, a steady cruise, faster in world terms
- * once the camera has pulled back (the same pace on screen covers more ocean), and a glide to
- * rest as the camera settles.
+ * Swim speed through the storyboard: a gradual start, a steady cruise, the long migration at
+ * more than twice the pace (the camera is a little higher, so it reads as the same stroke over
+ * more ocean), easing for the final shot and a glide as the introduction arrives.
  */
-const swimSpeed = (p: number) => ease(p, 0, 0.16) * (1 + 1.5 * ease(p, 0.5, 0.84)) * (1 - 0.8 * ease(p, 0.88, 1));
+const swimSpeed = (p: number) =>
+  ease(p, 0, 0.15) * (1 + 1.3 * ease(p, 0.38, 0.6)) * (1 - 0.45 * ease(p, 0.74, 0.9)) * (1 - 0.6 * ease(p, 0.9, 1));
 const TRAVEL_SAMPLES = 1024;
 const travelTable = (() => {
   const table = new Float64Array(TRAVEL_SAMPLES + 1);
@@ -65,7 +74,7 @@ export function travelAt(p: number): number {
 }
 
 // ---------------------------------------------------------------------------------------------
-// The two whales: one lane each, written as x (and depth) along y
+// The two whales: one lane each, written as x (and depth) along y, in route coordinates
 // ---------------------------------------------------------------------------------------------
 
 const mainX = (y: number) => 0.95 * Math.sin(y / 7.2 + 0.5) + 0.32 * Math.sin(y / 3.4 + 1.9);
@@ -88,9 +97,9 @@ export const WHALES = [
   },
   {
     length: 0.58,
-    // Wider apart in the last stretch, where the camera is far and they would read as one
-    x: (y: number) => mainX(y) - 0.66 - 0.5 * ease(y, 24, 40) + 0.17 * Math.sin(y / 4.3 + 2.3),
-    dx: (y: number) => mainDx(y) - 0.5 * easeSlope(y, 24, 40) + (0.17 / 4.3) * Math.cos(y / 4.3 + 2.3),
+    // A little wider apart over the long migration, where the camera is higher
+    x: (y: number) => mainX(y) - 0.66 - 0.3 * ease(y, 14, 26) + 0.17 * Math.sin(y / 4.3 + 2.3),
+    dx: (y: number) => mainDx(y) - 0.3 * easeSlope(y, 14, 26) + (0.17 / 4.3) * Math.cos(y / 4.3 + 2.3),
     z: (y: number) => -0.1 - 0.06 * Math.sin(y / 3.9 + 1),
     beat: 1 / 1.05,
     phase: 1.7
@@ -130,26 +139,110 @@ export function spineAlongLane(
 /** Swim stroke phase (radians): tail beats advance with distance swum, so they stop with the scroll */
 export const strokeAt = (i: number, travel: number) => WHALES[i].phase + headY(i, travel) * WHALES[i].beat * Math.PI * 2;
 
-/** Trails begin where the whales were as the long migration starts */
-export const TRAIL_FROM = travelAt(0.3);
+/** Trails begin where the whales were as the tracking begins */
+export const TRAIL_FROM = travelAt(0.12);
+
+// ---------------------------------------------------------------------------------------------
+// The planet and the route
+// ---------------------------------------------------------------------------------------------
+
+/** The ocean's radius, in whale lengths */
+export const PLANET_R = 27;
+
+const unitLatLon = (lat: number, lon: number): V3 => [
+  Math.cos(lat * DEG) * Math.cos(lon * DEG),
+  Math.cos(lat * DEG) * Math.sin(lon * DEG),
+  Math.sin(lat * DEG)
+];
+/** The route's southernmost point, south of the Cape of Good Hope, where it heads due east */
+const ROUTE_A = unitLatLon(-38, 25);
+const ROUTE_B: V3 = [-Math.sin(25 * DEG), Math.cos(25 * DEG), 0];
+/** To the whales' right (ahead × up): the route's pole */
+const ROUTE_N: V3 = [
+  ROUTE_B[1] * ROUTE_A[2] - ROUTE_B[2] * ROUTE_A[1],
+  ROUTE_B[2] * ROUTE_A[0] - ROUTE_B[0] * ROUTE_A[2],
+  ROUTE_B[0] * ROUTE_A[1] - ROUTE_B[1] * ROUTE_A[0]
+];
+/** Route angle at y = 0: the journey is centred on the vertex */
+const S0 = -TRAVEL / 2 / PLANET_R;
+
+/** A point given in route coordinates (x right, y along, z up from the surface), in the Earth's frame */
+export function laneToEarth(x: number, y: number, z: number, out: V3): V3 {
+  const s = S0 + y / PLANET_R;
+  const q = x / PLANET_R;
+  const rad = PLANET_R + z;
+  const cs = Math.cos(s);
+  const ss = Math.sin(s);
+  const cq = Math.cos(q) * rad;
+  const sq = Math.sin(q) * rad;
+  out[0] = cq * (cs * ROUTE_A[0] + ss * ROUTE_B[0]) + sq * ROUTE_N[0];
+  out[1] = cq * (cs * ROUTE_A[1] + ss * ROUTE_B[1]) + sq * ROUTE_N[1];
+  out[2] = cq * (cs * ROUTE_A[2] + ss * ROUTE_B[2]) + sq * ROUTE_N[2];
+  return out;
+}
+
+/** Route coordinates (x across, y along) of a point given in the Earth's frame */
+export function earthToLane(X: number, Y: number, Z: number, out: [number, number]): [number, number] {
+  const len = Math.sqrt(X * X + Y * Y + Z * Z);
+  const a = X * ROUTE_A[0] + Y * ROUTE_A[1] + Z * ROUTE_A[2];
+  const b = X * ROUTE_B[0] + Y * ROUTE_B[1] + Z * ROUTE_B[2];
+  const n = X * ROUTE_N[0] + Y * ROUTE_N[1] + Z * ROUTE_N[2];
+  out[0] = Math.asin(Math.max(-1, Math.min(1, n / len))) * PLANET_R;
+  out[1] = (Math.atan2(b, a) - S0) * PLANET_R;
+  return out;
+}
+
+/** Latitude and longitude (degrees) of a point given in the Earth's frame */
+export function latLonOf(X: number, Y: number, Z: number) {
+  return { lat: Math.asin(Z / Math.sqrt(X * X + Y * Y + Z * Z)) / DEG, lon: Math.atan2(Y, X) / DEG };
+}
+
+/** The point the camera frames, between the two whales, in route coordinates */
+const MID_Z = -0.12;
+function anchorAt(travel: number) {
+  const y = travel - 0.42;
+  return { x: (WHALES[0].x(y) + WHALES[1].x(y)) * 0.5, y };
+}
+const anchorScratch: V3 = [0, 0, 0];
+const anchorLon = (travel: number) => {
+  const a = anchorAt(travel);
+  laneToEarth(a.x, a.y, MID_Z, anchorScratch);
+  return Math.atan2(anchorScratch[1], anchorScratch[0]);
+};
+const LON0 = anchorLon(0);
+
+/**
+ * The Earth's turn about its pole at p (radians): exactly the whales' progress in longitude,
+ * so it is tied to their swim (still when they are, reversed when they are) and never spins
+ * on its own. About 120° over the journey.
+ */
+export const spinAt = (p: number) => LON0 - anchorLon(travelAt(p));
+
+const rotZ = (v: V3, c: number, s: number): V3 => [v[0] * c - v[1] * s, v[0] * s + v[1] * c, v[2]];
 
 // ---------------------------------------------------------------------------------------------
 // The camera
 // ---------------------------------------------------------------------------------------------
 
-export interface Camera {
-  /** Position in world units */
+/** A camera pose: position, right / up / forward unit vectors */
+export interface Pose {
   x: number;
   y: number;
   z: number;
-  /** Right, up and forward unit vectors */
   r: V3;
   u: V3;
   f: V3;
+}
+
+export interface Camera extends Pose {
   /** Focal length in px, and the screen point the view axis passes through */
   focal: number;
   ox: number;
   oy: number;
+  /** The Earth's spin (radians) this frame */
+  spin: number;
+  /** The same camera in the Earth's frame, where the ocean and the whales are */
+  e: Pose;
 }
 
 /** Viewport the frame is composed for; `whalePx` is the main whale's length in px at the start */
@@ -164,164 +257,259 @@ export const focalFor = (h: number) => h / (2 * Math.tan(22 * DEG));
 
 /**
  * Camera at p, set from the whales: how far it is from them (their size on screen), where they
- * sit in the frame, and its pitch (how far ahead it looks). Straight down while tracking; then
- * it pulls back and tilts up toward the horizon, where the Earth appears small and far; as the
- * whales close in it tilts back down onto the Earth (an orbital reframing) and settles. A
- * slight yaw follows the whales' turns, late, like a camera operator: never a spin.
- * `earthX` lets the frame drift toward the Earth as it is revealed.
+ * sit in the frame and how far it tilts ahead of straight down (4°–16°, never toward a
+ * horizon). It is built in the ocean's local frame at the point between the two whales, so it
+ * rides the curve of the planet with them; a slight yaw follows their turns, late, like a
+ * camera operator: never a spin.
  */
-export function cameraAt(p: number, vp: SceneViewport, earthX = 0): Camera {
+export function cameraAt(p: number, vp: SceneViewport): Camera {
   const focal = focalFor(vp.h);
   // Distance at which one whale length is `whalePx` on screen
   const base = focal / Math.max(1, vp.whalePx);
 
   const travel = travelAt(p);
   const lead = WHALES[0];
-  // The anchor: a point between the two whales
-  const midY = travel - 0.42;
-  const midX = (lead.x(midY) + WHALES[1].x(midY)) * 0.5;
-  const midZ = -0.12;
+  const mid = anchorAt(travel);
 
-  const reveal = ease(p, 0.58, 0.9);
-  // Phones pull back less, so the whales stay legible on the small screen
-  const pull = vp.w < 768 ? 0.55 : 1;
-  const dist =
-    base *
-    (1 +
-      0.18 * ease(p, 0.1, 0.35) +
-      (vp.w < 768 ? 0.55 : 0.95) * ease(p, 0.33, 0.62) +
-      pull * (1.0 * ease(p, 0.58, 0.74) + 1.25 * ease(p, 0.7, 0.95)));
-  const pitch = DEG * (5 * ease(p, 0.14, 0.4) + 9 * ease(p, 0.36, 0.62) + 60 * ease(p, 0.58, 0.72) - 14 * ease(p, 0.72, 0.95));
-  // Screen height of the anchor (fraction of the viewport): the whales rise into the upper
-  // middle for the long migration, so the water they leave behind (and their trails) is in
-  // frame, then settle low, with the Earth ahead of them
-  const anchorY = mix(mix(0.58, 0.4, ease(p, 0.16, 0.42)), 0.77, ease(p, 0.6, 0.88));
+  const mobile = vp.w < 768 || vp.w / vp.h < 1.15;
+  // A little higher for the long migration, lower again for the final shot
+  const dist = base * (1 + 0.16 * ease(p, 0.12, 0.4) + (mobile ? 0.2 : 0.34) * ease(p, 0.4, 0.68) - (mobile ? 0.08 : 0.16) * ease(p, 0.74, 0.9));
+  const pitch = DEG * (4 + 6 * ease(p, 0.12, 0.4) + 6 * ease(p, 0.4, 0.66) - 8 * ease(p, 0.74, 0.92));
+  // Screen height of the anchor (fraction of the viewport): the whales rise a little above the
+  // middle while tracking, so the wakes they leave are in frame, and settle for the final shot
+  const anchorY = mix(mix(0.57, 0.47, ease(p, 0.14, 0.42)), 0.52, ease(p, 0.74, 0.92));
+  const yaw = -0.32 * Math.atan(lead.dx(mid.y - 3)) * (1 - 0.7 * ease(p, 0.74, 0.95));
 
-  // The yaw leans gently into the lane's turns, a few whale lengths late, and settles at the end
-  const yaw = -0.32 * Math.atan(lead.dx(midY - 3)) * (1 - 0.7 * ease(p, 0.7, 0.95));
-
-  const hx = -Math.sin(yaw);
-  const hy = Math.cos(yaw);
+  // The ocean's local frame at the anchor, in the Earth's frame
+  const M = laneToEarth(mid.x, mid.y, MID_Z, [0, 0, 0]);
+  const mLen = Math.hypot(M[0], M[1], M[2]);
+  const up: V3 = [M[0] / mLen, M[1] / mLen, M[2] / mLen];
+  const s = S0 + mid.y / PLANET_R;
+  // Along the route: perpendicular to the anchor, wherever it sits across the lane
+  const ahead: V3 = [
+    -Math.sin(s) * ROUTE_A[0] + Math.cos(s) * ROUTE_B[0],
+    -Math.sin(s) * ROUTE_A[1] + Math.cos(s) * ROUTE_B[1],
+    -Math.sin(s) * ROUTE_A[2] + Math.cos(s) * ROUTE_B[2]
+  ];
+  const right: V3 = [
+    ahead[1] * up[2] - ahead[2] * up[1],
+    ahead[2] * up[0] - ahead[0] * up[2],
+    ahead[0] * up[1] - ahead[1] * up[0]
+  ];
+  const cy = Math.cos(yaw);
+  const sy = Math.sin(yaw);
   const sp = Math.sin(pitch);
   const cp = Math.cos(pitch);
-  const f: V3 = [hx * sp, hy * sp, -cp];
-  const u: V3 = [hx * cp, hy * cp, sp];
-  const r: V3 = [Math.cos(yaw), Math.sin(yaw), 0];
+  const H: V3 = [0, 0, 0];
+  const r: V3 = [0, 0, 0];
+  const f: V3 = [0, 0, 0];
+  const u: V3 = [0, 0, 0];
+  for (let k = 0; k < 3; k++) {
+    H[k] = cy * ahead[k] - sy * right[k];
+    r[k] = cy * right[k] + sy * ahead[k];
+    f[k] = H[k] * sp - up[k] * cp;
+    u[k] = H[k] * cp + up[k] * sp;
+  }
   const oy = vp.h * 0.47;
   // The ray to the anchor leaves the camera this far below the view axis
   const below = Math.atan((vp.h * anchorY - oy) / focal);
   const down = Math.PI / 2 - pitch + below;
   const back = dist * Math.cos(down);
-  return {
-    x: mix(midX, (midX + earthX) * 0.5, reveal * 0.5) - hx * back,
-    y: midY - hy * back,
-    z: midZ + dist * Math.sin(down),
+  const lift = dist * Math.sin(down);
+  const e: Pose = {
+    x: M[0] - H[0] * back + up[0] * lift,
+    y: M[1] - H[1] * back + up[1] * lift,
+    z: M[2] - H[2] * back + up[2] * lift,
     r,
     u,
-    f,
+    f
+  };
+
+  // Into the world: the Earth turned by its spin
+  const spin = spinAt(p);
+  const c = Math.cos(spin);
+  const sn = Math.sin(spin);
+  const pos = rotZ([e.x, e.y, e.z], c, sn);
+  return {
+    x: pos[0],
+    y: pos[1],
+    z: pos[2],
+    r: rotZ(r, c, sn),
+    u: rotZ(u, c, sn),
+    f: rotZ(f, c, sn),
     focal,
     ox: vp.w * 0.5,
-    oy
+    oy,
+    spin,
+    e
   };
 }
 
-/** Screen projection of a world point: px position, px per world unit, and depth */
+/** Screen projection of a point: px position, px per world unit, and depth */
 export interface Projected {
   x: number;
   y: number;
   scale: number;
   depth: number;
 }
-export function project(cam: Camera, X: number, Y: number, Z: number, out: Projected): Projected {
-  const dx = X - cam.x;
-  const dy = Y - cam.y;
-  const dz = Z - cam.z;
-  const depth = Math.max(1e-3, dx * cam.f[0] + dy * cam.f[1] + dz * cam.f[2]);
+function projectPose(cam: Camera, o: Pose, X: number, Y: number, Z: number, out: Projected): Projected {
+  const dx = X - o.x;
+  const dy = Y - o.y;
+  const dz = Z - o.z;
+  const depth = Math.max(1e-3, dx * o.f[0] + dy * o.f[1] + dz * o.f[2]);
   const k = cam.focal / depth;
-  out.x = cam.ox + (dx * cam.r[0] + dy * cam.r[1] + dz * cam.r[2]) * k;
-  out.y = cam.oy - (dx * cam.u[0] + dy * cam.u[1] + dz * cam.u[2]) * k;
+  out.x = cam.ox + (dx * o.r[0] + dy * o.r[1] + dz * o.r[2]) * k;
+  out.y = cam.oy - (dx * o.u[0] + dy * o.u[1] + dz * o.u[2]) * k;
   out.scale = k;
   out.depth = depth;
   return out;
 }
-
-/** Screen y of the horizon (−Infinity while the camera looks too steeply down to see it) */
-export function horizonY(cam: Camera): number {
-  const up = Math.PI / 2 - Math.acos(Math.max(-1, Math.min(1, -cam.f[2])));
-  return up <= 0.02 ? -Infinity : cam.oy - cam.focal * Math.tan(up);
+/** A point given in the world frame */
+export const project = (cam: Camera, X: number, Y: number, Z: number, out: Projected) => projectPose(cam, cam, X, Y, Z, out);
+/** A point given in the Earth's frame */
+export const projectEarth = (cam: Camera, X: number, Y: number, Z: number, out: Projected) => projectPose(cam, cam.e, X, Y, Z, out);
+const laneScratch: V3 = [0, 0, 0];
+/** A point given in route coordinates */
+export function projectLane(cam: Camera, x: number, y: number, z: number, out: Projected): Projected {
+  laneToEarth(x, y, z, laneScratch);
+  return projectPose(cam, cam.e, laneScratch[0], laneScratch[1], laneScratch[2], out);
 }
-
-// ---------------------------------------------------------------------------------------------
-// The Earth, ahead of the whales
-// ---------------------------------------------------------------------------------------------
-
-/** The Earth in world units: radius and centre */
-export interface Earth {
-  r: number;
-  x: number;
-  y: number;
-  z: number;
-}
-
-/** Where the Earth sits in the final frame: centre (viewport fractions) and radius (px) */
-export const earthFrame = (w: number, h: number) =>
-  w < 768 ? { x: 0.5, y: 0.31, r: Math.min(h * 0.19, w * 0.4) } : { x: 0.57, y: 0.3, r: h * 0.22 };
 
 /**
- * The Earth's place in the world for this viewport: on the ray through its spot in the final
- * frame, at the water's level, sized to its final radius. Placed once per viewport, it then
- * stays put while the camera and the whales move toward it.
+ * Where the ray through screen point (sx, sy) meets the sphere of radius `radius` (the ocean's
+ * surface, or a shell beneath it), in the Earth's frame. Returns the depth along the view axis
+ * and writes the point to `out`; −1 when the ray would pass the sphere's rim.
  */
-export function earthFor(vp: SceneViewport): Earth {
-  const spot = earthFrame(vp.w, vp.h);
-  const z = 0.2;
-  // The final frame drifts toward the Earth, so placing it moves the camera a quarter as far:
-  // a few passes settle it to a fraction of a pixel
-  let earth: Earth = { x: 0, y: 0, z, r: 1 };
-  for (let pass = 0; pass < 6; pass++) {
-    const cam = cameraAt(1, vp, earth.x);
-    const a = (spot.x * vp.w - cam.ox) / cam.focal;
-    const b = (spot.y * vp.h - cam.oy) / cam.focal;
-    const dx = cam.f[0] + a * cam.r[0] - b * cam.u[0];
-    const dy = cam.f[1] + a * cam.r[1] - b * cam.u[1];
-    const dz = cam.f[2] + a * cam.r[2] - b * cam.u[2];
-    // The ray's forward component is 1, so its parameter is the depth along the view axis
-    const t = (z - cam.z) / Math.min(-1e-3, dz);
-    earth = { x: cam.x + t * dx, y: cam.y + t * dy, z, r: (spot.r * t) / cam.focal };
-  }
-  return earth;
+export function oceanHit(cam: Camera, sx: number, sy: number, radius: number, out: V3): number {
+  const o = cam.e;
+  const a = (sx - cam.ox) / cam.focal;
+  const b = (sy - cam.oy) / cam.focal;
+  const dx = o.f[0] + a * o.r[0] - b * o.u[0];
+  const dy = o.f[1] + a * o.r[1] - b * o.u[1];
+  const dz = o.f[2] + a * o.r[2] - b * o.u[2];
+  const dd = dx * dx + dy * dy + dz * dz;
+  const cd = o.x * dx + o.y * dy + o.z * dz;
+  const disc = cd * cd - dd * (o.x * o.x + o.y * o.y + o.z * o.z - radius * radius);
+  if (disc < 0) return -1;
+  // The near intersection; d's forward component is 1, so t is also the depth
+  const t = (-cd - Math.sqrt(disc)) / dd;
+  if (t <= 0) return -1;
+  out[0] = o.x + t * dx;
+  out[1] = o.y + t * dy;
+  out[2] = o.z + t * dz;
+  return t;
 }
 
-/** Longitude (degrees) at the centre of the Earth's face: the Atlantic → Europe & the Gulf → Asia */
-export const EARTH_TURN = { from: -42, to: 104 };
-
-/**
- * The Earth's rotation and tilt at p: one controlled arc of about 150° that runs while it is
- * on screen and comes to rest with the camera: never a decorative spin.
- */
-export function earthView(p: number) {
-  const turn = ease(p, 0.62, 0.99);
+/** A single normalized clock includes the visual story and the page's transition into copy. */
+export function migrationAt(scrollY: number, top: number, height: number, viewportH: number) {
+  const total = Math.max(1, height + viewportH);
+  const progress = clamp01((scrollY - (top - viewportH)) / total);
+  const storyEnd = height / total;
   return {
-    lon: mix(EARTH_TURN.from, EARTH_TURN.to, turn),
-    // Seen a little more from the north as the camera rises over it
-    lat: 14 + 10 * ease(p, 0.72, 0.95)
+    progress,
+    p: clamp01(progress / Math.max(0.001, storyEnd)),
+    handoff: clamp01((progress - storyEnd) / Math.max(0.001, 1 - storyEnd))
   };
 }
 
 // ---------------------------------------------------------------------------------------------
-// The ocean, anchored in the world
+// The ocean, fixed to the Earth
 // ---------------------------------------------------------------------------------------------
 
 /**
- * Swell height at a point on the water, −1..1: long swells, a crossing sea and a fine chop,
- * each running its own way as p advances. `fine` (0..1) fades the chop out where a screen cell
- * covers too much water to resolve it (far away), so the distance never aliases into noise.
+ * How rough the sea is at a latitude: 0 in the subtropics, 1 in the Roaring Forties, which the
+ * route crosses south of the Cape. The swell changes with where the whales are, not with time.
  */
-export function swellAt(X: number, Y: number, p: number, fine: number): number {
-  const a = Math.sin(0.56 * X + 2.17 * Y - 9 * p);
-  const b = Math.sin(-2.5 * X + 3.35 * Y + 6 * p + 1.3);
-  const c = Math.sin(8.1 * X + 3.95 * Y - 14 * p + 0.4);
-  return 0.56 * a + (0.28 + 0.06 * (1 - fine)) * b + 0.16 * fine * c;
+export const seaStateAt = (latDeg: number) => ease(-latDeg, 25, 35);
+
+/**
+ * The slow part of the sea at a point (route coordinates): how strongly the long swell groups
+ * the ripples into bands (0.36..1), and how far the current bends their crests (radians).
+ * Smooth over many cells, so a renderer may sample it sparsely and interpolate.
+ */
+export function seaBaseAt(X: number, Y: number, p: number, out: [number, number]): [number, number] {
+  const swell = 0.6 * Math.sin(0.56 * X + 2.17 * Y - 9 * p) + 0.4 * Math.sin(-1.3 * X + 1.9 * Y + 6 * p + 1.3);
+  out[0] = 0.68 + 0.32 * swell;
+  out[1] = 1.6 * Math.sin(0.9 * X - 0.55 * Y + 0.8) + 0.9 * Math.sin(1.7 * Y + 0.4 * X + 2.1) + 0.7 * Math.sin(3.1 * X + 1.2 * Y);
+  return out;
+}
+
+/**
+ * The sea's surface as crest lines for ASCII, given its slow part: positive within a crest line,
+ * up to about 0.4 at the heart of a strong one. Wind ripples a third of a whale length apart
+ * whose crests meander with the current and rise and fall along their length (crests of every
+ * length, thicker where the wave is strong, never a ruled grid), a finer train for texture and,
+ * in the southern ocean (`storm`), a second set of crests crossing them: a confused sea. Each
+ * runs its own way as p advances. `fine` (0..1) fades the finest train where a cell covers too
+ * much water to resolve it.
+ */
+export function crestsAt(X: number, Y: number, p: number, fine: number, storm: number, group: number, bend: number): number {
+  const a = Math.sin(20 * (0.34 * X + 0.94 * Y) + bend - 16 * p);
+  const along = 0.5 + 0.5 * Math.sin(9.5 * X - 2.2 * Y + 0.6 * bend + 5 * p);
+  // Rough water: heavier crests
+  let v = a - 1 + 0.42 * group * along * (1 + 0.25 * storm);
+  if (fine > 0) v += 0.05 * fine * Math.sin(33 * (-0.42 * X + 0.91 * Y) + 1.3 * bend + 2.4 + 27 * p);
+  if (storm > 0) {
+    const c = Math.sin(15 * (-0.38 * X + 0.92 * Y) - 0.7 * bend + 13 * p + 1.1);
+    const cross = 0.5 + 0.5 * Math.sin(5.5 * X + 2.4 * Y + 1.7);
+    v = Math.max(v, c - 1 + 0.36 * storm * group * cross);
+  }
+  return v;
+}
+
+const baseScratch: [number, number] = [0, 0];
+/** The sea's surface at a point (route coordinates): crestsAt with its slow part evaluated there */
+export function swellAt(X: number, Y: number, p: number, fine: number, storm = 0): number {
+  seaBaseAt(X, Y, p, baseScratch);
+  return crestsAt(X, Y, p, fine, storm, baseScratch[0], baseScratch[1]);
+}
+
+/**
+ * The water's depth variations, 0..1: broad patches where the sea reads denser or more open.
+ * Fixed in the water, so they pass beneath the whales as they swim.
+ */
+export function densityAt(X: number, Y: number): number {
+  const v = 0.6 * Math.sin(0.7 * X + 0.38 * Y + 0.6) * Math.sin(0.3 * X - 0.52 * Y + 2.1) + 0.4 * Math.sin(0.27 * Y + 0.2 * X + 0.9);
+  return 0.5 + 0.5 * v;
+}
+
+/**
+ * Whale `i`'s disturbance of the water, 0..1, at `off` across from its lane and `Y` along it,
+ * its head at `head`: water parting along its flanks and at the head, and behind the flukes a
+ * Kelvin wake (two arms opening at about 19°) around a churned centre line, all fading with
+ * distance behind it.
+ */
+export function whaleWake(i: number, off: number, Y: number, head: number): number {
+  const L = WHALES[i].length;
+  const tail = head - L * 1.02;
+  if (Y > head + 0.18 * L || Y < tail - 5.5 * L) return 0;
+  const dx = Math.abs(off) / L;
+  if (Y >= head - 0.05 * L) {
+    // The bow: a crescent just ahead of the head
+    const r = Math.hypot(dx, (Y - head) / L);
+    return Math.exp(-(((r - 0.1) / 0.035) ** 2)) * 0.75;
+  }
+  if (Y >= tail) {
+    // The flanks: a thin band just outside the body, widest abreast of the flippers
+    const u = (head - Y) / (L * 1.02);
+    const half = 0.03 + 0.09 * Math.sin(Math.PI * Math.min(1, (u + 0.06) / 1.06));
+    return Math.exp(-(((dx - half * 1.55 - 0.03) / 0.035) ** 2)) * 0.55 * (1 - 0.6 * u);
+  }
+  const age = (tail - Y) / L;
+  if (dx > 0.2 + age * 0.45) return 0;
+  const arm = 0.07 + age * 0.354;
+  const armW = 0.035 + 0.022 * age;
+  const arms = Math.exp(-(((dx - arm) / armW) ** 2)) * Math.exp(-age / 2.6);
+  const churnW = 0.045 + 0.035 * age;
+  const churn = Math.exp(-((dx / churnW) ** 2)) * Math.exp(-age / 1.3) * (0.55 + 0.45 * Math.sin(Y * 23 + off * 17 + i * 2));
+  return Math.max(arms * 0.9, churn);
+}
+
+/** Both whales' disturbance of the water at a point (route coordinates) when the main whale has swum `travel` */
+export function wakeAt(X: number, Y: number, travel: number): number {
+  let w = 0;
+  for (let i = 0; i < 2; i++) w = Math.max(w, whaleWake(i, X - WHALES[i].x(Y), Y, headY(i, travel)));
+  return w;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -330,18 +518,23 @@ export function swellAt(X: number, Y: number, p: number, fine: number): number {
 
 /**
  * `engage` hands the whales from their own swim to the scene (and back after the handoff);
- * `water` brings in the world-anchored ocean field; `snow` the deep particles that give the
- * tracking shots their parallax; `trails` the traces left behind the whales; `earth` the globe.
- * `handoff` ∈ [0, 1] runs over the viewport of scrolling after the stage releases, while the
- * introduction rises.
+ * `water` brings in the Earth-anchored ocean; `snow` the deep particles that give the tracking
+ * shots their parallax; `wake` the water the whales disturb; `trails` the long traces left
+ * behind them; `chart` the faint meridians and parallels that pass beneath them during the
+ * long migration (the planet turning, never seen whole). `handoff` ∈ [0, 1] runs over the
+ * viewport of scrolling after the stage releases, while the introduction rises.
  */
 export function stagesAt(p: number, handoff = 0) {
   const leave = ease(handoff, 0.05, 0.65);
   return {
-    engage: ease(p, 0.02, 0.14) * (1 - leave),
+    // Keep the tracked pose during the exit; blending back into ambient swimming here
+    // would turn and enlarge the whales just as the paragraph comes into view.
+    engage: ease(p, 0.02, 0.14) * (handoff < 1 ? 1 : 0),
+    whales: 1 - ease(handoff, 0.08, 0.65),
     water: ease(p, 0.03, 0.16) * (1 - ease(handoff, 0, 0.5)),
-    snow: ease(p, 0.08, 0.2) * (1 - ease(p, 0.6, 0.72)),
-    trails: ease(p, 0.36, 0.46) * (1 - ease(p, 0.86, 0.97)),
-    earth: ease(p, 0.62, 0.7) * (1 - ease(handoff, 0.18, 0.7))
+    snow: ease(p, 0.08, 0.2) * (1 - leave),
+    wake: ease(p, 0.08, 0.2) * (1 - leave),
+    trails: ease(p, 0.16, 0.3) * (1 - leave),
+    chart: ease(p, 0.36, 0.48) * (1 - ease(p, 0.8, 0.92))
   };
 }
