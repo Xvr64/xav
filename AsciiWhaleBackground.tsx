@@ -503,6 +503,23 @@ export const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.m
     }));
     let ambientOffsetY = 0;
 
+    // Marine snow (deterministic): position, parallax against the page (> 1: it passes faster
+    // than the copy), slow sink (px/s), sideways sway, glyph and strength
+    const MARINE_SNOW = Array.from({ length: 64 }, (_, i) => {
+      const r = (k: number) => (((i + 1) * k) % 1000) / 1000;
+      return {
+        nx: r(617.3),
+        ny: r(379.1),
+        par: 1.15 + r(271.7) * 0.45,
+        sink: 4 + r(143.9) * 7,
+        sway: 3 + r(97.3) * 6,
+        swayF: 0.2 + r(53.1) * 0.25,
+        phase: r(811.7) * Math.PI * 2,
+        glyph: ['.', '.', '·', '·', ',', ':'][(r(431.9) * 6) | 0],
+        alpha: 0.38 + r(677.1) * 0.5
+      };
+    });
+
     // Anatomical ASCII jellyfish (3 species, 3 parallax depth planes).
     // Rendered by this component's single RAF loop through pre-baked glyph atlases
     // (see asciiOceanLife.ts) — no extra loop, no per-glyph fillText, no shadowBlur.
@@ -2514,6 +2531,38 @@ export const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.m
         );
       }
       ctx.globalAlpha = 1;
+
+      // 2B'. MARINE SNOW — in dark water only, sparse flecks pass upward faster than the page as
+      // the visitor descends (the reader is the one sinking) and settle into a slow fall when the
+      // page holds still. Never over a line of text; absent on white water and without motion.
+      const snowPresence = migActive || prefersReducedMotion ? 0 : Math.max(0, Math.min(1, (abyss - 0.22) / 0.4));
+      if (snowPresence > 0.01) {
+        const snowCount = w < 768 ? 34 : MARINE_SNOW.length;
+        const lines = readingZones.read();
+        const scrollNow = window.scrollY;
+        ctx.font = '500 13px "JetBrains Mono", monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = 'rgb(198, 220, 214)';
+        for (let i = 0; i < snowCount; i++) {
+          const f = MARINE_SNOW[i];
+          const span = h + 40;
+          const y = ((((f.ny * span - scrollNow * f.par + time * f.sink) % span) + span) % span) - 20;
+          const x = (f.nx * w + Math.sin(time * f.swayF + f.phase) * f.sway + w) % w;
+          let behindText = false;
+          for (let k = 0; k < lines.length; k++) {
+            const r = lines[k];
+            if (x > r.left - 6 && x < r.left + r.width + 6 && y > r.top - 6 && y < r.top + r.height + 6) {
+              behindText = true;
+              break;
+            }
+          }
+          if (behindText) continue;
+          ctx.globalAlpha = snowPresence * f.alpha;
+          ctx.fillText(f.glyph, x, y);
+        }
+        ctx.globalAlpha = 1;
+      }
 
       // 2C. DEEP-WATER SILHOUETTE (Stage 5): a distant manta ray glides past now and then,
       // only once the visitor has descended, drawn in the faintest halo glyphs ('.' ':')
