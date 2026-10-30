@@ -22,98 +22,103 @@ export const VIEWPORT_ZONES = {
 } as const;
 
 /**
- * Individual word progress based on vertical position in viewport.
- * Uses a very subtle left-to-right stagger so words in a sentence
- * resolve almost together and remain effortless to read naturally.
+ * Where a line's entry decode must finish (viewport fraction). Normally the reading zone's lower
+ * edge; but a line near the end of the page may never scroll that high (`lowestTop` is its top
+ * at maximum scroll), so its entry zone slides down to finish just before the page stops.
  */
-export function wordProgress(
-  top: number,
-  height: number,
-  viewport: number,
-  wordIndexInLine = 0,
-  totalWordsInLine = 1
-): number {
+export function entryEndFor(lowestTop: number, viewport: number): number {
+  if (viewport <= 0) return VIEWPORT_ZONES.ENTRY_END;
+  return Math.max(VIEWPORT_ZONES.ENTRY_END, lowestTop / viewport + 0.03);
+}
+
+/**
+ * Zone progress of one rendered line from its top edge: 0 invisible → 1 readable. The whole
+ * line shares this value; each character derives its own progress from it (`charProgress`).
+ */
+export function lineProgress(top: number, viewport: number, entryEnd: number = VIEWPORT_ZONES.ENTRY_END): number {
   if (viewport <= 0) return 1;
   const y = top / viewport;
-
-  // Very subtle stagger: max 0.018 across the entire line (~15px scroll)
-  // Ensures words resolve almost together so sentences read naturally
-  const maxLineStagger = 0.018;
-  const step = totalWordsInLine > 1 ? Math.min(0.004, maxLineStagger / (totalWordsInLine - 1)) : 0;
-  const stagger = wordIndexInLine * step;
-
-  // Entry zone: 90% down to 78%
-  // Progress goes from 0 (at 0.90 - stagger) to 1 (at 0.78 - stagger)
-  const entryStart = VIEWPORT_ZONES.ENTRY_START - stagger;
-  const entryEnd = VIEWPORT_ZONES.ENTRY_END - stagger;
-  const enter = clamp01((entryStart - y) / (entryStart - entryEnd));
-
-  // Exit zone: 22% down to 10%
-  // Progress goes from 1 (at 0.22 - stagger) down to 0 (at 0.10 - stagger)
-  const exitStart = VIEWPORT_ZONES.EXIT_START - stagger;
-  const exitEnd = VIEWPORT_ZONES.EXIT_END - stagger;
-  const exit = clamp01((y - exitEnd) / (exitStart - exitEnd));
-
+  const entryLength = VIEWPORT_ZONES.ENTRY_START - VIEWPORT_ZONES.ENTRY_END;
+  const enter = clamp01((entryEnd + entryLength - y) / entryLength);
+  const exit = clamp01((y - VIEWPORT_ZONES.EXIT_END) / (VIEWPORT_ZONES.EXIT_START - VIEWPORT_ZONES.EXIT_END));
   return Math.min(enter, exit);
 }
 
+/** A character's own progress at which its real letter locks in. */
+export const LOCK_AT = 0.62;
 /**
- * Line-level compatibility function.
+ * Width of the decoding wave. Each character runs its whole decode over 1 / (1 + DECODE_WAVE) of
+ * the line's zone progress, and the start times spread over the rest, so neighbours overlap
+ * while the far edge of a line is still scrambled: a narrow band travelling across the line.
  */
-export function lineProgress(top: number, height: number, viewport: number) {
-  return wordProgress(top, height, viewport, 0, 1);
+export const DECODE_WAVE = 2.4;
+/** Distinct ASCII states a character passes through before it locks (state 0 waits ahead of the wave). */
+export const GLYPH_STATES = 7;
+/** Character state meaning "the real letter". */
+export const RESOLVED = -1;
+
+/**
+ * One character's progress. `lineP` is its line's zone progress and `t` the character's 0..1
+ * horizontal position across its text block. Entering, the wave runs left → right; leaving it
+ * runs left → right too, so the left edge dissolves first. Pure: the same scroll position always
+ * gives the same state, so reversing the scroll reverses the wave.
+ */
+export function charProgress(lineP: number, t: number, entering: boolean, wave = DECODE_WAVE): number {
+  const offset = entering ? clamp01(t) : 1 - clamp01(t);
+  return clamp01(lineP * (1 + wave) - wave * offset);
+}
+
+/** Letters and digits decode; spaces and punctuation keep the text's structure as they are. */
+export const isDecodable = (char: string) => /[\p{L}\p{N}]/u.test(char);
+
+/** RESOLVED once locked, otherwise which of the GLYPH_STATES the character is showing. */
+export function charState(c: number): number {
+  if (c >= LOCK_AT) return RESOLVED;
+  return Math.min(GLYPH_STATES - 1, Math.floor((c / LOCK_AT) * GLYPH_STATES));
 }
 
 /**
- * Restrained opacity progression:
- * - Starts with subtle, low-opacity scrambled characters (~0.28)
- * - Smoothly ramps to full opacity (1.0) as real letters resolve by progress ~0.70
- * - Remains 1.0 throughout the central reading zone and fully resolved text
- * - Reverses smoothly during exit so outgoing glyphs fade gracefully
+ * The ASCII glyph a character shows in a given state. Seeded per character, and consecutive
+ * states always differ (a step of 7 is coprime with the 23 glyphs), so each letter visibly
+ * steps through a fixed sequence of symbols rather than flickering at random.
  */
-export function wordOpacity(progress: number): number {
-  if (progress <= 0) return 0;
-  if (progress >= 0.70) return 1;
-  // Subtle entry: starts at 0.28 and smoothly climbs to 1.0 by progress 0.70
-  return 0.28 + 0.72 * clamp01(progress / 0.70);
+export function charGlyph(state: number, seed: number): string {
+  const hash = ((seed + 1) * 2654435761) >>> 0;
+  return ASCII_GLYPHS[(hash + state * 7) % ASCII_GLYPHS.length];
 }
 
 /**
- * Progressive character-by-character decoding:
- * - 14 meaningful intermediate scroll bands (calm, restrained, no harsh flicker)
- * - Begins revealing correct characters early (~0.16)
- * - Resolves most characters by approximately 50%
- * - Fully resolves all characters by 70%
- * - Completely normal, stable, original text for the remaining transition and central zone
+ * Opacity of one character. A line fades in as a faint field of scrambled glyphs (the text's
+ * full structure is there before any letter resolves); each glyph brightens as the wave reaches
+ * it and is at full ink by the time its letter locks.
  */
-export function decodeWord(word: string, progress: number, seed: number) {
-  // Fully resolve early (by 70%) so the word is completely readable well before the center
-  if (progress >= 0.70) return word;
+export function charOpacity(lineP: number, c: number): number {
+  if (lineP <= 0) return 0;
+  const presence = clamp01(lineP / 0.12);
+  return presence * (0.3 + 0.7 * clamp01(c / LOCK_AT));
+}
 
-  const chars = Array.from(word);
-  const len = chars.length;
-  if (progress <= 0 || len === 0) return '\u00a0'.repeat(len);
-
-  // 14 scroll bands for calm, deliberate intermediate states without visual noise
-  const band = Math.floor(progress * 14);
-
-  return chars.map((char, index) => {
-    // Preserve whitespace
-    if (/^\s$/.test(char)) return char;
-
-    // Deterministic rank for organic letter locking
-    // Letters lock in smoothly between progress 0.16 and 0.68
-    const hash = (((seed + 1) * 2654435761 ^ (index * 2246822519)) >>> 0);
-    const rank = (index * 7 + (seed % 11)) % len;
-    const threshold = 0.16 + 0.50 * ((rank + 0.5) / len);
-
-    // If progress has reached this character's threshold, lock in the real character
-    if (progress >= threshold) return char;
-
-    // Otherwise, cycle through restrained ASCII glyphs
-    const glyphIndex = (hash + band * 5 + index * 3) % ASCII_GLYPHS.length;
-    return ASCII_GLYPHS[glyphIndex];
-  }).join('');
+/**
+ * Decode a string laid out on one line (`charOffset` characters in, `lineChars` long) into the
+ * text it shows at `lineP`. The controller works per character in the DOM; this is the same
+ * mapping as a string, for tests and for reasoning about the sequence.
+ */
+export function decodeChars(
+  word: string,
+  charOffset: number,
+  lineChars: number,
+  lineP: number,
+  entering: boolean,
+  seed: number
+): string {
+  const span = Math.max(1, lineChars - 1);
+  return Array.from(word)
+    .map((char, index) => {
+      if (!isDecodable(char)) return char;
+      const state = charState(charProgress(lineP, (charOffset + index) / span, entering));
+      return state === RESOLVED ? char : charGlyph(state, seed + charOffset + index);
+    })
+    .join('');
 }
 
 /** White until the globe starts; black after its complete scroll sequence. */

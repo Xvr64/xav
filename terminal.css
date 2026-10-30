@@ -763,7 +763,7 @@ body {
 }
 
 /* ---------------------------------------------------------------------------
-   Scroll-driven ASCII word reveal and disappearance system (unchanged)
+   Scroll-driven ASCII character decode (controller: TerminalEditorial.tsx)
    --------------------------------------------------------------------------- */
 .ascii-word {
   display: inline-block;
@@ -790,6 +790,38 @@ body {
   line-height: inherit;
   text-transform: inherit;
 }
+/* While a word decodes, each character is its own cell placed exactly over its real letter, so a
+   wider or narrower ASCII glyph never pushes the letters that have already locked in. */
+.ascii-cell {
+  position: absolute;
+  top: 0;
+  text-align: center;
+  white-space: pre;
+}
+
+/* The decoding sound's only control: a quiet speaker in the corner, in the page's own ink. */
+.decode-sound-toggle {
+  position: fixed;
+  left: max(16px, calc(var(--page-margin) - 10px));
+  bottom: max(14px, env(safe-area-inset-bottom));
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--ink-52595E, var(--ink-muted));
+  opacity: 0.55;
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+.decode-sound-toggle svg { width: 15px; height: 15px; }
+.decode-sound-toggle:hover,
+.decode-sound-toggle[aria-pressed='true'] { opacity: 0.9; }
+.decode-sound-toggle:focus-visible { outline: 1px solid currentColor; outline-offset: 2px; opacity: 1; }
 
 .terminal-portfolio [data-journey-runway] { overflow: visible; }
 .terminal-portfolio #global { overflow: visible; }
@@ -797,11 +829,13 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .ascii-word, .ascii-source { opacity: 1 !important; }
   .ascii-visual { visibility: hidden; }
+  /* No decoding motion, so there is nothing for the decoding sound to accompany */
+  .decode-sound-toggle { display: none; }
   [data-editorial-section] { transition: none; }
   .terminal-portfolio *, .terminal-portfolio *::before, .terminal-portfolio *::after { scroll-behavior: auto !important; }
 }
 
 @media print {
-  .ascii-visual { display: none !important; }
+  .ascii-visual, .decode-sound-toggle { display: none !important; }
   .ascii-word, .ascii-source, .ascii-text, [data-editorial-section] { opacity: 1 !important; }
 }

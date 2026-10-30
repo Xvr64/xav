@@ -3,109 +3,159 @@ import assert from 'node:assert/strict';
 import {
   ASCII_GLYPHS,
   VIEWPORT_ZONES,
-  decodeWord,
-  wordProgress,
-  wordOpacity,
+  DECODE_WAVE,
+  GLYPH_STATES,
+  LOCK_AT,
+  RESOLVED,
+  decodeChars,
+  charProgress,
+  charState,
+  charGlyph,
+  charOpacity,
   lineProgress,
+  entryEndFor,
   waterShade,
   orbitStages,
   ORBIT_SPIN
 } from './terminalMotion.ts';
+import { ClickGate, CLICK_GAP_MS, MIN_ACTIVITY } from './decodeAudio.ts';
 
-test('reading zone is expanded to 22%–78% of viewport with 100% stable readable text', () => {
+test('reading zone is 22%–78% of the viewport and fully stable there', () => {
   for (const viewport of [600, 800, 1000, 1200]) {
-    // 0–10%: text is invisible (p = 0, opacity = 0)
-    assert.equal(wordProgress(viewport * 0.05, 20, viewport, 0, 1), 0);
-    assert.equal(wordProgress(viewport * 0.09, 20, viewport, 0, 1), 0);
-    assert.equal(wordOpacity(0), 0);
-
-    // 10–22%: outgoing ASCII scramble transition zone
-    const pExit = wordProgress(viewport * 0.16, 20, viewport, 0, 1);
-    assert.ok(pExit > 0 && pExit < 1, `Expected exit transition at 16%, got ${pExit}`);
-
-    // 22–78%: comfortable central reading zone (fully readable, stable, opacity = 1)
-    for (const frac of [0.25, 0.35, 0.50, 0.65, 0.75]) {
-      const top = viewport * frac;
-      const p = wordProgress(top, 20, viewport, 0, 1);
-      assert.equal(p, 1, `Expected fully readable text at ${frac * 100}%, got ${p}`);
-      assert.equal(decodeWord('International', p, 42), 'International');
-      assert.equal(wordOpacity(p), 1);
+    // 0–10% and 90–100%: invisible
+    for (const frac of [0.02, 0.05, 0.09, 0.92, 0.98]) {
+      const p = lineProgress(viewport * frac, viewport);
+      assert.equal(p, 0, `at ${frac}`);
+      assert.equal(charOpacity(p, charProgress(p, 0.5, frac > 0.5)), 0);
     }
+    // Transition zones
+    for (const frac of [0.16, 0.84]) {
+      const p = lineProgress(viewport * frac, viewport);
+      assert.ok(p > 0 && p < 1, `Expected transition at ${frac}, got ${p}`);
+    }
+    // Reading zone: every character resolved, full opacity
+    for (const frac of [0.22, 0.25, 0.35, 0.5, 0.65, 0.75, 0.78]) {
+      const p = lineProgress(viewport * frac, viewport);
+      assert.equal(p, 1, `Expected fully readable text at ${frac * 100}%, got ${p}`);
+      assert.equal(decodeChars('International', 0, 13, p, true, 42), 'International');
+      for (const t of [0, 0.5, 1]) assert.equal(charOpacity(p, charProgress(p, t, true)), 1);
+    }
+  }
+  assert.equal(VIEWPORT_ZONES.READING_TOP, 0.22);
+  assert.equal(VIEWPORT_ZONES.READING_BOTTOM, 0.78);
+});
 
-    // 78–90%: incoming ASCII decoding transition zone
-    const pEntry = wordProgress(viewport * 0.84, 20, viewport, 0, 1);
-    assert.ok(pEntry > 0 && pEntry < 1, `Expected entry transition at 84%, got ${pEntry}`);
-
-    // 90–100%: invisible (p = 0, opacity = 0)
-    assert.equal(wordProgress(viewport * 0.92, 20, viewport, 0, 1), 0);
-    assert.equal(wordProgress(viewport * 0.98, 20, viewport, 0, 1), 0);
+test('lines that cannot scroll into the reading zone still resolve at the end of the page', () => {
+  const viewport = 900;
+  // A line that reaches the reading zone keeps the normal entry zone
+  assert.equal(entryEndFor(viewport * 0.4, viewport), VIEWPORT_ZONES.ENTRY_END);
+  assert.equal(entryEndFor(-5000, viewport), VIEWPORT_ZONES.ENTRY_END);
+  // The footer stops at 82% of the viewport: readable there, still decoding a little lower
+  for (const frac of [0.79, 0.82, 0.88, 0.96]) {
+    const lowest = viewport * frac;
+    const end = entryEndFor(lowest, viewport);
+    assert.equal(lineProgress(lowest, viewport, end), 1, `${frac}`);
+    const below = lineProgress(lowest + viewport * 0.08, viewport, end);
+    assert.ok(below > 0 && below < 1, `${frac}: ${below}`);
   }
 });
 
-test('subtle stagger allows sentences to resolve almost together without reading delays', () => {
-  const viewport = 1000;
-  // Position line inside entry zone at 84% viewport height
-  const top = viewport * 0.84;
-  const height = 20;
-
-  const w0 = wordProgress(top, height, viewport, 0, 3);
-  const w1 = wordProgress(top, height, viewport, 1, 3);
-  const w2 = wordProgress(top, height, viewport, 2, 3);
-
-  // Subtle stagger: Word 0 resolves slightly ahead of Word 1 and Word 2
-  assert.ok(w0 > w1, `Expected w0 (${w0}) > w1 (${w1})`);
-  assert.ok(w1 > w2, `Expected w1 (${w1}) > w2 (${w2})`);
-
-  // Max difference between first and last word on the line is very subtle (<= 0.15 in progress)
-  assert.ok(w0 - w2 <= 0.15, `Expected subtle stagger between words, got delta ${w0 - w2}`);
-
-  // In the reading zone (e.g. 50%), all words on the line are fully stable and readable
-  const centerTop = viewport * 0.50;
-  assert.equal(wordProgress(centerTop, height, viewport, 0, 3), 1);
-  assert.equal(wordProgress(centerTop, height, viewport, 1, 3), 1);
-  assert.equal(wordProgress(centerTop, height, viewport, 2, 3), 1);
+test('characters decode one by one in a narrow left-to-right wave', () => {
+  const line = 'Xavier Hery builds things';
+  const n = line.length;
+  const at = (lp, entering = true) => decodeChars(line, 0, n, lp, entering, 7);
+  // The full structure is present from the start: same length, spaces kept, ASCII glyphs
+  assert.equal(at(0.01).length, n);
+  assert.equal(at(0.01)[6], ' ');
+  assert.ok([...at(0.01)].every((ch, i) => ch === ' ' || ASCII_GLYPHS.includes(ch)));
+  // Mid-wave: leading letters are real while trailing ones are still glyphs
+  const mid = at(0.5);
+  assert.equal(mid.slice(0, 3), 'Xav');
+  assert.notEqual(mid.slice(-4), 'ings');
+  // Letters lock individually, never a whole word or line at once
+  const locked = (lp) => [...at(lp)].filter((ch, i) => ch === line[i] && ch !== ' ').length;
+  const counts = Array.from({ length: 101 }, (_, i) => locked(i / 100));
+  for (let i = 1; i < counts.length; i++) {
+    assert.ok(counts[i] >= counts[i - 1], 'locking is monotonic while entering');
+    assert.ok(counts[i] - counts[i - 1] <= 3, `at most a few letters lock per 1% (${i})`);
+  }
+  // The wave is narrow: while the first letter is still decoding, the last has not started
+  assert.equal(charProgress(1 / (1 + DECODE_WAVE) / 2, 1, true), 0);
+  // Exactly the original text before the reading zone
+  assert.equal(at(1), line);
+  assert.equal(at(0.92), line);
+  // Punctuation is never replaced
+  assert.equal(decodeChars('B2B,', 0, 4, 0.1, true, 1)[3], ',');
 });
 
-test('letters lock in early: fully resolved by 70% progress, calm 14 scroll bands', () => {
-  const word = 'Business';
-
-  // At progress 0: invisible
-  assert.equal(decodeWord(word, 0, 42).trim(), '');
-
-  // At progress 0.50: majority of letters are already resolved into real letters
-  const mid = decodeWord(word, 0.50, 42);
-  let resolvedCount = 0;
-  for (let i = 0; i < word.length; i++) {
-    if (mid[i] === word[i]) resolvedCount++;
+test('each character steps through several distinct ASCII states before it locks', () => {
+  const seen = [];
+  for (let i = 0; i <= 400; i++) {
+    const state = charState(i / 400);
+    if (seen[seen.length - 1] !== state) seen.push(state);
   }
-  assert.ok(resolvedCount >= Math.floor(word.length * 0.5), `Expected at least half letters resolved at 50%, got ${resolvedCount}/${word.length}`);
-
-  // At progress 0.70 and above: word is 100% fully resolved into normal text!
-  for (let p = 0.70; p <= 1.0; p += 0.05) {
-    assert.equal(decodeWord(word, p, 42), word);
+  assert.deepEqual(seen, [...Array.from({ length: GLYPH_STATES }, (_, i) => i), RESOLVED]);
+  assert.equal(charState(LOCK_AT), RESOLVED);
+  for (let seed = 0; seed < 50; seed++) {
+    const glyphs = Array.from({ length: GLYPH_STATES }, (_, s) => charGlyph(s, seed));
+    glyphs.forEach((g, s) => {
+      assert.ok(ASCII_GLYPHS.includes(g));
+      if (s) assert.notEqual(g, glyphs[s - 1], 'consecutive states differ');
+    });
+    assert.ok(new Set(glyphs).size >= 5);
   }
-
-  // Reverse scrolling produces identical deterministic states
-  const samples = Array.from({ length: 141 }, (_, i) => i / 140);
-  const forward = samples.map(p => decodeWord(word, p, 99));
-  const backward = [...samples].reverse().map(p => decodeWord(word, p, 99)).reverse();
-  assert.deepEqual(forward, backward);
 });
 
-test('restrained opacity: subtle low-contrast entry climbing smoothly to 1.0 by progress 0.70', () => {
-  // Completely off-screen: 0
-  assert.equal(wordOpacity(0), 0);
+test('exit reverses the wave deterministically', () => {
+  const samples = Array.from({ length: 101 }, (_, i) => i / 100);
+  const down = samples.map((p) => decodeChars('Operational', 0, 11, p, false, 9));
+  const up = [...samples].reverse().map((p) => decodeChars('Operational', 0, 11, p, false, 9)).reverse();
+  assert.deepEqual(down, up);
+  assert.equal(charProgress(1, 0.5, false), 1);
+  assert.equal(charProgress(0, 0.5, false), 0);
+  assert.ok(charProgress(0.5, 0, false) < charProgress(0.5, 1, false), 'left edge leaves first');
+});
 
-  // Entry: subtle and restrained (around 0.28 - 0.40)
-  assert.ok(wordOpacity(0.05) >= 0.28 && wordOpacity(0.05) <= 0.40);
+test('opacity: a faint field of glyphs that brightens to full ink as letters lock', () => {
+  assert.equal(charOpacity(0, 0), 0);
+  const faint = charOpacity(0.2, 0);
+  assert.ok(faint > 0.2 && faint < 0.4, `ahead of the wave: ${faint}`);
+  assert.ok(charOpacity(0.2, 0.3) > faint);
+  assert.equal(charOpacity(0.5, LOCK_AT), 1);
+  assert.equal(charOpacity(1, 1), 1);
+});
 
-  // Smooth increase
-  assert.ok(wordOpacity(0.35) > wordOpacity(0.15));
+test('click gate: grouped, rate-limited, silent when still, no backlog', () => {
+  const gate = new ClickGate();
+  // Jitter that flips one or two glyphs never clicks
+  assert.equal(gate.offer(0, 1, 0, false), null);
+  assert.equal(gate.offer(16, 0, 0, false), null);
+  assert.equal(gate.offer(32, MIN_ACTIVITY - 1, 0, false), null);
+  assert.equal(gate.offer(48, 0, 0, false), null);
 
-  // Full opacity reached by 0.70
-  assert.equal(wordOpacity(0.70), 1);
-  assert.equal(wordOpacity(0.85), 1);
-  assert.equal(wordOpacity(1.0), 1);
+  // A fast scroll for two seconds at 60 fps with heavy activity every frame
+  let clicks = 0;
+  for (let t = 1000; t < 3000; t += 1000 / 60) if (gate.offer(t, 120, 10, false)) clicks++;
+  assert.ok(clicks >= 2 * 8 && clicks <= 2 * 15, `~8–15 clicks per second, got ${clicks / 2}`);
+
+  // Stopping clears everything at once: the next frame with no changes is silent, and so is
+  // anything after it until new changes arrive
+  assert.equal(gate.offer(3100, 0, 0, false), null);
+  assert.equal(gate.offer(3200, 0, 0, false), null);
+
+  // Grouping: changes from consecutive frames add up into one click
+  const g2 = new ClickGate();
+  assert.equal(g2.offer(0, 1, 0, false), null);
+  assert.equal(g2.offer(16, 1, 0, false), null);
+  const click = g2.offer(32, 1, 1, true);
+  assert.ok(click && click.lock && click.exiting);
+  assert.ok(click.strength > 0 && click.strength <= 1);
+  // Rate limit: activity right after a click waits for the gap, then needs fresh changes
+  assert.equal(g2.offer(40, 30, 0, false), null);
+  assert.ok(g2.offer(32 + CLICK_GAP_MS * 1.3, 30, 0, false));
+  // Strength is bounded however much changes at once
+  const g3 = new ClickGate();
+  assert.ok(g3.offer(0, 100000, 0, false).strength <= 1);
 });
 
 test('background remains white before the globe and black after its exact end', () => {

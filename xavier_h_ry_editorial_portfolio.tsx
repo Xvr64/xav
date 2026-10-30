@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { Eye, Download, X, Menu, Check, ArrowDown } from 'lucide-react';
 import { loadLandDots, type LandDots } from './glyphcssGlobe';
 import { createAsciiJellyfishField } from './asciiOceanLife';
-import { AsciiText, useEditorialScroll } from './TerminalEditorial';
+import { AsciiText, DecodeSoundToggle, useEditorialScroll } from './TerminalEditorial';
 import { waterShade, orbitStages } from './terminalMotion';
 import { background, fluid, type BackgroundHandle } from 'asciify-engine/kit';
 import { createHeroCurrent, type HeroRect } from './heroCurrent';
@@ -1636,14 +1636,22 @@ function buildAbyssCss(): string {
 // Ink and opacity follow the same `abyss` value as the background — no second timeline.
 const FLUID_INK_SURFACE: AbyssRGB = [47, 72, 88]; // #2F4858 muted ocean blue-grey on white
 const FLUID_INK_ABYSS: AbyssRGB = [232, 238, 242]; // #E8EEF2 soft cool white on black
-const FLUID_OPACITY_SURFACE = 0.3; // the surface is the calmest water: the type leads there
+// The fluid preset draws a flat ink whose density follows the field's tone, and the cursor wake
+// only adds tone. On white that left the wake as faint as the idle folds (ink at one flat low
+// opacity). `shade` dims low-tone glyphs, so on light water a higher canvas opacity plus shade
+// keeps the idle field quiet while wake-lifted glyphs reach full ink. Both fade to the original
+// flat look (shade 0) on dark water, which already reads well.
+const FLUID_OPACITY_SURFACE = 0.58;
 const FLUID_OPACITY_ABYSS = 0.46;
+const FLUID_SHADE_SURFACE = 0.8;
+const FLUID_SHADE_ABYSS = 0;
 const rgbHex = (c: number[]) => `#${c.map((v) => Math.round(v).toString(16).padStart(2, '0')).join('')}`;
 
 const fluidOcean = {
   host: null as HTMLElement | null,
   handle: null as BackgroundHandle | null,
   ink: '',
+  shade: -1,
   opacity: -1
 };
 /** True while the GPU fluid is mounted; otherwise the canvas keeps its own water as a fallback. */
@@ -1664,6 +1672,11 @@ function syncFluidOcean(abyss: number) {
     // Kept on the host too, so any internal refresh of the kit resolves the same ink
     host.style.setProperty('--fluid-ink', ink);
     handle.field?.update({ ink });
+  }
+  const shade = Math.round(lerpN(FLUID_SHADE_SURFACE, FLUID_SHADE_ABYSS, t) * 50) / 50;
+  if (shade !== fluidOcean.shade) {
+    fluidOcean.shade = shade;
+    handle.field?.update({ shade });
   }
   const opacity = Math.round(lerpN(FLUID_OPACITY_SURFACE, FLUID_OPACITY_ABYSS, t) * 200) / 200;
   if (opacity !== fluidOcean.opacity) {
@@ -1810,11 +1823,12 @@ const FluidOceanBackground: React.FC = React.memo(() => {
       clearStrength: 0.85,
       // Full-bleed field behind everything: a lower backing-store ratio than the preset's 1.5
       // keeps its per-frame GPU draw and canvas copy cheap next to the whales and the Globe.
-      look: { maxPixelRatio: 1 }
+      look: { maxPixelRatio: 1, shade: FLUID_SHADE_SURFACE }
     });
     fluidOcean.host = host;
     fluidOcean.handle = handle;
     fluidOcean.ink = '';
+    fluidOcean.shade = -1;
     fluidOcean.opacity = -1;
 
     // The host never takes pointer events (content stays clickable), so real pointer moves are
@@ -5540,10 +5554,10 @@ const ProgressiveOceanEntry: React.FC<ProgressiveOceanEntryProps> = React.memo((
       </div>
     </section>
     {/* Introduction: the name resolved above carries the heading visually; the semantic name stays
-        here. After the cover's movement this spread is the first moment of calm, so its text is
-        kept out of the word-scramble and simply reads. */}
-    <section id="introduction" data-editorial-section data-ascii-preserve className="terminal-overview ed-grid relative">
-      <h2 className="intro-name intro-name--carried">
+        here (visually clipped, so it is excluded from the word system). The rest of the spread
+        uses the shared ASCII word reveal like every other section. */}
+    <section id="introduction" data-editorial-section className="terminal-overview ed-grid relative">
+      <h2 className="intro-name intro-name--carried" data-ascii-preserve>
         <span className="intro-name-first"><AsciiText text="Xavier" /></span>{' '}
         <span className="intro-name-last"><AsciiText text="Hery" /></span>
       </h2>
@@ -5896,6 +5910,7 @@ export default function App() {
       <HeroCurrentLayer />
       <WhaleStretch sectionId="experience" lanes={LANES_EXPERIENCE} narrowLanes={LANES_EXPERIENCE_NARROW} />
       <AsciiWhaleBackground mode="ambient" />
+      <DecodeSoundToggle />
 
       {downloadToast && (
         <div className="fixed top-20 right-6 z-50 bg-[#171717]/90 backdrop-blur-md text-[#F5F3EE] border border-[#B6C5B0] px-4 py-3 shadow-lg flex items-center gap-3 font-mono text-xs">
@@ -5914,9 +5929,8 @@ export default function App() {
         <div className="cv-arch mt-16 sm:mt-24 lg:mt-32 space-y-28 sm:space-y-36">
           {/* SECTION 02: EXPERIENCE (De-boxed, Floating Editorial Timeline) */}
           {/* A sounding log: each internship is a station sitting on its own datum line, like the
-              cover's headline on the horizon, with its record hanging below in the water. The
-              section reads plainly, without the word-scramble. */}
-          <section id="experience" data-editorial-section data-ascii-preserve className="relative">
+              cover's headline on the horizon, with its record hanging below in the water. */}
+          <section id="experience" data-editorial-section className="relative">
             <RevealBlock variant="section">
               <FloatingSectionHeader
                 sectionId="experience"
@@ -5936,7 +5950,7 @@ export default function App() {
                       <BioWords text={toTitleCase(exp.company)} />
                     </h3>
                     <p className="exp-when meta">
-                      <span className="exp-index" aria-hidden="true">stn {exp.index}</span>
+                      <span className="exp-index" aria-hidden="true"><AsciiText text={`stn ${exp.index}`} /></span>
                       <BioWords text={exp.date} />
                     </p>
                     <div className="exp-who">
@@ -6102,7 +6116,7 @@ export default function App() {
                     {lang.levelCode && (
                       <>
                         <BioWords text={lang.levelCode} />
-                        <span aria-hidden="true"> · </span>
+                        <span aria-hidden="true"> <AsciiText text="·" /> </span>
                       </>
                     )}
                     <BioWords text={lang.levelWord} />
@@ -6195,7 +6209,7 @@ export default function App() {
 
             <footer className="terminal-social">
               <a href={CV_DATA.linkedin} target="_blank" rel="noopener noreferrer"><AsciiText text="linkedin" /></a>
-              <span aria-hidden="true">/</span>
+              <span aria-hidden="true"><AsciiText text="/" /></span>
               <a href={CV_DATA.emailHref}><AsciiText text="email" /></a>
             </footer>
           </section>
