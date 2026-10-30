@@ -96,6 +96,12 @@ export const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.m
     const NUM_OCEAN_GLYPHS = OCEAN_GLYPHS.length;
     // Migration scene glyphs, faint to dense: 0 '·' 1 '.' 2 ':' 3 '-' 4 '~' 5 '+' 6 '*'
     const SPHERE_GLYPHS = ['·', '.', ':', '-', '~', '+', '*'];
+    // Engraved contour strokes, indexed by CONTOUR_* below
+    const CONTOUR_GLYPHS = ['-', '|', '/', '\\'];
+    const CONTOUR_FLAT = 0;
+    const CONTOUR_END = 1;
+    const CONTOUR_RISE = 2;
+    const CONTOUR_FALL = 3;
 
     // ------------------------------------------------------------------------
     // 1. PRE-BAKED SPRITE ATLAS FOR WHALE MOSAIC TILES, HALO & OCEAN SHADER GLYPHS
@@ -111,7 +117,8 @@ export const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.m
     // Rows 15..17: fish school ink (glyph only). Row 18: open-mouth interior (baleen).
     // Rows 19..21: abyss ocean tiers — pale teal / blue-grey / forest-green glyphs for dark water.
     // Rows 22..23: migration scene — the globe's graticule navy (water, trails, lattice) and land ink.
-    atlasCanvas.height = 24 * tilePx;
+    // Row 24: the whales' engraved contour — edge strokes in the dorsal navy.
+    atlasCanvas.height = 25 * tilePx;
     const aCtx = atlasCanvas.getContext('2d');
 
     if (aCtx) {
@@ -282,6 +289,18 @@ export const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.m
         for (let gIdx = 0; gIdx < SPHERE_GLYPHS.length; gIdx++) {
           aCtx.fillText(SPHERE_GLYPHS[gIdx], gIdx * cellSize + cellSize * 0.5, ink.row * cellSize + cellSize * 0.5 + 0.5);
         }
+      }
+
+      // Row 24: ENGRAVED CONTOUR — the strokes that outline a swimming whale ('-' top and bottom
+      // edges, '|' ends, '/' and '' slopes), on the flank's faint wash so the body stays whole
+      aCtx.font = 'bold 9.5px "JetBrains Mono", monospace';
+      for (let gIdx = 0; gIdx < CONTOUR_GLYPHS.length; gIdx++) {
+        const px = gIdx * cellSize;
+        const py = 24 * cellSize;
+        aCtx.fillStyle = 'rgba(138, 160, 178, 0.16)';
+        aCtx.fillRect(px + tilePad * 0.5, py + tilePad * 0.5, tileSize, tileSize);
+        aCtx.fillStyle = 'rgba(10, 26, 46, 0.95)';
+        aCtx.fillText(CONTOUR_GLYPHS[gIdx], px + cellSize * 0.5, py + cellSize * 0.5 + 0.5);
       }
     }
 
@@ -3022,10 +3041,26 @@ export const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.m
               styleRow = 0;
             }
 
+            // Engraved contour: a swimming whale's edge cells take the stroke of the edge they sit
+            // on, read from which neighbours are open water
+            let contour = -1;
+            if (!migActive && !isFocus && tone <= 1.5) {
+              const up = occBuf[idx - cols] === 0;
+              const down = occBuf[idx + cols] === 0;
+              const left = occBuf[idx - 1] === 0;
+              const right = occBuf[idx + 1] === 0;
+              if (up || down || left || right) {
+                if ((up && right) || (down && left)) contour = up && down ? CONTOUR_FLAT : CONTOUR_FALL;
+                else if ((up && left) || (down && right)) contour = up && down ? CONTOUR_FLAT : CONTOUR_RISE;
+                else if (up || down) contour = CONTOUR_FLAT;
+                else contour = CONTOUR_END;
+              }
+            }
+
             ctx.drawImage(
               atlasCanvas,
-              (tone > 1.5 ? (c * 7 + r * 13 + shimmerTick) & 3 : glyphIdx) * tilePx,
-              (tone > 1.5 ? 18 : !isFocus ? styleRow + 10 : styleRow) * tilePx,
+              (contour >= 0 ? contour : tone > 1.5 ? (c * 7 + r * 13 + shimmerTick) & 3 : glyphIdx) * tilePx,
+              (contour >= 0 ? 24 : tone > 1.5 ? 18 : !isFocus ? styleRow + 10 : styleRow) * tilePx,
               tilePx,
               tilePx,
               px,
