@@ -166,6 +166,36 @@ export function noteDecodeActivity(changes: number, locks: number, exiting: bool
 
 export const decodeSoundEnabled = () => enabled;
 
+/**
+ * A sonar ping for a click in open water: a soft sine with a slight downward glide, then one
+ * quieter, lower return. Only ever heard while the visitor has turned sound on; it goes through
+ * the same master gain as the keyboard ticks, so muting silences it at once.
+ */
+export function playSonarPing() {
+  const e = engine;
+  if (!enabled || !e || e.ctx.state !== 'running') return;
+  const now = e.ctx.currentTime;
+  const tone = (at: number, freq: number, peak: number, length: number) => {
+    const osc = e.ctx.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(freq, now + at);
+    osc.frequency.exponentialRampToValueAtTime(freq * 0.93, now + at + length);
+    const gain = e.ctx.createGain();
+    gain.gain.setValueAtTime(0.0001, now + at);
+    gain.gain.exponentialRampToValueAtTime(peak, now + at + 0.008);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + at + length);
+    osc.connect(gain).connect(e.master);
+    osc.start(now + at);
+    osc.stop(now + at + length + 0.02);
+    osc.onended = () => {
+      osc.disconnect();
+      gain.disconnect();
+    };
+  };
+  tone(0, 1180, 0.32, 1.4);
+  tone(0.42, 1040, 0.1, 1.1);
+}
+
 export function onDecodeSoundChange(listener: (on: boolean) => void) {
   listeners.add(listener);
   return () => {

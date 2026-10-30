@@ -1,5 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { createAsciiJellyfishField } from './asciiOceanLife';
+import { playSonarPing } from './decodeAudio';
+import { MAX_PINGS, arrivalTime, echoStrength, isOpenWaterClick, pingRadius, pingStrength } from './sonarPing';
 import { waterShade } from './terminalMotion';
 import {
   applyAbyssPalette,
@@ -521,6 +523,8 @@ export const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.m
       glyphIdx: idx % 3 // 0: '.', 1: ':', 2: '+'
     }));
     let ambientOffsetY = 0;
+    /** The sonar's ink this frame (set when a ping is drawn, reused by its echoes). */
+    let sonarInk = 'rgb(47, 72, 88)';
 
     // Marine snow (deterministic): position, parallax against the page (> 1: it passes faster
     // than the copy), slow sink (px/s), sideways sway, glyph and strength
@@ -674,6 +678,17 @@ export const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.m
 
     window.addEventListener('scroll', handleScrollChange, { passive: true });
     window.addEventListener('wheel', handleWheelDir, { passive: true });
+
+    // SONAR — a click in open water sends a ring outward from where it landed (see sonarPing.ts)
+    const pings: { x: number; y: number; at: number }[] = [];
+    const handleSonarClick = (e: MouseEvent) => {
+      if (prefersReducedMotion || isFocus || e.button !== 0) return;
+      if (!isOpenWaterClick(e.target, window.getSelection()?.toString() ?? '')) return;
+      pings.push({ x: e.clientX, y: e.clientY, at: performance.now() / 1000 });
+      if (pings.length > MAX_PINGS) pings.shift();
+      playSonarPing();
+    };
+    window.addEventListener('click', handleSonarClick);
 
     // ------------------------------------------------------------------------
     // AUTONOMOUS SWIMMING (main whale only)
@@ -2584,6 +2599,47 @@ export const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.m
         ctx.globalAlpha = 1;
       }
 
+      // 2B''. SONAR RING — glyphs along a spreading circle, in the water's ink (slate on light
+      // water, seafoam in the deep), passing beneath the whales and never over a line of text
+      const nowS = performance.now() / 1000;
+      while (pings.length && nowS - pings[0].at > 3) pings.shift();
+      if (pings.length) {
+        const deep = Math.max(0, Math.min(1, (abyss - 0.4) / 0.25));
+        sonarInk = `rgb(${Math.round(47 + 123 * deep)}, ${Math.round(72 + 152 * deep)}, ${Math.round(88 + 126 * deep)})`;
+        const lines = readingZones.read();
+        ctx.font = '500 12px "JetBrains Mono", monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = sonarInk;
+        for (const ping of pings) {
+          const age = nowS - ping.at;
+          const strength = pingStrength(age);
+          if (strength <= 0.01) continue;
+          for (const [offset, share, glyph] of [[0, 1, ':'], [-16, 0.45, '·']] as const) {
+            const radius = pingRadius(age) + offset;
+            if (radius < 4) continue;
+            const count = Math.max(8, Math.round((Math.PI * 2 * radius) / 13));
+            ctx.globalAlpha = Math.min(1, strength * share * 0.95);
+            for (let k = 0; k < count; k++) {
+              const a = (k / count) * Math.PI * 2;
+              const x = ping.x + Math.cos(a) * radius;
+              const y = ping.y + Math.sin(a) * radius;
+              if (x < -8 || x > w + 8 || y < -8 || y > h + 8) continue;
+              let behindText = false;
+              for (let li = 0; li < lines.length; li++) {
+                const r = lines[li];
+                if (x > r.left - 4 && x < r.left + r.width + 4 && y > r.top - 4 && y < r.top + r.height + 4) {
+                  behindText = true;
+                  break;
+                }
+              }
+              if (!behindText) ctx.fillText(glyph, x, y);
+            }
+          }
+        }
+        ctx.globalAlpha = 1;
+      }
+
       // 2C. DEEP-WATER SILHOUETTE (Stage 5): a distant manta ray glides past now and then,
       // only once the visitor has descended, drawn in the faintest halo glyphs ('.' ':')
       const rayVis = isFocus || prefersReducedMotion || migActive ? 0 : Math.max(0, Math.min(1, (depth - 0.35) / 0.25));
@@ -3105,6 +3161,44 @@ export const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.m
         ctx.globalAlpha = 1.0;
       }
 
+      // 6B. SONAR ECHOES — each whale and visible jellyfish the ring reaches answers with a brief
+      // bracket of glyphs around it, the moment the ring arrives
+      if (pings.length) {
+        const echoTargets: number[] = [];
+        for (const wh of whales) {
+          const mid = SPINE_NODES >> 1;
+          echoTargets.push(wh.spineX[mid], wh.spineY[mid], mainBodyLen * wh.scale * 0.42);
+        }
+        const jp = jellyfishField.stats.pos;
+        for (let j = 0; j < jp.length; j += 4) {
+          if (jp[j + 3] > 0.08) echoTargets.push(jp[j], jp[j + 1], jp[j + 2] * 1.5);
+        }
+        ctx.font = '500 12px "JetBrains Mono", monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = sonarInk;
+        for (const ping of pings) {
+          const age = nowS - ping.at;
+          for (let ti = 0; ti < echoTargets.length; ti += 3) {
+            const tx = echoTargets[ti];
+            const ty = echoTargets[ti + 1];
+            const tr = echoTargets[ti + 2];
+            const since = age - arrivalTime(Math.hypot(tx - ping.x, ty - ping.y));
+            const strength = echoStrength(since);
+            if (strength <= 0.01) continue;
+            // An open bracket facing back toward the click, widening a little as it fades
+            const facing = Math.atan2(ping.y - ty, ping.x - tx);
+            const rr = tr * (1 + since * 0.35);
+            ctx.globalAlpha = strength * 0.85;
+            for (let k = -4; k <= 4; k++) {
+              const a = facing + k * 0.17;
+              ctx.fillText(Math.abs(k) === 4 ? '.' : ':', tx + Math.cos(a) * rr, ty + Math.sin(a) * rr);
+            }
+          }
+        }
+        ctx.globalAlpha = 1;
+      }
+
       // 7. DEEP-OCEAN BIOLUMINESCENT JELLYFISH — Foreground-margin plane
       if (!migActive) renderJellyfishPlanes(w, h, rawDepth, abyss, surfaceBaseY, 2, 2);
 
@@ -3120,6 +3214,7 @@ export const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.m
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('scroll', handleScrollChange);
       window.removeEventListener('wheel', handleWheelDir);
+      window.removeEventListener('click', handleSonarClick);
       oceanLifeDisposed = true;
       cancelAnimationFrame(animId);
       directWhales('migration', 0, migLanes);
