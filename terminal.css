@@ -1,14 +1,15 @@
 /* ============================================================================
-   OCEANIC EDITORIAL SYSTEM
-   Newsreader (display, opsz 72) · Plus Jakarta Sans (text) · JetBrains Mono (metadata)
+   OCEANOGRAPHIC MODERNISM
+   Newsreader (the human voice: display, statements) · Instrument Sans (reading text)
+   · IBM Plex Mono (the instrument: depths, dates, coordinates).
    The ASCII canvases keep their own JetBrains Mono rendering; nothing here touches them.
    ============================================================================ */
 
 :root {
   /* Families */
   --font-display: 'Newsreader', 'Iowan Old Style', Georgia, serif;
-  --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --font-sans: 'Instrument Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   /* Legacy aliases still referenced by components */
   --font-serif: var(--font-display);
   --font-hero: var(--font-display);
@@ -20,14 +21,15 @@
 
   /* Type scale — display sizes are set at opsz 72 */
   --text-cover: clamp(54px, 9.4vw, 160px);
-  --text-name: clamp(58px, 10.8vw, 178px);
+  --text-name: clamp(84px, 16.4vw, 272px);
+  --text-statement: clamp(26px, 2.75vw, 44px);
   --text-display: clamp(40px, 5.6vw, 92px);
   --text-h2: clamp(31px, 3.9vw, 58px);
   --text-lead: clamp(21px, 1.95vw, 29px);
   --text-h3: clamp(20px, 1.65vw, 25px);
-  --text-body: clamp(15.5px, 1vw, 16.5px);
+  --text-body: clamp(16px, 1.05vw, 17px);
   --text-small: 14px;
-  --text-meta: 11.5px;
+  --text-meta: 12px;
   /* kept for components that still read them */
   --text-hero: var(--text-cover);
   --text-body-sm: var(--text-small);
@@ -37,7 +39,7 @@
   --leading-h2: 1.08;
   --leading-lead: 1.32;
   --leading-h3: 1.25;
-  --leading-body: 1.6;
+  --leading-body: 1.58;
   --leading-meta: 1.5;
 
   --tracking-display: -0.03em;
@@ -45,7 +47,7 @@
   --tracking-h2: -0.025em;
   --tracking-h3: -0.012em;
   --tracking-body: -0.004em;
-  --tracking-mono: 0.01em;
+  --tracking-mono: 0.02em;
   --tracking-mono-wide: 0.04em;
 
   /* Spacing scale (8-based, stretched toward the deep end) */
@@ -232,13 +234,15 @@ body {
 
 /* ---------------------------------------------------------------------------
    01 · Cover — "A journey without horizons"
+   One scroll value (heroCurrent.ts) conducts the whole cover: the horizon rises out of
+   view, each letter breaks into the current as the water reaches it, the fragments
+   gather into the name, and the ASCII name resolves into type.
    --------------------------------------------------------------------------- */
-/* A scroll runway with a pinned stage: ~190svh of scroll drives headline → current → name */
 .hero-runway { position: relative; }
 .hero-stage { position: sticky; top: 0; height: 100svh; }
 @media (prefers-reduced-motion: no-preference) {
-  .hero-runway { height: 290svh; }
-  /* The ASCII name formed above carries the introduction's heading visually */
+  .hero-runway { height: 300svh; }
+  /* The name resolved on the cover carries the introduction's heading visually */
   .terminal-overview .intro-name--carried {
     position: absolute;
     width: 1px;
@@ -247,12 +251,28 @@ body {
     clip-path: inset(50%);
     white-space: nowrap;
   }
-  .terminal-overview:has(.intro-name--carried) { padding-top: 4vh; }
 }
+
+/* Colophon: who and where, set as quietly as a chart's title block */
+.hero-colophon {
+  position: absolute;
+  inset: 0 0 auto 0;
+  padding-top: clamp(22px, 3.6vh, 40px);
+  align-items: baseline;
+  pointer-events: none;
+}
+.hero-colophon p { margin: 0; }
+.hero-colophon .colophon-name { grid-column: 1 / span 3; color: var(--ink-171717, #171717); }
+.hero-colophon .colophon-role { grid-column: 5 / span 5; }
+.hero-colophon .colophon-depth { grid-column: 10 / span 3; text-align: right; }
+.hero-colophon .colophon-depth b { font-weight: 500; color: var(--ink-171717, #171717); }
+
 .minimal-hero {
-  height: 100%;
-  align-content: end;
-  padding-block: 22vh 17vh;
+  position: absolute;
+  inset: 0;
+  align-content: start;
+  /* Puts the first line's baseline a little above the middle: the surface sits at ~55% */
+  padding-top: calc(55svh - 0.86 * var(--text-cover));
 }
 .hero-letter { display: inline; }
 .minimal-hero h1 {
@@ -264,56 +284,138 @@ body {
   grid-template-columns: repeat(12, minmax(0, 1fr));
   column-gap: var(--gutter);
 }
-.minimal-hero .cover-line { grid-column: 1 / span 12; display: block; }
+.minimal-hero .cover-line { grid-column: 1 / span 12; display: block; position: relative; }
+/* Optical margin: the A's apex hangs on the column edge like the colophon's first letter */
+.minimal-hero .cover-line:first-child { margin-left: -0.045em; }
+/* "horizons" starts below the surface: italic, in the water's own ink, on the drift column */
 .minimal-hero .cover-line--drift {
   grid-column: 5 / span 8;
   font-style: italic;
   font-weight: 300;
-  margin-top: -0.04em;
+  margin-top: 0.1em;
+  color: #2F4858;
+}
+
+/* The horizon: one hairline, full bleed, just under the first line's baseline so the
+   descenders of "journey" hang into the water. JS translates it upward as you descend. */
+.hero-horizon {
+  position: absolute;
+  top: calc(100% - 0.19em);
+  left: 50%;
+  width: 100vw;
+  margin-left: -50vw;
+  height: 0;
+  pointer-events: none;
+  user-select: none;
+  will-change: transform;
+}
+.hero-horizon::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 1px;
+  background: rgba(23, 23, 23, 0.46);
+}
+.hero-horizon-label {
+  position: absolute;
+  top: 12px;
+  right: var(--page-margin);
+  font-family: var(--font-mono);
+  font-style: normal;
+  font-weight: 400;
+  font-size: var(--text-meta);
+  line-height: var(--leading-meta);
+  letter-spacing: var(--tracking-mono);
+  font-variation-settings: normal;
+  color: #2F4858;
+  white-space: nowrap;
+}
+
+/* The name the current resolves into: a lock-up that rhymes with the cover — first line
+   flush on the margin, the italic second line stepping in to column 5. */
+.hero-name {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  align-content: start;
+  padding-top: 12svh;
+  font-family: var(--font-display);
+  font-variation-settings: 'opsz' 72;
+  font-weight: 300;
+  font-size: var(--text-name);
+  line-height: 0.84;
+  letter-spacing: -0.034em;
+  color: var(--ink-171717, #171717);
+  opacity: 0;
+  pointer-events: none;
+  user-select: none;
+}
+.hero-name > span { display: block; }
+.hero-name-first { grid-column: 1 / span 12; margin-left: -0.05em; }
+.hero-name-last { grid-column: 5 / span 8; font-style: italic; margin-top: 0.02em; }
+@media (prefers-reduced-motion: reduce) {
+  .hero-name, .hero-horizon { display: none; }
 }
 
 /* ---------------------------------------------------------------------------
-   02 · Introduction — name, statement, supporting biography
+   02 · Introduction — a statement spread under the name
    --------------------------------------------------------------------------- */
 .terminal-overview {
-  padding-block: 18vh 0;
+  padding-block: 9vh 0;
   row-gap: 0;
 }
+/* Shown as type only without motion; with motion the cover's lock-up carries it */
 .terminal-overview .intro-name {
   grid-column: 1 / span 12;
   display: grid;
   grid-template-columns: repeat(12, minmax(0, 1fr));
   column-gap: var(--gutter);
-  margin: 0;
-  font-family: var(--font-sans);
+  margin: 0 0 var(--space-2xl);
+  font-family: var(--font-display);
+  font-variation-settings: 'opsz' 72;
   font-size: var(--text-name);
-  font-weight: 400;
-  line-height: 0.94;
-  letter-spacing: var(--tracking-name);
+  font-weight: 300;
+  line-height: 0.84;
+  letter-spacing: -0.034em;
   color: var(--ink-171717, #171717);
 }
 .terminal-overview .intro-name-first { grid-column: 1 / span 12; }
-/* "Hery" steps in to column 5, the same edge the statement below starts on */
-.terminal-overview .intro-name-last { grid-column: 5 / span 8; }
+.terminal-overview .intro-name-last { grid-column: 5 / span 8; font-style: italic; }
+/* The depth reading is an annotation on the chart: a leader line runs from it to the statement */
 .terminal-overview .depth-mark {
-  grid-column: 1 / span 3;
+  grid-column: 1 / span 4;
   grid-row: 2;
   align-self: start;
-  margin-top: calc(var(--space-2xl) + 0.55em);
+  display: flex;
+  align-items: center;
+  gap: var(--space-s);
+  margin: calc(0.5 * var(--text-statement)) 0 0;
+  opacity: 1;
+}
+.terminal-overview .depth-mark::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--rule-20, rgba(23, 23, 23, 0.2));
 }
 .terminal-overview .lead {
-  grid-column: 5 / span 7;
+  grid-column: 5 / span 8;
   grid-row: 2;
-  margin: var(--space-2xl) 0 0;
+  margin: 0;
+  max-width: 21.5em;
+  font-size: var(--text-statement);
+  font-variation-settings: 'opsz' 48;
+  line-height: 1.17;
+  letter-spacing: -0.016em;
 }
 .terminal-overview .intro-support {
-  grid-column: 8 / span 4;
+  grid-column: 9 / span 4;
   grid-row: 3;
   margin: var(--space-xl) 0 0;
-  max-width: 44ch;
+  max-width: 40ch;
   font-size: var(--text-body);
   line-height: var(--leading-body);
-  color: var(--ink-3E4C52, #3E4C52);
+  color: var(--ink-2B353B, #2B353B);
 }
 
 /* Entries are wrapped by reveal blocks, so rhythm is set on the list, not on siblings */
@@ -321,16 +423,148 @@ body {
 .entry-list--wide > * + * { margin-top: var(--space-2xl); }
 
 /* ---------------------------------------------------------------------------
-   03 · Experience — index on the left, narrative on a reading column
+   The Sounding's section header: the introduction's annotation grammar. The depth reading
+   sits in the margin columns and a leader line runs from it to a Newsreader title; the dek
+   reads beneath the title, the aside answers it in italic on the right.
    --------------------------------------------------------------------------- */
-.exp-entry { row-gap: var(--space-m); align-items: start; }
-.exp-entry .exp-when { grid-column: 1 / span 2; padding-top: 0.55em; }
-.exp-entry .exp-who { grid-column: 3 / span 4; }
-.exp-entry .exp-what { grid-column: 8 / span 5; }
-.exp-entry .exp-role { margin-top: var(--space-xs); color: var(--ink-3E4C52, #3E4C52); }
+.section-head--sounding {
+  --text-sounding: clamp(38px, 4.5vw, 74px);
+  row-gap: var(--space-l);
+  align-items: start;
+}
+.section-head--sounding > .depth-mark {
+  grid-column: 1 / span 2;
+  grid-row: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--space-s);
+  /* centred on the title's first line */
+  margin-top: calc(0.56 * var(--text-sounding) - 0.75em);
+  margin-right: calc(-1 * var(--gutter));
+  opacity: 1;
+}
+.section-head--sounding > .depth-mark::after {
+  content: '';
+  flex: 1;
+  min-width: var(--space-m);
+  height: 1px;
+  background: var(--rule-20, rgba(23, 23, 23, 0.2));
+}
+.terminal-portfolio .section-head--sounding > .ocean-h2 {
+  grid-column: 3 / span 8;
+  grid-row: 1;
+  max-width: 14em;
+  font-family: var(--font-display);
+  font-variation-settings: 'opsz' 72;
+  font-size: var(--text-sounding);
+  font-weight: 300;
+  line-height: 1.02;
+  letter-spacing: -0.028em;
+}
+.section-head--sounding > .section-dek { grid-column: 3 / span 4; grid-row: 2; }
+.section-head--sounding > .section-aside {
+  grid-column: 8 / span 4;
+  grid-row: 2;
+  margin: 0;
+  color: var(--ink-2F4858, #2F4858);
+}
+
+/* ---------------------------------------------------------------------------
+   03 · Experience — a sounding log. Each station's name sits on a datum line that runs the
+   full measure, the way the cover's headline sits on the horizon, and its date reads at the
+   far end of the line. The record hangs below it, leaving the margin columns open water.
+   --------------------------------------------------------------------------- */
+.station-list { padding-top: var(--space-l); }
+.exp-entry {
+  --text-station: clamp(34px, 3.9vw, 62px);
+  row-gap: var(--space-m);
+  align-items: start;
+}
+.terminal-portfolio .exp-entry .exp-company {
+  grid-column: 1 / -1;
+  grid-row: 1;
+  position: relative;
+  /* the name starts on column 3; the datum under it spans all twelve */
+  padding-left: calc(2 * (100% + var(--gutter)) / 12);
+  margin: 0;
+  font-family: var(--font-display);
+  font-variation-settings: 'opsz' 72;
+  font-size: var(--text-station);
+  font-weight: 300;
+  line-height: 1;
+  letter-spacing: -0.026em;
+  color: var(--ink-171717, #171717);
+}
+.exp-entry .exp-company::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% - 0.17em);
+  height: 1px;
+  background: var(--rule-46, rgba(23, 23, 23, 0.32));
+}
+.exp-entry .exp-when {
+  grid-column: 8 / span 5;
+  grid-row: 1;
+  align-self: end;
+  justify-self: end;
+  display: flex;
+  gap: var(--space-s);
+  /* rests on the datum line */
+  margin-bottom: calc(0.17 * var(--text-station) + 8px);
+}
+.exp-entry .exp-index { color: var(--ink-2F4858, #2F4858); }
+.exp-entry .exp-who { grid-column: 3 / span 4; grid-row: 2; }
+#experience .exp-entry .exp-role {
+  margin: 0;
+  font-family: var(--font-display);
+  font-variation-settings: 'opsz' 36;
+  font-style: italic;
+  font-weight: 300;
+  font-size: var(--text-lead);
+  line-height: 1.22;
+  letter-spacing: -0.01em;
+  color: var(--ink-2F4858, #2F4858);
+  max-width: 18em;
+  text-wrap: balance;
+}
 .exp-entry .exp-tags { margin-top: var(--space-m); }
+#experience .exp-entry .exp-tags li { font: inherit; letter-spacing: inherit; }
+.exp-entry .exp-what {
+  grid-column: 8 / span 5;
+  grid-row: 2;
+  counter-reset: reading;
+  padding-top: 0.3em;
+}
+.exp-entry .exp-what li {
+  position: relative;
+  padding-left: 3.2em;
+  max-width: var(--measure-narrow);
+  color: var(--ink-1F2428, #1F2428);
+  counter-increment: reading;
+}
+/* Each line of the record is a numbered reading */
+.exp-entry .exp-what li::before {
+  content: counter(reading, decimal-leading-zero);
+  position: absolute;
+  left: 0;
+  top: 0.32em;
+  font-family: var(--font-mono);
+  font-size: var(--text-meta);
+  line-height: var(--leading-meta);
+  letter-spacing: var(--tracking-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-52595E, #52595E);
+}
 .exp-entry .exp-what li + li { margin-top: var(--space-s); }
-.exp-entry .exp-what li { max-width: var(--measure-narrow); color: var(--ink-1F2428, #1F2428); }
+/* Article text defaults to the reading face through an ID-weighted :is(); the instrument
+   lines and the role take it back */
+#experience .exp-entry .meta {
+  font-family: var(--font-mono);
+  line-height: var(--leading-meta);
+  letter-spacing: var(--tracking-mono);
+}
 
 /* ---------------------------------------------------------------------------
    05 · Skills — a typographic index: category, then its tools
@@ -459,11 +693,18 @@ body {
    --------------------------------------------------------------------------- */
 @media (max-width: 1100px) {
   .minimal-hero .cover-line--drift { grid-column: 3 / span 10; }
+  .hero-colophon .colophon-role { grid-column: 4 / span 6; }
+  .hero-name-last, .terminal-overview .intro-name-last { grid-column: 3 / span 10; }
+  .terminal-overview .depth-mark { grid-column: 1 / span 3; }
   .terminal-overview .lead { grid-column: 4 / span 9; }
-  .terminal-overview .intro-support { grid-column: 6 / span 7; }
-  .exp-entry .exp-who { grid-column: 1 / span 6; grid-row: 2; }
-  .exp-entry .exp-when { grid-column: 1 / span 6; grid-row: 1; padding-top: 0; }
-  .exp-entry .exp-what { grid-column: 7 / span 6; grid-row: 1 / span 2; }
+  .terminal-overview .intro-support { grid-column: 7 / span 6; }
+  .section-head--sounding > .depth-mark { grid-column: 1 / span 3; }
+  .terminal-portfolio .section-head--sounding > .ocean-h2 { grid-column: 4 / span 9; }
+  .section-head--sounding > .section-dek { grid-column: 4 / span 5; }
+  .section-head--sounding > .section-aside { grid-column: 4 / span 7; grid-row: 3; }
+  .terminal-portfolio .exp-entry .exp-company { padding-left: 0; }
+  .exp-entry .exp-who { grid-column: 1 / span 4; }
+  .exp-entry .exp-what { grid-column: 6 / span 7; }
   .skill-band .skill-head { grid-column: 3 / span 4; }
   .skill-band .skill-list { grid-column: 7 / span 6; }
   .section-head--counter > :is(.depth-mark, .ocean-h2, .section-dek) { grid-column-start: 4; grid-column-end: span 9; }
@@ -485,21 +726,31 @@ body {
   .ed-grid > *,
   .minimal-hero h1 > * { grid-column: 1 / -1 !important; grid-row: auto !important; }
   .minimal-hero h1 { grid-template-columns: minmax(0, 1fr); }
-  .minimal-hero { padding-block: 24vh 16vh; }
+  :root { --text-name: 27vw; --text-statement: 25px; }
+  .hero-colophon { grid-template-columns: 1fr auto; }
+  .hero-colophon .colophon-name { grid-column: 1 !important; }
+  .hero-colophon .colophon-role { grid-column: 1 !important; grid-row: 2 !important; }
+  .hero-colophon .colophon-depth { grid-column: 2 !important; grid-row: 1 !important; }
+  .minimal-hero { padding-top: calc(50svh - 1.88 * var(--text-cover)); }
   .minimal-hero .cover-line--drift { padding-left: 1.1em; }
-  .terminal-overview { padding-top: 14vh; }
-  .terminal-overview .intro-name { grid-template-columns: minmax(0, 1fr); }
-  .terminal-overview .intro-name > * { grid-column: 1 / -1 !important; }
-  .terminal-overview .intro-name-last { padding-left: 1.2em; }
-  .terminal-overview .depth-mark { margin-top: var(--space-xl); }
-  .terminal-overview .lead { margin-top: var(--space-s); }
-  .terminal-overview .intro-support { margin-top: var(--space-l); padding-left: var(--space-l); }
+  /* "horizons" fills the line below the surface, so the datum is read above it */
+  .hero-horizon-label { top: auto; bottom: 8px; }
+  .hero-name { padding-top: 17svh; }
+  .hero-name, .terminal-overview .intro-name { grid-template-columns: minmax(0, 1fr); }
+  .hero-name > *, .terminal-overview .intro-name > * { grid-column: 1 / -1 !important; }
+  .hero-name-last, .terminal-overview .intro-name-last { padding-left: 1.05em; }
+  .terminal-overview { padding-top: 6vh; }
+  .terminal-overview .depth-mark { margin: 0 0 var(--space-m); }
+  .terminal-overview .intro-support { margin-top: var(--space-l); padding-left: var(--space-xl); }
   .section-head { row-gap: var(--space-s); padding-bottom: var(--space-l); }
   .section-head .section-dek { padding-left: 0; }
   .section-head .section-aside { margin-top: var(--space-s) !important; }
   .entry-list--wide > * + * { margin-top: var(--space-xl); }
+  .section-head--sounding > .depth-mark { margin-top: 0; margin-right: 0; }
   .exp-entry { row-gap: var(--space-s); }
-  .exp-entry .exp-what { margin-top: var(--space-xs); }
+  .exp-entry .exp-when { justify-self: start; margin: 0; padding-top: var(--space-2xs); }
+  .exp-entry .exp-what { margin-top: var(--space-s); }
+  .exp-entry .exp-what li { padding-left: 2.6em; }
   .skill-band { row-gap: var(--space-m); }
   .skill-band .skill-list { padding-left: var(--space-l); }
   .edu-entry .edu-where { text-align: left; padding-top: var(--space-xs); }

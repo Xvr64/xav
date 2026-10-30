@@ -1,19 +1,24 @@
 // ============================================================================
-// HERO CURRENT — "A journey without horizons" → "XAVIER HERY"
+// HERO CURRENT — "A journey without horizons" → "Xavier Hery"
 // ============================================================================
 // The cover headline breaks into ASCII fragments that an ocean current carries across the
-// stage and gathers into the full name, built as a dot-matrix of monospaced glyphs.
+// stage and gathers into the name, built as a dot-matrix of monospaced glyphs that finally
+// resolves into the real type of the name lock-up.
 //
 // Every particle's position, glyph, ink and opacity is a pure function of the hero's scroll
 // progress t ∈ [0, 1]: scrolling back reverses the sequence exactly, and a still page never
 // changes. Nothing animates on its own — the canvas is redrawn only when scroll or layout
 // changes, so this adds no loop of its own next to the whales and the fluid.
 //
+// The same progress also conducts the horizon: the waterline under the first line rises out
+// of view as the visitor descends, and each letter breaks up the moment the water reaches it.
+//
 // Choreography (refined in the browser):
-//   0.00–0.24  headline fully readable (real HTML letters)
-//   0.24–0.47  letters break apart left → right, a wave running through the lines
-//   0.47–0.86  the current carries the fragments and gathers XAVIER, then HERY
-//   0.86–1.00  the name holds, complete and still
+//   0.00–0.05  the surface: headline on the horizon, "horizons" already below it
+//   0.05–0.42  the horizon rises out of view; letters break up as the water passes them
+//   0.42–0.78  the current carries the fragments and gathers Xavier, then Hery
+//   0.76–0.88  the ASCII name resolves into the type of the lock-up
+//   0.88–1.00  the name holds, complete and still
 
 export interface HeroRect {
   left: number;
@@ -30,10 +35,28 @@ export interface HeroCurrentOptions {
   stage: HTMLElement;
   /** One span per headline letter (spaces excluded), in reading order. */
   letters: HTMLElement[];
-  /** The name built at the end, e.g. "XAVIER HERY". */
-  name: string;
+  /** The name lock-up the current resolves into (kept transparent until it does). */
+  nameEl: HTMLElement;
+  /** Its lines, each set in its own face and position by CSS. */
+  nameLines: HTMLElement[];
+  /** The hairline horizon under the first line, translated as the visitor descends. */
+  horizon?: HTMLElement | null;
+  /** Readout of the visitor's depth on the cover. */
+  depthEl?: HTMLElement | null;
   /** Viewport rects of the typography currently on stage, for the calm zones around it. */
   onZones?: (rects: HeroRect[]) => void;
+  /** Called on every drawn scroll position with the cover's state (viewport px). */
+  onFrame?: (state: HeroFrame) => void;
+}
+
+export interface HeroFrame {
+  /** Progress through the runway, 0–1. */
+  t: number;
+  /** Viewport y of the horizon (negative once it has left the top). */
+  horizonY: number;
+  /** Viewport y of the stage: 0 while pinned, negative once the runway has passed. */
+  stageTop: number;
+  stageHeight: number;
 }
 
 export interface HeroCurrentHandle {
@@ -50,16 +73,21 @@ const CHARS = Array.from(new Set(Array.from(FLIGHT + DENSE + MID + EDGE)));
 const CHAR_INDEX = new Map(CHARS.map((c, i) => [c, i]));
 // Fresh fragment · fragment in the current · formed name
 const INKS = ['#2F4858', '#647887', '#171717'];
-// The mask alone is cut at 600 so strokes stay several glyphs thick; the HTML name keeps 400/500
-const NAME_WEIGHT = 600;
-
-const RELEASE_START = 0.24;
-const ARRIVE_START = 0.47;
-const ARRIVE_SPREAD = 0.22; // last arrival ends ≤ 0.855, so 0.86–1 is a true hold
-const ARRIVE_DURATION = 0.15;
-const STRAY_FADE: [number, number] = [0.56, 0.74];
-/** From here every fragment has arrived: the image is final and is never redrawn. */
-const HOLD = 0.86;
+// The horizon rises from under the first line to just above the top of the stage
+const RISE: [number, number] = [0.05, 0.42];
+/** "horizons" starts below the surface, so it is the first word to go. */
+const SUBMERGED_RELEASE = 0.075;
+const ARRIVE_START = 0.42;
+const ARRIVE_SPREAD = 0.22; // last arrival ends ≤ 0.78
+const ARRIVE_DURATION = 0.14;
+const STRAY_FADE: [number, number] = [0.5, 0.68];
+/** The ASCII name hands over to the type: the type comes up, then the glyphs go. */
+const TYPE_IN: [number, number] = [0.76, 0.85];
+const GLYPHS_OUT: [number, number] = [0.79, 0.88];
+/** From here the glyphs are gone: the image is final and is never redrawn. */
+const HOLD = 0.88;
+/** Depth shown on the cover's readout at the end of the runway (the introduction starts there). */
+const COVER_DEPTH_M = 10;
 
 const clamp01 = (v: number) => (v < 0 ? 0 : v > 1 ? 1 : v);
 const smooth = (a: number, b: number, v: number) => {
@@ -74,7 +102,7 @@ const hash = (i: number, k: number) => {
 };
 
 export function createHeroCurrent(opts: HeroCurrentOptions): HeroCurrentHandle {
-  const { canvas, section, stage, letters, name, onZones } = opts;
+  const { canvas, section, stage, letters, nameEl, nameLines, horizon, depthEl, onZones, onFrame } = opts;
   const ctx = canvas.getContext('2d');
   if (!ctx) return { destroy() {} };
 
@@ -111,7 +139,13 @@ export function createHeroCurrent(opts: HeroCurrentOptions): HeroCurrentHandle {
   let letterOpacity = new Float32Array(0);
   let headlineRects: HeroRect[] = [];
   let nameRects: HeroRect[] = [];
-  let releaseEnd = RELEASE_START;
+  let releaseEnd = RISE[1];
+  // Horizon: rest position (stage px) and where it leaves the stage
+  let horizonRest = 0;
+  let horizonEnd = -40;
+  let lastHorizonShift = NaN;
+  let lastDepth = -1;
+  let lastTypeOpacity = -1;
 
   // Glyph atlas: one column per character, one row per ink
   const atlas = document.createElement('canvas');
@@ -174,47 +208,45 @@ export function createHeroCurrent(opts: HeroCurrentOptions): HeroCurrentHandle {
     sectionTop = section.getBoundingClientRect().top + window.scrollY;
     runway = Math.max(1, section.offsetHeight - stageH);
 
-    // ---- Target layout: the full name, ~90% of the viewport width ----------------------
-    const single = viewW >= 700;
-    const lines = single ? [name] : name.split(' ');
-    const family = '"Plus Jakarta Sans", -apple-system, "Segoe UI", sans-serif';
-    mctx.font = `${NAME_WEIGHT} 100px ${family}`;
-    const tracking = 0.015;
-    const width100 = (s: string) => mctx.measureText(s).width + tracking * 100 * (s.length - 1);
-    const longest = Math.max(...lines.map(width100));
-    let fontPx = (100 * viewW * (single ? 0.9 : 0.86)) / longest;
-    fontPx = Math.min(fontPx, (stageH * 0.62) / (lines.length * 0.98));
-    const capH = fontPx * 0.72;
-    cellH = Math.max(4.5, Math.min(10, capH / 17));
+    // ---- Target layout: the name lock-up, exactly where CSS set its type ------------------
+    if (horizon) horizon.style.transform = '';
+    lastHorizonShift = NaN;
+    const lineBoxes = nameLines.map((el) => {
+      const r = el.getBoundingClientRect();
+      return { el, x: r.left, y: r.top - sr.top, w: r.width, h: r.height, cs: getComputedStyle(el) };
+    });
+    const nameFontPx = parseFloat(getComputedStyle(nameEl).fontSize) || 120;
+    // Cells follow the strokes of the light serif: hairlines still register as one glyph
+    const capH = nameFontPx * 0.63;
+    cellH = Math.max(4, Math.min(9, capH / 19));
     cellW = cellH * 0.6;
-    const lineGap = fontPx * 0.98;
-    const blockH = capH + (lines.length - 1) * lineGap;
-    const firstBaseline = stageH * 0.5 - blockH / 2 + capH;
 
     maskCanvas.width = Math.max(1, Math.ceil(viewW));
     maskCanvas.height = Math.max(1, Math.ceil(stageH));
     const W = maskCanvas.width;
     const H = maskCanvas.height;
+    const spacing = mctx as CanvasRenderingContext2D & { letterSpacing?: string };
 
     mctx.clearRect(0, 0, W, H);
     mctx.fillStyle = '#000';
     mctx.textAlign = 'left';
     mctx.textBaseline = 'alphabetic';
-    mctx.font = `${NAME_WEIGHT} ${fontPx.toFixed(2)}px ${family}`;
     nameRects = [];
-    lines.forEach((line, li) => {
-      // Measured at the final size (the font is already set to fontPx here)
-      const lw = mctx.measureText(line).width + tracking * fontPx * (line.length - 1);
-      const baseline = firstBaseline + li * lineGap;
-      let x = (viewW - lw) / 2;
-      // Glyph by glyph so the tracking is exact without relying on ctx.letterSpacing
-      for (const ch of line) {
-        mctx.fillText(ch, x, baseline);
-        x += mctx.measureText(ch).width + tracking * fontPx;
-      }
-      nameRects.push({ left: (viewW - lw) / 2, top: baseline - capH, width: lw, height: capH });
-    });
-    const target = sampleMask(W, H, 110);
+    for (const b of lineBoxes) {
+      const cs = b.cs;
+      mctx.font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+      if ('letterSpacing' in spacing) spacing.letterSpacing = cs.letterSpacing;
+      const text = b.el.textContent || '';
+      const m = mctx.measureText(text);
+      const asc = m.fontBoundingBoxAscent || nameFontPx * 0.8;
+      const desc = m.fontBoundingBoxDescent || nameFontPx * 0.2;
+      const baseline = b.y + (b.h - (asc + desc)) / 2 + asc;
+      mctx.fillText(text, b.x, baseline);
+      const inkAsc = m.actualBoundingBoxAscent || capH;
+      nameRects.push({ left: b.x, top: baseline - inkAsc, width: m.width, height: inkAsc + (m.actualBoundingBoxDescent || 0) });
+    }
+    if ('letterSpacing' in spacing) spacing.letterSpacing = '0px';
+    const target = sampleMask(W, H, 52);
     const targets: { x: number; y: number; edge: number }[] = [];
     for (let r = 1; r < target.rows - 1; r++) {
       for (let c = 1; c < target.cols - 1; c++) {
@@ -231,15 +263,11 @@ export function createHeroCurrent(opts: HeroCurrentOptions): HeroCurrentHandle {
     const sources: { x: number; y: number; letter: number; local: number }[] = [];
     let minX = Infinity;
     let maxX = -Infinity;
-    let minY = Infinity;
-    let maxY = -Infinity;
     const letterBoxes = letters.map((el) => {
       const r = el.getBoundingClientRect();
       const box = { x: r.left, y: r.top - sr.top, w: r.width, h: r.height };
       minX = Math.min(minX, box.x);
       maxX = Math.max(maxX, box.x + box.w);
-      minY = Math.min(minY, box.y);
-      maxY = Math.max(maxY, box.y + box.h);
       const cs = getComputedStyle(el);
       mctx.font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
       const m = mctx.measureText(el.textContent || '');
@@ -277,16 +305,22 @@ export function createHeroCurrent(opts: HeroCurrentOptions): HeroCurrentHandle {
       } else headlineRects.push({ left: b.x, top: b.y, width: b.w, height: b.h });
     });
 
-    // Release: a wave sweeping left → right and down through the lines
+    // Horizon rest position: just under the first line's baseline (set by CSS)
+    horizonRest = horizon ? horizon.getBoundingClientRect().top - sr.top : stageH * 0.55;
+    horizonEnd = -Math.max(40, stageH * 0.06);
+
+    // Release: each letter breaks up as the rising water reaches its middle, with a slight
+    // left → right lag so the line dissolves like a wave rather than a cut. The letters already
+    // below the surface ("horizons") go first, as soon as the descent begins.
     const spanX = Math.max(1, maxX - minX);
-    const spanY = Math.max(1, maxY - minY);
     letterRelease = new Float32Array(letters.length);
     letterOpacity = new Float32Array(letters.length).fill(-1);
-    releaseEnd = RELEASE_START;
+    releaseEnd = 0;
     letterBoxes.forEach((b, li) => {
       const ux = (b.x + b.w / 2 - minX) / spanX;
-      const uy = (b.y + b.h / 2 - minY) / spanY;
-      letterRelease[li] = RELEASE_START + 0.15 * ux + 0.05 * uy + 0.012 * Math.sin(ux * 9 + uy * 3);
+      const cy = b.y + b.h * 0.55;
+      const base = cy >= horizonRest ? SUBMERGED_RELEASE : riseTimeAt(cy);
+      letterRelease[li] = base + 0.05 * ux + 0.008 * Math.sin(ux * 9 + li);
       releaseEnd = Math.max(releaseEnd, letterRelease[li] + 0.04);
     });
 
@@ -355,6 +389,21 @@ export function createHeroCurrent(opts: HeroCurrentOptions): HeroCurrentHandle {
     ready = true;
   };
 
+  /** Stage y of the horizon at progress t. */
+  const horizonAt = (t: number) =>
+    horizonRest + (horizonEnd - horizonRest) * easeInOutCubic(smooth(RISE[0], RISE[1], t));
+  /** Earliest progress at which the horizon has risen to stage y `y` (y above its rest). */
+  const riseTimeAt = (y: number) => {
+    let lo = RISE[0];
+    let hi = RISE[1];
+    for (let i = 0; i < 24; i++) {
+      const mid = (lo + hi) / 2;
+      if (horizonAt(mid) > y) lo = mid;
+      else hi = mid;
+    }
+    return hi;
+  };
+
   const progressNow = () => clamp01((window.scrollY - sectionTop) / runway);
   /** Viewport y of the stage: 0 while pinned, negative once the runway has passed. */
   const stageTopNow = () => Math.min(0, sectionTop + runway - window.scrollY);
@@ -367,6 +416,30 @@ export function createHeroCurrent(opts: HeroCurrentOptions): HeroCurrentHandle {
     const W = viewW;
     const H = stageH;
 
+    // The horizon and the depth readout follow the same progress
+    const hy = horizonAt(t);
+    if (horizon) {
+      const shift = Math.round((hy - horizonRest) * 2) / 2;
+      if (shift !== lastHorizonShift) {
+        lastHorizonShift = shift;
+        horizon.style.transform = shift === 0 ? '' : `translate3d(0, ${shift}px, 0)`;
+      }
+    }
+    if (depthEl) {
+      const d = Math.round(COVER_DEPTH_M * clamp01((t - RISE[0]) / (0.9 - RISE[0])));
+      if (d !== lastDepth) {
+        lastDepth = d;
+        depthEl.textContent = `${d} m`;
+      }
+    }
+    // The type of the name comes up under the glyphs, then the glyphs let go
+    const typeOpacity = Math.round(smooth(TYPE_IN[0], TYPE_IN[1], t) * 100) / 100;
+    if (typeOpacity !== lastTypeOpacity) {
+      lastTypeOpacity = typeOpacity;
+      nameEl.style.opacity = String(typeOpacity);
+    }
+    onFrame?.({ t, horizonY: hy + top, stageTop: top, stageHeight: H });
+
     // Real headline letters break up exactly as their fragments are released
     for (let i = 0; i < letters.length; i++) {
       const r = letterRelease[i];
@@ -377,7 +450,7 @@ export function createHeroCurrent(opts: HeroCurrentOptions): HeroCurrentHandle {
       }
     }
 
-    const visible = t > RELEASE_START - 0.002 && top > -H;
+    const visible = t > SUBMERGED_RELEASE - 0.002 && top > -H;
     if (!visible) {
       if (drewLast) {
         ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -408,6 +481,13 @@ export function createHeroCurrent(opts: HeroCurrentOptions): HeroCurrentHandle {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.imageSmoothingEnabled = true;
+    // Nothing of the current shows above the waterline
+    const waterTop = Math.max(0, horizonAt(drawT));
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, Math.floor(waterTop * dpr), canvas.width, canvas.height);
+    ctx.clip();
+    const glyphFade = 1 - smooth(GLYPHS_OUT[0], GLYPHS_OUT[1], drawT);
     let activeAlpha = -1;
 
     for (let k = 0; k < count; k++) {
@@ -442,6 +522,7 @@ export function createHeroCurrent(opts: HeroCurrentOptions): HeroCurrentHandle {
           alpha = alpha + (targetAlpha[k] - alpha) * smooth(0.55, 1, a);
         }
       }
+      alpha *= glyphFade;
       if (alpha < 0.02) continue;
 
       if (x < -cellW || x > W + cellW || y < -cellH || y > window.innerHeight + cellH) continue;
@@ -463,6 +544,7 @@ export function createHeroCurrent(opts: HeroCurrentOptions): HeroCurrentHandle {
       );
     }
     ctx.globalAlpha = 1;
+    ctx.restore();
     drewLast = true;
   };
 
@@ -501,6 +583,8 @@ export function createHeroCurrent(opts: HeroCurrentOptions): HeroCurrentHandle {
       document.fonts?.removeEventListener?.('loadingdone', remeasure);
       for (const el of letters) el.style.opacity = '';
       canvas.style.transform = '';
+      nameEl.style.opacity = '';
+      if (horizon) horizon.style.transform = '';
       onZones?.([]);
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.clearRect(0, 0, canvas.width, canvas.height);

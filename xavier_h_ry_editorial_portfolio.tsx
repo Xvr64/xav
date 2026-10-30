@@ -1636,7 +1636,7 @@ function buildAbyssCss(): string {
 // Ink and opacity follow the same `abyss` value as the background — no second timeline.
 const FLUID_INK_SURFACE: AbyssRGB = [47, 72, 88]; // #2F4858 muted ocean blue-grey on white
 const FLUID_INK_ABYSS: AbyssRGB = [232, 238, 242]; // #E8EEF2 soft cool white on black
-const FLUID_OPACITY_SURFACE = 0.42;
+const FLUID_OPACITY_SURFACE = 0.3; // the surface is the calmest water: the type leads there
 const FLUID_OPACITY_ABYSS = 0.46;
 const rgbHex = (c: number[]) => `#${c.map((v) => Math.round(v).toString(16).padStart(2, '0')).join('')}`;
 
@@ -1680,6 +1680,49 @@ const READING_WHALE_ALPHA = [1, 0.62, 0.34];
 /** Viewport line boxes of the page's reading text, shared by the fluid clear map and the whales. */
 const readingZones: { read: () => readonly { left: number; top: number; width: number; height: number }[] } = {
   read: () => []
+};
+
+/**
+ * Composed stretches of the page (the cover and the introduction) place the whales instead of
+ * letting them roam: one lane per whale in viewport fractions, blended in by `weight`, and a
+ * surface they stay below. Written by the cover's conductor, read by the whale loop.
+ */
+const whaleDirection = {
+  weight: 0,
+  surfaceY: -Infinity,
+  lanes: [
+    { x: 0.79, y: 0.8 },
+    { x: 0.15, y: 0.9 }
+  ]
+};
+
+/**
+ * Each composed stretch publishes how strongly it holds the whales and where. The strongest
+ * stretch sets the weight; the lanes blend by weight, so hand-overs between stretches stay
+ * continuous.
+ */
+const whaleStretches = new Map<string, { weight: number; lanes: readonly Lane[] }>();
+const directWhales = (id: string, weight: number, lanes: readonly Lane[]) => {
+  whaleStretches.set(id, { weight, lanes: lanes.map((l) => ({ ...l })) });
+  let strongest = 0;
+  let total = 0;
+  const x = [0, 0];
+  const y = [0, 0];
+  for (const s of whaleStretches.values()) {
+    if (s.weight <= 0) continue;
+    strongest = Math.max(strongest, s.weight);
+    total += s.weight;
+    for (let i = 0; i < 2; i++) {
+      x[i] += s.lanes[i].x * s.weight;
+      y[i] += s.lanes[i].y * s.weight;
+    }
+  }
+  whaleDirection.weight = strongest;
+  if (total <= 0) return;
+  for (let i = 0; i < 2; i++) {
+    whaleDirection.lanes[i].x = x[i] / total;
+    whaleDirection.lanes[i].y = y[i] / total;
+  }
 };
 
 /** Reading text the current quiets behind (line boxes, measured on layout changes only). */
@@ -1757,6 +1800,8 @@ const FluidOceanBackground: React.FC = React.memo(() => {
     const handle = background(host, {
       preset: fluid,
       color: 'var(--fluid-ink, #2F4858)',
+      // Punctuation only, from still to dense: the current reads as water, never as letters
+      charset: ' ·.:-~=+*',
       opacity: FLUID_OPACITY_SURFACE,
       lazy: false,
       clear: readClear,
@@ -1810,7 +1855,7 @@ const FluidOceanBackground: React.FC = React.memo(() => {
     };
   }, []);
 
-  return <div ref={hostRef} aria-hidden="true" className="fixed inset-0 z-0 pointer-events-none overflow-hidden" />;
+  return <div ref={hostRef} aria-hidden="true" data-ocean-layer className="fixed inset-0 z-0 pointer-events-none overflow-hidden" />;
 });
 
 interface JourneyGlobeProps {
@@ -2644,11 +2689,12 @@ const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ 
       // instantly against the off-white paper.
       aCtx.font = 'bold 8.5px "JetBrains Mono", monospace';
       const mainWhaleStyles = [
-        { fill: [176, 192, 204], fillA: 0.5, ink: [34, 56, 78], inkA: 0.58 },  // Ventral sea-light
-        { fill: [138, 160, 178], fillA: 0.56, ink: [28, 48, 70], inkA: 0.7 },  // Blue-grey flank
-        { fill: [100, 126, 150], fillA: 0.6, ink: [20, 40, 62], inkA: 0.82 },  // Slate blue
-        { fill: [72, 100, 128], fillA: 0.62, ink: [14, 32, 54], inkA: 0.88 },  // Deep slate navy
-        { fill: [52, 78, 104], fillA: 0.64, ink: [10, 26, 46], inkA: 0.92 }    // Dorsal navy
+        // Fills kept to a faint wash so the glyphs, not the squares, draw the animal
+        { fill: [176, 192, 204], fillA: 0.18, ink: [34, 56, 78], inkA: 0.66 },  // Ventral sea-light
+        { fill: [138, 160, 178], fillA: 0.22, ink: [28, 48, 70], inkA: 0.78 },  // Blue-grey flank
+        { fill: [100, 126, 150], fillA: 0.26, ink: [20, 40, 62], inkA: 0.88 },  // Slate blue
+        { fill: [72, 100, 128], fillA: 0.3, ink: [14, 32, 54], inkA: 0.94 },    // Deep slate navy
+        { fill: [52, 78, 104], fillA: 0.34, ink: [10, 26, 46], inkA: 1 }        // Dorsal navy
       ];
       for (let sIdx = 0; sIdx < mainWhaleStyles.length; sIdx++) {
         const st = mainWhaleStyles[sIdx];
@@ -3021,6 +3067,19 @@ const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ 
       const facing: 1 | -1 = Math.cos(wh.heading) >= 0 ? 1 : -1;
       const r = Math.random();
 
+      if (whaleDirection.weight > 0.5) {
+        // Composed stretch: short explorations around the lane, never across the type
+        const lane = whaleDirection.lanes[0];
+        const surfaceFrac = (whaleDirection.surfaceY + mainBodyLen * 0.3) / Math.max(1, h);
+        auto.phase = r < 0.3 ? 'drift' : 'wander';
+        auto.phaseDuration = auto.phase === 'drift' ? rand(1.6, 2.6) : rand(5, 8);
+        auto.targetXFrac = Math.max(0.08, Math.min(0.92, lane.x + rand(-0.09, 0.09)));
+        auto.targetYFrac = Math.max(surfaceFrac, Math.min(0.94, lane.y + rand(-0.06, 0.06)));
+        auto.targetSpeed = rand(0.6, 1.1) * wh.scale;
+        auto.driftAngle = rand(-0.1, 0.1);
+        return;
+      }
+
       if (r < 0.24 && feed.state !== 'school') {
         // Cross the screen and leave through the edge the whale already faces
         // (never while a school is waiting — the encounter takes priority)
@@ -3328,9 +3387,10 @@ const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ 
       const sm = scrollMotionRef.current;
 
       if (!wh.initialized) {
-        // Opening screen placement: graceful presence in open water spanning from upper to lower depths
-        wh.x = idx === 0 ? w * 0.64 : w * 0.24;
-        wh.y = idx === 0 ? h * 0.58 : h * 0.18;
+        // Opening screen placement: on the cover, already in the lanes composed against the type
+        const onCover = window.scrollY < h;
+        wh.x = onCover ? w * whaleDirection.lanes[idx].x : idx === 0 ? w * 0.64 : w * 0.24;
+        wh.y = onCover ? h * whaleDirection.lanes[idx].y : idx === 0 ? h * 0.58 : h * 0.18;
         wh.heading = idx === 0 ? -0.08 : 0.14;
         for (let k = 0; k < SPINE_NODES; k++) {
           wh.spineX[k] = wh.x - Math.cos(wh.heading) * k * segLen;
@@ -3396,11 +3456,18 @@ const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ 
         }
       }
 
-      const laneCenterX =
+      let laneCenterX =
         rawLaneCenterX +
         (idx === 0 ? auto.offX : 0) +
         (feedPull > 0 ? (feed.cx - rawLaneCenterX) * feedPull * 0.6 : 0);
-      const scrollLinkedScreenY = rawScrollLinkedScreenY + (idx === 0 ? auto.offY : 0);
+      let scrollLinkedScreenY = rawScrollLinkedScreenY + (idx === 0 ? auto.offY : 0);
+      // Composed stretches (cover, introduction): the lanes are placed against the type
+      const directed = whaleDirection.weight;
+      if (directed > 0) {
+        const lane = whaleDirection.lanes[idx];
+        laneCenterX += (lane.x * w - laneCenterX) * directed;
+        scrollLinkedScreenY += (lane.y * h - scrollLinkedScreenY) * directed;
+      }
 
       if (autoStep) {
         // Tail beat follows cruising speed
@@ -3519,7 +3586,7 @@ const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ 
       }
 
       // Boundary near the very top of the viewport so whales can reach the top of the site and bank smoothly
-      const minWhaleY = Math.max(18, bodyLenPx * 0.04);
+      const minWhaleY = Math.max(18, bodyLenPx * 0.04, whaleDirection.surfaceY + bodyLenPx * 0.3);
       if (wh.y < minWhaleY) {
         const pushDown = (minWhaleY - wh.y) * Math.min(1, 0.14 * dtScale);
         wh.y += pushDown;
@@ -4737,6 +4804,7 @@ const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ 
   return (
     <div
       aria-hidden="true"
+      data-ocean-layer
       className={`fixed inset-0 pointer-events-none transition-opacity duration-500 max-w-full overflow-hidden ${
         mode === 'focus' ? 'z-30 bg-[#F5F3EE]/85 backdrop-blur-[2px]' : 'z-[1]'
       }`}
@@ -4778,12 +4846,39 @@ const heroLetters = (text: string) =>
     )
   );
 
+/** "XAVIER HERY" → "Xavier Hery", for the colophon's quiet voice. */
+const toTitleCase = (text: string) => text.toLowerCase().replace(/(^|[\s/·-])(\p{L})/gu, (_, sep, ch) => sep + ch.toUpperCase());
+
 /** Calm zones of the hero typography (viewport px), read by the fluid clear map and the whales. */
 const heroZone: { rects: HeroRect[]; version: number } = { rects: [], version: 0 };
 
 /**
  * The hero current's canvas: fixed between the fluid (below) and the whales (above), so the
  * whales keep priority over the fragments. It redraws only when the scroll position changes.
+ */
+/** Px over which the water fades in under the horizon: light falling off with depth. */
+const SURFACE_FADE = 170;
+
+type Lane = { x: number; y: number };
+const mixLane = (a: Lane, b: Lane, t: number): Lane => ({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
+// Whale lanes (main, companion) for each moment of the cover and introduction, chosen against
+// the type: under the horizon at the surface, at the edges while the fragments own the middle,
+// beside the name, then in the introduction's open left field while the statement reads on the
+// right. While the finished name holds, the main whale glides beneath it through the empty
+// lower band — the one movement between two still compositions — so it never crosses the type.
+const LANES_SURFACE: Lane[] = [{ x: 0.79, y: 0.8 }, { x: 0.15, y: 0.9 }];
+const LANES_DESCENT: Lane[] = [{ x: 0.83, y: 0.8 }, { x: 0.13, y: 0.86 }];
+const LANES_NAME: Lane[] = [{ x: 0.85, y: 0.68 }, { x: 0.12, y: 0.9 }];
+const LANES_HOLD: Lane[] = [{ x: 0.36, y: 0.86 }, { x: 0.1, y: 0.92 }];
+const LANES_INTRO: Lane[] = [{ x: 0.17, y: 0.6 }, { x: 0.1, y: 0.93 }];
+// One reading column on phones leaves no open field: the whales keep to the bottom edge
+const LANES_INTRO_NARROW: Lane[] = [{ x: 0.86, y: 0.95 }, { x: 0.12, y: 0.97 }];
+
+/**
+ * The hero current's canvas: fixed between the fluid (below) and the whales (above), so the
+ * whales keep priority over the fragments. It redraws only when the scroll position changes.
+ * Its frames also conduct the ocean around the cover: the surface mask on the fluid and whale
+ * layers, and where the whales swim.
  */
 const HeroCurrentLayer: React.FC = React.memo(() => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -4792,25 +4887,143 @@ const HeroCurrentLayer: React.FC = React.memo(() => {
     const canvas = canvasRef.current;
     const section = document.getElementById('home');
     const stage = section?.querySelector<HTMLElement>('[data-hero-stage]');
+    const intro = document.getElementById('introduction');
     if (!canvas || !section || !stage) return;
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const nameEl = stage.querySelector<HTMLElement>('[data-hero-name]');
+    if (!nameEl) return;
+
+    const oceanLayers = Array.from(document.querySelectorAll<HTMLElement>('[data-ocean-layer]'));
+    let maskY = NaN;
+    const maskSurface = (horizonY: number) => {
+      const y = Math.round(horizonY);
+      if (y === maskY) return;
+      maskY = y;
+      const mask =
+        y <= -SURFACE_FADE
+          ? ''
+          : `linear-gradient(to bottom, transparent ${y}px, rgba(0, 0, 0, 0.35) ${y + 1}px, #000 ${y + SURFACE_FADE}px)`;
+      for (const el of oceanLayers) {
+        el.style.maskImage = mask;
+        el.style.setProperty('-webkit-mask-image', mask);
+      }
+    };
+
+    // The introduction's document position, for handing the whales back once it has passed
+    let introTop = 0;
+    let introBottom = 0;
+    const measureIntro = () => {
+      if (!intro) return;
+      const r = intro.getBoundingClientRect();
+      introTop = r.top + window.scrollY;
+      introBottom = r.bottom + window.scrollY;
+    };
+    measureIntro();
+    const introObserver = new ResizeObserver(measureIntro);
+    if (intro) introObserver.observe(intro);
+    window.addEventListener('resize', measureIntro);
+
     const handle = createHeroCurrent({
       canvas,
       section,
       stage,
       letters: Array.from(stage.querySelectorAll<HTMLElement>('[data-hero-letter]')),
-      name: 'XAVIER HERY',
+      nameEl,
+      nameLines: Array.from(nameEl.querySelectorAll<HTMLElement>('[data-hero-name-line]')),
+      horizon: stage.querySelector<HTMLElement>('[data-hero-horizon]'),
+      depthEl: stage.querySelector<HTMLElement>('[data-hero-depth]'),
       onZones: (rects) => {
         if (rects.length === 0 && heroZone.rects.length === 0) return;
         heroZone.rects = rects;
         heroZone.version++;
+      },
+      onFrame: ({ t, horizonY, stageTop, stageHeight }) => {
+        maskSurface(horizonY);
+        // Surface → descent → name, then the stage scrolls away and the introduction takes over
+        const toDescent = smoothStepRange(t, 0.04, 0.36);
+        const toName = smoothStepRange(t, 0.4, 0.72);
+        const toHold = smoothStepRange(t, 0.86, 1);
+        const away = smoothStepRange(-stageTop / Math.max(1, stageHeight), 0.35, 0.95);
+        const lanes = [0, 1].map((i) => {
+          let lane = mixLane(LANES_SURFACE[i], LANES_DESCENT[i], toDescent);
+          lane = mixLane(lane, LANES_NAME[i], toName);
+          lane = mixLane(lane, LANES_HOLD[i], toHold);
+          return mixLane(lane, (window.innerWidth < 768 ? LANES_INTRO_NARROW : LANES_INTRO)[i], away);
+        });
+        whaleDirection.surfaceY = horizonY;
+        // Fully composed until the introduction's last line rises past mid-screen
+        const vh = window.innerHeight;
+        const introLeft = intro ? introBottom - window.scrollY : -1;
+        directWhales('cover', introTop > 0 ? smoothStepRange(introLeft, vh * 0.05, vh * 0.55) : 1 - away, lanes);
       }
     });
-    return () => handle.destroy();
+    return () => {
+      handle.destroy();
+      introObserver.disconnect();
+      window.removeEventListener('resize', measureIntro);
+      maskSurface(-Infinity);
+      directWhales('cover', 0, LANES_SURFACE);
+      whaleDirection.surfaceY = -Infinity;
+    };
   }, []);
 
   return <canvas ref={canvasRef} aria-hidden="true" className="fixed inset-0 z-0 pointer-events-none w-full h-full" />;
 });
+
+// Experience: the stations fill the reading measure, so the whales swim the lower band of the
+// screen, beneath the eye line, where the next station is only rising into view.
+const LANES_EXPERIENCE: Lane[] = [{ x: 0.17, y: 0.91 }, { x: 0.88, y: 0.96 }];
+const LANES_EXPERIENCE_NARROW: Lane[] = [{ x: 0.86, y: 0.95 }, { x: 0.12, y: 0.97 }];
+
+/**
+ * Holds the whales in composed lanes while a section is on screen: the hold builds as the
+ * section rises into view and lets go as its end rises past mid-screen.
+ */
+const WhaleStretch: React.FC<{ sectionId: string; lanes: readonly Lane[]; narrowLanes?: readonly Lane[] }> = ({
+  sectionId,
+  lanes,
+  narrowLanes = lanes
+}) => {
+  useEffect(() => {
+    const section = document.getElementById(sectionId);
+    if (!section) return;
+    let top = 0;
+    let bottom = 0;
+    const measure = () => {
+      const r = section.getBoundingClientRect();
+      top = r.top + window.scrollY;
+      bottom = r.bottom + window.scrollY;
+      update();
+    };
+    let frame = 0;
+    const update = () => {
+      frame = 0;
+      const vh = window.innerHeight;
+      const sy = window.scrollY;
+      const weight = Math.min(
+        smoothStepRange(sy + vh - top, vh * 0.1, vh * 0.5),
+        smoothStepRange(bottom - sy, vh * 0.05, vh * 0.55)
+      );
+      directWhales(sectionId, weight, window.innerWidth < 768 ? narrowLanes : lanes);
+    };
+    const schedule = () => {
+      if (!frame) frame = requestAnimationFrame(update);
+    };
+    const observer = new ResizeObserver(measure);
+    observer.observe(section);
+    window.addEventListener('scroll', schedule, { passive: true });
+    window.addEventListener('resize', measure);
+    measure();
+    return () => {
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+      window.removeEventListener('scroll', schedule);
+      window.removeEventListener('resize', measure);
+      directWhales(sectionId, 0, lanes);
+    };
+  }, [sectionId, lanes, narrowLanes]);
+  return null;
+};
 
 const ProgressiveOceanEntry: React.FC<ProgressiveOceanEntryProps> = React.memo(() => (
   <>
@@ -4819,16 +5032,35 @@ const ProgressiveOceanEntry: React.FC<ProgressiveOceanEntryProps> = React.memo((
         out of the word-reveal system because it does not move while pinned. */}
     <section id="home" data-editorial-section className="hero-runway relative">
       <div className="hero-stage" data-hero-stage data-ascii-preserve>
+        <div className="hero-colophon ed-grid meta" aria-hidden="true">
+          <p className="colophon-name">{toTitleCase(CV_DATA.name)}</p>
+          <p className="colophon-role">{toTitleCase(CV_DATA.positioning).replace(/\s*\/\s*/g, ' · ')}</p>
+          <p className="colophon-depth">
+            depth <b data-hero-depth>0 m</b>
+          </p>
+        </div>
         <div className="minimal-hero ed-grid">
-          <h1 className="display">
-            <span className="cover-line">{heroLetters('A journey without')}</span>
-            <span className="cover-line cover-line--drift">{heroLetters('horizons')}</span>
+          <h1 className="display" aria-label="A journey without horizons">
+            <span className="cover-line" aria-hidden="true">
+              {heroLetters('A journey without')}
+              <span className="hero-horizon" data-hero-horizon>
+                <span className="hero-horizon-label">0 m · sea level</span>
+              </span>
+            </span>
+            <span className="cover-line cover-line--drift" aria-hidden="true">{heroLetters('horizons')}</span>
           </h1>
         </div>
+        {/* The type the ASCII name resolves into; the semantic heading stays in the introduction */}
+        <p className="hero-name ed-grid" data-hero-name aria-hidden="true">
+          <span className="hero-name-first" data-hero-name-line>Xavier</span>
+          <span className="hero-name-last" data-hero-name-line>Hery</span>
+        </p>
       </div>
     </section>
-    {/* Introduction: the ASCII name above carries the heading visually; the semantic name stays here */}
-    <section id="introduction" data-editorial-section className="terminal-overview ed-grid relative">
+    {/* Introduction: the name resolved above carries the heading visually; the semantic name stays
+        here. After the cover's movement this spread is the first moment of calm, so its text is
+        kept out of the word-scramble and simply reads. */}
+    <section id="introduction" data-editorial-section data-ascii-preserve className="terminal-overview ed-grid relative">
       <h2 className="intro-name intro-name--carried">
         <span className="intro-name-first"><AsciiText text="Xavier" /></span>{' '}
         <span className="intro-name-last"><AsciiText text="Hery" /></span>
@@ -5089,8 +5321,9 @@ interface FloatingSectionHeaderProps {
   description?: string;
   /** Oceanographic depth reference for this stretch of the descent, e.g. "200 m — twilight zone". */
   depth?: string;
-  /** How the header sits on the 12-column grid; each section picks its own. */
-  layout?: 'left' | 'drift' | 'counter' | 'stacked';
+  /** How the header sits on the 12-column grid; each section picks its own. "sounding" is The
+      Sounding's header: a depth annotation with a leader line running to a Newsreader title. */
+  layout?: 'left' | 'drift' | 'counter' | 'stacked' | 'sounding';
   /** A single Newsreader statement set beneath the header. */
   asideAccent?: string;
 }
@@ -5179,6 +5412,7 @@ export default function App() {
 
       <FluidOceanBackground />
       <HeroCurrentLayer />
+      <WhaleStretch sectionId="experience" lanes={LANES_EXPERIENCE} narrowLanes={LANES_EXPERIENCE_NARROW} />
       <AsciiWhaleBackground mode="ambient" />
 
       {downloadToast && (
@@ -5197,11 +5431,14 @@ export default function App() {
 
         <div className="cv-arch mt-16 sm:mt-24 lg:mt-32 space-y-28 sm:space-y-36">
           {/* SECTION 02: EXPERIENCE (De-boxed, Floating Editorial Timeline) */}
-          <section id="experience" data-editorial-section className="relative">
+          {/* A sounding log: each internship is a station sitting on its own datum line, like the
+              cover's headline on the horizon, with its record hanging below in the water. The
+              section reads plainly, without the word-scramble. */}
+          <section id="experience" data-editorial-section data-ascii-preserve className="relative">
             <RevealBlock variant="section">
               <FloatingSectionHeader
                 sectionId="experience"
-                layout="left"
+                layout="sounding"
                 depth="120 m — sunlit zone"
                 title="Operational & commercial internships"
                 description="Practical experience across business development, commercial quotation workflows, and international air and sea freight coordination."
@@ -5209,23 +5446,28 @@ export default function App() {
               />
             </RevealBlock>
 
-            <div className="entry-list entry-list--wide">
+            <div className="entry-list entry-list--wide station-list">
               {CV_DATA.experiences.map((exp, idx) => (
                 <RevealBlock key={exp.id} delayMs={idx * 100}>
-                  <article className="exp-entry ed-grid relative">
+                  <article className="exp-entry station ed-grid relative">
+                    <h3 className="exp-company">
+                      <BioWords text={toTitleCase(exp.company)} />
+                    </h3>
                     <p className="exp-when meta">
+                      <span className="exp-index" aria-hidden="true">stn {exp.index}</span>
                       <BioWords text={exp.date} />
                     </p>
                     <div className="exp-who">
-                      <h3 className="ocean-h3 text-[#171717]">
-                        <BioWords text={exp.company} />
-                      </h3>
-                      <p className="exp-role body-copy">
+                      <p className="exp-role">
                         <BioWords text={exp.role} />
                       </p>
-                      <p className="exp-tags meta">
-                        <BioWords text={exp.domainTag.replace(/\s*\/\s*/g, ' · ')} />
-                      </p>
+                      <ul className="exp-tags meta">
+                        {exp.domainTag.split(/\s*\/\s*/).map((tag) => (
+                          <li key={tag}>
+                            <BioWords text={tag} />
+                          </li>
+                        ))}
+                      </ul>
                     </div>
                     <ul className="exp-what">
                       {exp.concisePoints.map((pt, i) => (
