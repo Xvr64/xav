@@ -4,6 +4,7 @@ import { createHeroCurrent } from './heroCurrent';
 import { createHorizonRipple } from './horizonRipple';
 import { CV_DATA } from './cvData';
 import {
+  convergence,
   directWhales,
   globeZone,
   heroZone,
@@ -171,9 +172,12 @@ export const LANES_EXPERIENCE: Lane[] = [{ x: 0.17, y: 0.91 }, { x: 0.88, y: 0.9
 export const LANES_EXPERIENCE_NARROW: Lane[] = [{ x: 0.86, y: 0.95 }, { x: 0.12, y: 0.97 }];
 
 /**
- * The whales dive into the Globe: as its runway rises they steer toward the journey's first city on
- * the disc and shrink to a third of their size, swimming deep into the planet behind it (a calm zone, so they
- * draw faintly there) for the whole city sequence, and grow back as the pinned stage lets go.
+ * The ambient whales around the Globe. When the convergence can draw (WhaleConvergence.tsx), they
+ * give way as the Globe's runway rises — the 3D pair takes over, circles and becomes the Earth —
+ * and return as the pinned stage lets go after the journey. Without it (no WebGL2), they dive into
+ * the Globe as before: steering toward the journey's first city on the disc and shrinking to a
+ * third of their size, swimming deep into the planet behind it (a calm zone, so they draw faintly
+ * there) for the whole city sequence, and growing back as the pinned stage lets go.
  * Every value follows the runway's position, so scrolling back plays it in reverse.
  */
 export const GlobeDive: React.FC = () => {
@@ -189,6 +193,15 @@ export const GlobeDive: React.FC = () => {
       frame = 0;
       const vh = window.innerHeight;
       const r = runway.getBoundingClientRect();
+      if (convergence.ready) {
+        // Gone before the stage pins, back once its end rises past the middle of the screen
+        const away = Math.min(smoothStepRange(vh - r.top, vh * 0.1, vh * 0.85), smoothStepRange(r.bottom, vh * 0.35, vh * 1.0));
+        whaleDirection.presence = 1 - away;
+        whaleDirection.size = 1;
+        directWhales('globe', 0, lanes);
+        return;
+      }
+      whaleDirection.presence = 1;
       const dive = Math.min(
         smoothStepRange(vh - r.top, vh * 0.15, vh * 0.95),
         smoothStepRange(r.bottom, vh * 0.35, vh * 1.0)
@@ -211,12 +224,15 @@ export const GlobeDive: React.FC = () => {
     };
     window.addEventListener('scroll', schedule, { passive: true });
     window.addEventListener('resize', schedule);
+    convergence.listeners.add(schedule);
     update();
     return () => {
       cancelAnimationFrame(frame);
       window.removeEventListener('scroll', schedule);
       window.removeEventListener('resize', schedule);
+      convergence.listeners.delete(schedule);
       whaleDirection.size = 1;
+      whaleDirection.presence = 1;
       directWhales('globe', 0, lanes);
     };
   }, []);

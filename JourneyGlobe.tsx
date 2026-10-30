@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { loadLandDots, type LandDots } from './glyphcssGlobe';
 import type { LocationItem } from './cvData';
 import { abyssFromProgress, globeScrollGeometry, globeScrollProgress, lerpN } from './abyssPalette';
-import { diveWake, setGlobeZone } from './oceanDirection';
+import { convergence, convergenceProgress, diveWake, globeRevealAt, setGlobeZone } from './oceanDirection';
 
 const PlainText = ({ text }: { text: string }) => <>{text}</>;
 
@@ -107,6 +107,8 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const progressFillRef = useRef<HTMLDivElement | null>(null);
   const captionRef = useRef<HTMLDivElement | null>(null);
+  // Hidden while the convergence's whales are forming this Earth (see WhaleConvergence.tsx)
+  const veilRefs = useRef<(HTMLDivElement | null)[]>([]);
   const activeIdRef = useRef(activeId);
   activeIdRef.current = activeId;
   const goToCityRef = useRef<(id: string) => void>((id) => setActiveId(id));
@@ -255,6 +257,9 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
     const pinned = runway?.firstElementChild as HTMLElement | null;
     let runwayDocTop = 0;
     let runwayTravel = 1;
+    // The convergence's share of the runway, before the journey's own scroll (0 when absent)
+    const leadEl = runway?.querySelector<HTMLElement>('[data-journey-lead]') ?? null;
+    let leadPx = 0;
     let stickyTop = 0;
     let stageDocLeft = 0;
     let cachedDocScrollable = 1;
@@ -282,9 +287,12 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
         const rr = runway.getBoundingClientRect();
         const pr = pinned.getBoundingClientRect();
         runwayDocTop = rr.top + sy;
-        runwayTravel = Math.max(1, rr.height - pr.height);
+        leadPx = leadEl && !prefersReduced ? leadEl.offsetHeight : 0;
+        runwayTravel = Math.max(1, rr.height - pr.height - leadPx);
         stickyTop = parseFloat(getComputedStyle(pinned).top) || 0;
-        globeScrollGeometry.start = runwayDocTop - stickyTop;
+        convergence.start = runwayDocTop - stickyTop;
+        convergence.length = leadPx;
+        globeScrollGeometry.start = runwayDocTop - stickyTop + leadPx;
         globeScrollGeometry.travel = runwayTravel;
       }
       cachedDocScrollable = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
@@ -292,7 +300,7 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
 
     const progressGeometry = () => {
       if (!runway || !pinned || runwayTravel <= 1) return null;
-      return { top: runwayDocTop - window.scrollY, stickyTop, travel: runwayTravel };
+      return { top: runwayDocTop + leadPx - window.scrollY, stickyTop, travel: runwayTravel };
     };
     const measureProgress = (): number => {
       return globeScrollProgress();
@@ -551,8 +559,18 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
     const lastCityOpacities = new Float32Array(locations.length).fill(-1);
     let lastActive = Math.max(0, locations.findIndex((l) => l.id === activeIdRef.current));
 
+    let lastReveal = -1;
     const apply = (st: JourneyState) => {
       draw(st);
+      // The convergence's Earth becomes this one: canvas, washes and caption appear as it hands over
+      const reveal = prefersReduced ? 1 : globeRevealAt(convergenceProgress(window.scrollY));
+      if (Math.abs(reveal - lastReveal) > 0.002 || (reveal !== lastReveal && (reveal === 0 || reveal === 1))) {
+        lastReveal = reveal;
+        const op = reveal >= 1 ? '' : reveal.toFixed(3);
+        canvas.style.opacity = op;
+        if (captionRef.current) captionRef.current.style.opacity = op;
+        for (const v of veilRefs.current) if (v) v.style.opacity = op;
+      }
       if (progressFillRef.current) progressFillRef.current.style.transform = `scaleX(${st.p.toFixed(4)})`;
       for (let idx = 0; idx < cityStopEls.length; idx++) {
         const op = 0.4 + st.reveal[idx] * 0.6;
@@ -580,6 +598,8 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
       const { cx, cy, baseR } = globeFrame(W, H);
       const R = baseR * st.zoom;
       const rects = [{ left: sr.left + cx - R, top: sr.top + cy - R, width: R * 2, height: R * 2 }];
+      // While the convergence plays, its whales circle the whole stage: keep the water calm there
+      if (lastReveal < 1) rects.push({ left: sr.left + W * 0.04, top: sr.top + H * 0.06, width: W * 0.92, height: H * 0.88 });
       const caption = captionRef.current?.getBoundingClientRect();
       if (caption && caption.width > 0) {
         rects.push({ left: caption.left, top: caption.top, width: caption.width, height: caption.height });
@@ -647,6 +667,7 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
       resize();
       requestRender();
     };
+    convergence.listeners.add(onResize);
     resize();
     requestRender();
     window.addEventListener('scroll', onScroll, { passive: true });
@@ -664,6 +685,8 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
 
     return () => {
       disposed = true;
+      convergence.listeners.delete(onResize);
+      convergence.length = 0;
       if (globeIo) globeIo.disconnect();
       window.removeEventListener('scroll', onScroll);
       window.removeEventListener('resize', onResize);
@@ -687,6 +710,7 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
 
       {/* Subtle water-matched veil softens whale glyphs directly behind the destination caption */}
       <div
+        ref={(el) => (veilRefs.current[0] = el)}
         aria-hidden="true"
         className="pointer-events-none absolute inset-0 hidden md:block"
         style={{
@@ -695,6 +719,7 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
         }}
       />
       <div
+        ref={(el) => (veilRefs.current[1] = el)}
         aria-hidden="true"
         className="pointer-events-none absolute inset-x-0 bottom-0 h-[54%] md:hidden"
         style={{

@@ -3143,8 +3143,9 @@ export const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.m
       // Subtle contrast attenuation establishes underwater distance (foreground vs deeper companion)
       const shimmerTick = (fx * 2.2) | 0;
       const fgWhaleAlpha = isFocus ? 1.0 : 0.60 + (1 - entryCalm) * 0.18;
-      // Both whales share the deep-blue atlas rows (10..14) at full strength
-      const whaleAlpha = migActive ? mig.whales : 1;
+      // Both whales share the deep-blue atlas rows (10..14) at full strength; they give way while
+      // the convergence's 3D whales swim and become the Globe (whaleDirection.presence)
+      const whaleAlpha = (migActive ? mig.whales : 1) * whaleDirection.presence;
       let activeAlpha = 1.0;
       const batch = glyphBatch;
       batch?.begin();

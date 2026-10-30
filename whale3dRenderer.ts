@@ -202,7 +202,7 @@ float hash(vec3 p) { return fract(sin(dot(p, vec3(12.9898, 78.233, 37.719))) * 4
 void main() {
   // Unravel from the tail: the same key orders the particles that leave the body (convergence)
   if (uDissolve > 0.0) {
-    float front = 1.0 - uDissolve * 1.12;
+    float front = 1.0 - uDissolve;
     float edge = (hash(floor(vRestPos * 220.0)) - 0.5) * 0.07;
     if (vInfo.w + edge > front) discard;
   }
@@ -465,7 +465,8 @@ export interface WhaleAsciiRendererOptions {
 export class WhaleAsciiRenderer {
   readonly renderer: THREE.WebGLRenderer;
   readonly camera = new THREE.PerspectiveCamera(30, 1, 0.1, 200);
-  /** Drawn after the ASCII composite with the same camera (particles, discs). */
+  /** Drawn before the ASCII composite (beneath the whales) and after it, with the same camera. */
+  readonly underlay = new THREE.Scene();
   readonly overlay = new THREE.Scene();
   readonly style: AsciiStyle = { ...DEFAULT_STYLE };
   readonly skinData: Float32Array<ArrayBuffer>;
@@ -702,6 +703,12 @@ export class WhaleAsciiRenderer {
     return { cw, ch, W, H };
   }
 
+  /** The glyph atlas in use (device-px tiles), for layers that draw glyphs of their own. */
+  get glyphs(): { texture: THREE.Texture | null; tileW: number; tileH: number; cols: number } {
+    this.ensureCells();
+    return { texture: this.atlasTexture, tileW: this.atlas?.tileW ?? 1, tileH: this.atlas?.tileH ?? 1, cols: ATLAS_COLS };
+  }
+
   /** Rebuild the atlas on the next frame (after the web font has loaded). */
   invalidateAtlas() {
     this.atlasKey = '';
@@ -748,6 +755,7 @@ export class WhaleAsciiRenderer {
     r.setRenderTarget(null);
     r.setClearColor(0x000000, 0);
     r.clear(true, true, true);
+    if (drawOverlay && this.underlay.children.length) r.render(this.underlay, this.camera);
     if (this.style.mode === 'raw') {
       const u = this.rawMaterial.uniforms;
       u.uInk.value = inkTex;

@@ -7,6 +7,7 @@ import { CV_DATA } from './cvData';
 import { FluidOceanBackground } from './FluidOceanBackground';
 import { JourneyGlobe } from './JourneyGlobe';
 import { AsciiWhaleBackground } from './AsciiWhaleBackground';
+import { WhaleConvergence } from './WhaleConvergence';
 import {
   GlobeDive,
   HeroCurrentLayer,
@@ -262,13 +263,17 @@ export default function App() {
             </RevealBlock>
 
             {/* Journey runway: full-width stage stays pinned while the visitor
-                scrolls through this distance — the scroll position IS the journey timeline. */}
+                scrolls through this distance — the scroll position IS the timeline. Its first
+                stretch (the lead) is the convergence: two whales circle each other and become this
+                Earth; the city journey takes the rest. */}
             <div
               data-journey-runway
               data-ascii-preserve
-              className="relative mt-8 sm:mt-12 h-[600vh] motion-reduce:h-[100svh] w-full max-w-full overflow-hidden"
+              className="journey-runway relative mt-8 sm:mt-12 w-full max-w-full overflow-hidden"
             >
+              <div data-journey-lead aria-hidden="true" className="journey-lead absolute top-0 left-0 w-px pointer-events-none" />
               <div className="sticky top-0 h-[100svh] w-full max-w-full overflow-hidden">
+                <WhaleConvergence firstCity={CV_DATA.locations[0]} />
                 <JourneyGlobe locations={CV_DATA.locations} />
               </div>
             </div>

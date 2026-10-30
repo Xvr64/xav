@@ -20,6 +20,9 @@ export const readingZones: { read: () => readonly { left: number; top: number; w
  */
 export const whaleDirection = {
   weight: 0,
+  /** How present the ambient whales are (1 = fully): they give way while the 3D whales of the
+   * convergence swim and are the Earth, and return after the journey. */
+  presence: 1,
   /** Drawn size of the whales (1 = their own): below 1 while they dive into the Globe. */
   size: 1,
   surfaceY: -Infinity,
@@ -92,6 +95,28 @@ export const setGlobeZone = (rects: HeroRect[], origin: { x: number; y: number }
 /** The dive's wake as the Globe should land it: the lead whale's latest wake point (viewport px)
  * how strongly it shows (0 none … 1 full) and how far toward the first city it has drawn (0 … 1). Written by the whale loop, read by the Globe. */
 export const diveWake = { x: 0, y: 0, strength: 0, reach: 0 };
+
+/**
+ * The convergence (two 3D whales becoming the Earth) plays in the first part of the Globe's
+ * pinned runway. JourneyGlobe measures it: p runs 0 → 1 as the page scrolls from `start` over
+ * `length` px, and the journey's own progress begins where it ends. `ready` is set once the 3D
+ * layer can draw; until then (or without WebGL2) the Globe shows itself throughout.
+ */
+export const convergence = {
+  start: Infinity,
+  length: 0,
+  ready: false,
+  /** Called when readiness or geometry changes, so the Globe redraws its reveal. */
+  listeners: new Set<() => void>()
+};
+export const convergenceProgress = (scrollY: number) =>
+  convergence.length > 0 ? Math.max(0, Math.min(1, (scrollY - convergence.start) / convergence.length)) : 1;
+/** How visible the Globe's own canvas and caption are (it takes over from the convergence's Earth). */
+export const globeRevealAt = (p: number) => {
+  if (!convergence.ready || convergence.length <= 0) return 1;
+  const t = Math.max(0, Math.min(1, (p - 0.955) / (0.985 - 0.955)));
+  return t * t * (3 - 2 * t);
+};
 
 export type Lane = { x: number; y: number };
 export const mixLane = (a: Lane, b: Lane, t: number): Lane => ({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
