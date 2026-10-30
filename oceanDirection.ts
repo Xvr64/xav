@@ -76,12 +76,22 @@ export const heroZone: { rects: HeroRect[]; version: number } = { rects: [], ver
 
 /** Calm zones of the Globe stage while it is on screen (viewport px): the disc and the city
  * caption. The fluid quiets there and the whales and jellyfish draw faintly behind them. */
-export const globeZone: { rects: HeroRect[]; version: number } = { rects: [], version: 0 };
-export const setGlobeZone = (rects: HeroRect[]) => {
+export const globeZone: {
+  rects: HeroRect[];
+  version: number;
+  /** Where the journey's first city sits on screen while it faces the viewer (viewport px). */
+  origin: { x: number; y: number } | null;
+} = { rects: [], version: 0, origin: null };
+export const setGlobeZone = (rects: HeroRect[], origin: { x: number; y: number } | null = null) => {
+  globeZone.origin = origin;
   if (rects.length === 0 && globeZone.rects.length === 0) return;
   globeZone.rects = rects;
   globeZone.version++;
 };
+
+/** The dive's wake as the Globe should land it: the lead whale's latest wake point (viewport px)
+ * how strongly it shows (0 none … 1 full) and how far toward the first city it has drawn (0 … 1). Written by the whale loop, read by the Globe. */
+export const diveWake = { x: 0, y: 0, strength: 0, reach: 0 };
 
 export type Lane = { x: number; y: number };
 export const mixLane = (a: Lane, b: Lane, t: number): Lane => ({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });

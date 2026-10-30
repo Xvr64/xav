@@ -171,8 +171,8 @@ export const LANES_EXPERIENCE: Lane[] = [{ x: 0.17, y: 0.91 }, { x: 0.88, y: 0.9
 export const LANES_EXPERIENCE_NARROW: Lane[] = [{ x: 0.86, y: 0.95 }, { x: 0.12, y: 0.97 }];
 
 /**
- * The whales dive into the Globe: as its runway rises they steer toward the centre of the disc and
- * shrink to a third of their size, swimming deep into the planet behind it (a calm zone, so they
+ * The whales dive into the Globe: as its runway rises they steer toward the journey's first city on
+ * the disc and shrink to a third of their size, swimming deep into the planet behind it (a calm zone, so they
  * draw faintly there) for the whole city sequence, and grow back as the pinned stage lets go.
  * Every value follows the runway's position, so scrolling back plays it in reverse.
  */
@@ -193,11 +193,13 @@ export const GlobeDive: React.FC = () => {
         smoothStepRange(vh - r.top, vh * 0.15, vh * 0.95),
         smoothStepRange(r.bottom, vh * 0.35, vh * 1.0)
       );
-      // The disc's centre as the Globe publishes it; the desktop framing until it does
+      // They dive toward the journey's first city where the Globe shows it (their wake lands there
+      // and becomes the route), else toward the disc's centre; the desktop framing until either
       const disc = globeZone.rects[0];
-      if (disc) {
-        const cx = (disc.left + disc.width / 2) / Math.max(1, window.innerWidth);
-        const cy = (disc.top + disc.height / 2) / Math.max(1, vh);
+      const origin = globeZone.origin;
+      if (origin || disc) {
+        const cx = (origin ? origin.x : disc.left + disc.width / 2) / Math.max(1, window.innerWidth);
+        const cy = (origin ? origin.y : disc.top + disc.height / 2) / Math.max(1, vh);
         lanes[0] = { x: cx, y: cy };
         lanes[1] = { x: cx - 0.04, y: cy + 0.06 };
       }

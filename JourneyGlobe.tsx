@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { loadLandDots, type LandDots } from './glyphcssGlobe';
 import type { LocationItem } from './cvData';
 import { abyssFromProgress, globeScrollGeometry, globeScrollProgress, lerpN } from './abyssPalette';
-import { setGlobeZone } from './oceanDirection';
+import { diveWake, setGlobeZone } from './oceanDirection';
 
 const PlainText = ({ text }: { text: string }) => <>{text}</>;
 
@@ -441,6 +441,26 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
         ctx.stroke();
         if (isCurrent) head = last;
       }
+      // The whales' wake lands here: a dotted line from where the lead whale's wake reaches into
+      // the stage, onto the journey's first city, while they dive into the Globe
+      if (diveWake.strength > 0.01 && vecDot(cityVecs[0], view) > 0.15) {
+        const sr = stage.getBoundingClientRect();
+        const fromX = diveWake.x - sr.left;
+        const fromY = diveWake.y - sr.top;
+        const toX = px(cityVecs[0]);
+        const toY = py(cityVecs[0]);
+        ctx.save();
+        ctx.setLineDash([1.5, 5]);
+        ctx.lineWidth = 1.3;
+        ctx.globalAlpha = Math.min(1, diveWake.strength);
+        ctx.strokeStyle = mc([31, 59, 87, 0.8], [14, 38, 32, 0.8]);
+        ctx.beginPath();
+        ctx.moveTo(fromX, fromY);
+        ctx.lineTo(fromX + (toX - fromX) * diveWake.reach, fromY + (toY - fromY) * diveWake.reach);
+        ctx.stroke();
+        ctx.restore();
+      }
+
       if (head) {
         ctx.beginPath();
         ctx.arc(head.x, head.y, 3, 0, Math.PI * 2);
@@ -564,7 +584,14 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
       if (caption && caption.width > 0) {
         rects.push({ left: caption.left, top: caption.top, width: caption.width, height: caption.height });
       }
-      setGlobeZone(rects);
+      // The journey's first city on screen, while it faces the viewer: where the whales' wake lands
+      const first = cityVecs[0];
+      let origin: { x: number; y: number } | null = null;
+      if (vecDot(first, st.cam) > 0.15) {
+        const { east, north } = cameraBasis(st.cam);
+        origin = { x: sr.left + cx + R * vecDot(first, east), y: sr.top + cy - R * vecDot(first, north) };
+      }
+      setGlobeZone(rects, origin);
     };
 
     let raf = 0;
