@@ -851,3 +851,104 @@ body {
   .ascii-visual, .decode-sound-toggle { display: none !important; }
   .ascii-word, .ascii-source, .ascii-text, [data-editorial-section] { opacity: 1 !important; }
 }
+
+/* ---------------------------------------------------------------------------
+   Lantern cursor (lanternCursor.ts). Only ever active on fine, hover-capable pointers after a
+   real mouse move; touch, pen and unsupported browsers keep the native cursor.
+   --------------------------------------------------------------------------- */
+@media (hover: hover) and (pointer: fine) {
+  html.lantern-active,
+  html.lantern-active * { cursor: none !important; }
+}
+.lantern,
+.lantern-light {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  contain: strict;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+/* Above everything, the CV preview included */
+.lantern { z-index: 2147483000; }
+/* Between the ocean canvases (z 0–1) and the page content (z 10): it lights the water, never the type */
+.lantern-light { z-index: 5; }
+.lantern.is-shown,
+.lantern-light.is-shown { opacity: 1; }
+
+.lantern-ring,
+.lantern-core,
+.lantern-ripple,
+.lantern-halo {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  will-change: transform;
+}
+.lantern-ring-shape,
+.lantern-ripple-shape {
+  position: absolute;
+  width: 26px;
+  height: 26px;
+  margin: -13px 0 0 -13px;
+  border-radius: 50%;
+  border: 1px solid var(--lantern-ring);
+}
+.lantern-ring-shape {
+  transition: transform 0.34s cubic-bezier(0.2, 0.7, 0.2, 1), border-color 0.3s ease;
+}
+.lantern-ripple-shape { border-color: var(--lantern-ripple); }
+.lantern-core-shape {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  margin: -3px 0 0 -3px;
+  border-radius: 50%;
+  background: var(--lantern-core);
+  box-shadow: 0 0 0 1px var(--lantern-edge), 0 0 9px 1px var(--lantern-bloom);
+  transition: transform 0.22s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+/* Over links and controls the ring opens like a lens around a smaller core */
+.lantern.is-hover .lantern-ring-shape { transform: scale(1.5); border-color: var(--lantern-ripple); }
+.lantern.is-hover .lantern-core-shape { transform: scale(0.7); }
+.lantern.is-down .lantern-ring-shape { transform: scale(0.88); }
+.lantern.is-hover.is-down .lantern-ring-shape { transform: scale(1.32); }
+.lantern.is-down .lantern-core-shape { transform: scale(0.6); }
+
+/* The lure's light: a soft seafoam diffusion, absent at the surface */
+.lantern-halo-glow {
+  position: absolute;
+  width: 220px;
+  height: 220px;
+  margin: -110px 0 0 -110px;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    rgba(150, 214, 204, 0.5) 0%,
+    rgba(150, 214, 204, 0.2) 18%,
+    rgba(150, 214, 204, 0.07) 40%,
+    rgba(150, 214, 204, 0) 68%
+  );
+  opacity: var(--lantern-glow, 0);
+  scale: var(--lantern-glow-scale, 1);
+  transition: opacity 0.3s ease;
+}
+.lantern-light.is-hover .lantern-halo-glow { opacity: calc(var(--lantern-glow, 0) * 1.25); }
+.lantern-light.is-deep .lantern-halo-glow { animation: lantern-breathe 5.6s ease-in-out infinite; }
+@keyframes lantern-breathe {
+  0%, 100% { transform: scale(0.95); }
+  50% { transform: scale(1.05); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lantern-light.is-deep .lantern-halo-glow { animation: none; }
+  .lantern-ring-shape,
+  .lantern-core-shape,
+  .lantern-halo-glow { transition: none; }
+}
+@media print {
+  .lantern, .lantern-light { display: none !important; }
+}

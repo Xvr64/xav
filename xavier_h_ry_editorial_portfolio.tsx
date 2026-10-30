@@ -5,6 +5,7 @@ import { loadLandDots, type LandDots } from './glyphcssGlobe';
 import { createAsciiJellyfishField } from './asciiOceanLife';
 import { AsciiText, DecodeSoundToggle, useEditorialScroll } from './TerminalEditorial';
 import { waterShade, orbitStages } from './terminalMotion';
+import { mountLanternCursor, setLanternDepth } from './lanternCursor';
 import { background, fluid, type BackgroundHandle } from 'asciify-engine/kit';
 import { createHeroCurrent, type HeroRect } from './heroCurrent';
 
@@ -1588,6 +1589,8 @@ function applyAbyssWash(abyssLevel: number) {
   root.setProperty('--ocean-background', `rgb(${shade}, ${shade}, ${shade})`);
   root.setProperty('--abyss-wash', `${shade}, ${shade}, ${shade}`);
   root.setProperty('--abyss-halo', `rgba(${shade}, ${shade}, ${shade}, 0.82)`);
+  // The cursor descends with the water: quiet slate at the surface, a lantern in the deep
+  setLanternDepth(abyssLevel);
 }
 
 function buildAbyssCss(): string {
@@ -5855,6 +5858,7 @@ const FloatingSectionHeader: React.FC<FloatingSectionHeaderProps> = ({
 
 export default function App() {
   useEditorialScroll();
+  useEffect(() => mountLanternCursor(), []);
 
 
   const [cvModalOpen, setCvModalOpen] = useState<boolean>(false);
