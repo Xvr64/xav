@@ -22,11 +22,11 @@ function run(c, seconds, signal, from = 0) {
 }
 
 test('framing: Whale A is monumental on every screen', () => {
-  for (const [w, h, min] of [[1280, 720, 0.6], [1920, 1080, 0.6], [390, 844, 1], [768, 1024, 0.75]]) {
+  for (const [w, h, min] of [[1280, 720, 0.8], [1920, 1080, 0.8], [1024, 768, 0.9], [390, 844, 1.25], [768, 1024, 1]]) {
     const cam = ambientCamera(w, h);
     assert.ok(cam.px / w >= min, `${w}x${h}: ${cam.px}px is ${(cam.px / w).toFixed(2)} of the width`);
-    // Girth (about 0.22 of the length) spans at least fifteen 10 px character rows on desktop
-    if (w >= 1024) assert.ok((cam.px * 0.22) / 10 >= 15, `${w}: girth ${((cam.px * 0.22) / 10).toFixed(1)} rows`);
+    // Girth (about 0.22 of the length) spans at least twenty 10 px character rows on desktop
+    if (w >= 1024) assert.ok((cam.px * 0.22) / 10 >= 20, `${w}: girth ${((cam.px * 0.22) / 10).toFixed(1)} rows`);
     assert.ok(cam.fov > 10 && cam.fov < 50);
   }
 });
@@ -88,6 +88,49 @@ for (const [width, height] of [[1280, 720], [390, 844]]) {
     }
   });
 }
+
+test('scrolling quickens the swim, the turning is smooth, the lean is a lean and not a capsize', () => {
+  const c = composition();
+  const script = (t) => (t < 4 ? 0 : t < 11 ? 0.85 : t < 18 ? -0.85 : 0);
+  const frames = run(c, 40, script, 120);
+  const at = (t) => Math.round(t / DT);
+  for (let i = 0; i < 2; i++) {
+    const speed = (a, b) => {
+      let d = 0;
+      for (let k = at(a) + 1; k <= at(b); k++) {
+        const step = vLen(vSub(frames[k].poses[i].position, frames[k - 1].poses[i].position));
+        if (step < 0.2) d += step; // skip the off-screen re-entry
+      }
+      return d / (b - a);
+    };
+    // The visitor's scroll is carried by the whale's own swimming: faster, not sliding
+    assert.ok(speed(8, 11) > 1.8 * speed(0, 4), `whale ${i}: ${speed(8, 11).toFixed(3)} vs ${speed(0, 4).toFixed(3)} at rest`);
+    let maxAccel = 0;
+    let prev = 0;
+    for (let k = 1; k < frames.length; k++) {
+      const rate = angle(frames[k - 1].poses[i].quaternion, frames[k].poses[i].quaternion) / DT;
+      if (k > 1) maxAccel = Math.max(maxAccel, Math.abs(rate - prev) / DT);
+      prev = rate;
+    }
+    // A heavy body: no turn, lean or stroke ever jerks the attitude (about 1/60 of a turn per s²)
+    assert.ok(maxAccel < 1.5, `whale ${i} angular acceleration ${maxAccel.toFixed(2)} rad/s²`);
+  }
+  // Under a held scroll the flank faces the camera, so the dive or climb reads on screen
+  for (const signal of [0.85, -0.85]) {
+    const held = run(c, 200, () => signal, 300).slice(150);
+    for (let i = 0; i < 2; i++) {
+      const endOn = held.reduce((sum, f) => sum + Math.abs(heading(f.poses[i])[2]), 0) / held.length;
+      assert.ok(endOn < 0.35, `whale ${i} heads into the screen ${endOn.toFixed(2)} on average at ${signal}`);
+    }
+  }
+  // Leaning into the slow wander: present, never lying over at rest
+  const idle = run(c, 300, () => 0, 500);
+  for (let i = 0; i < 2; i++) {
+    const leans = idle.map((f) => Math.abs(deg(f.poses[i].bank - rollAt(i, 500 + f.t))));
+    assert.ok(Math.max(...leans) > 8, `whale ${i} never leans`);
+    assert.ok(leans.reduce((a, b) => a + b, 0) / leans.length < 30, `whale ${i} mean idle lean too deep`);
+  }
+});
 
 test('personalities: A larger and calmer, B quicker, their strokes never in unison', () => {
   const c = composition();
