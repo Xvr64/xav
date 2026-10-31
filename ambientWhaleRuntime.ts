@@ -4,7 +4,7 @@ import { createConvergenceLayer, type ConvergenceLayer } from './convergenceLaye
 import { sampleConvergence } from './convergenceScene';
 import { globeFrame } from './JourneyGlobe';
 import { ambientWhalesLive, convergence, convergenceProgress, globeZone, readingZones, smoothStepRange, whaleDirection, whaleStage } from './oceanDirection';
-import { ambientCamera, newTravel, sampleAmbientWhale, stepTravel, type AmbientComposition } from './ambientWhaleScene';
+import { ambientCamera, newTravel, projectedBounds, sampleAmbientWhale, stepTravel, type AmbientComposition } from './ambientWhaleScene';
 import { qConj, qMul, qRotate, qSlerp, vLerp, skinFrames, type Articulation, type Quat } from './whale3dPose';
 import { globeScrollGeometry, inkMixFromAbyss } from './abyssPalette';
 import { waterShade } from './terminalMotion';
@@ -273,8 +273,13 @@ export function mountAmbientWhales(host: HTMLElement): () => void {
         }
         lastScroll = scrollY; scrollVel = 0;
         if (!inCinema) drawAmbient(1 / 30, 0);
-        return { s: travel.s, pitch: travel.fwd.map(f => (f ? Math.round(Math.asin(f[1]) * 573) / 10 : null)), drift: travel.drift.map(d => Math.round(d * 100) / 100), avoid: avoid.map(a => Math.round(a * 1000) / 1000) };
+        return { s: travel.s, pitch: travel.fwd.map(f => (f ? Math.round(Math.asin(f[1]) * 573) / 10 : null)), drift: travel.drift.map(d => Math.round(d * 100) / 100), side: travel.side.map(d => Math.round(d * 100) / 100), avoid: avoid.map(a => Math.round(a * 1000) / 1000) };
       },
+      /** Each whale's projected hull on screen (CSS px, flippers and flukes included). */
+      bounds: () => current.map(w => {
+        const [x0, x1, y0, y1] = projectedBounds(w, ambientCamera(vw(), vh()));
+        return { left: Math.round((x0 + 1) * vw() / 2), right: Math.round((x1 + 1) * vw() / 2), top: Math.round((1 - y1) * vh() / 2), bottom: Math.round((1 - y0) * vh() / 2) };
+      }),
       state: () => ({ seconds, current, handoff, inCinema, frameCount, meanMs, quality, reduced: reduced(), contexts: 1, parent: canvas.parentElement?.dataset, presence: ambientWhalesLive.presence, travel, camera: ambientCamera(vw(), vh()) }),
       renderer: ascii
     };

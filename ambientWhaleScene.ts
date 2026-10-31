@@ -15,9 +15,13 @@
  * Weight: turns build and ease under an angular-acceleration limit and settle into the water's
  * drag; the lean into a turn is a sprung roll that leads into, carries through and settles out of
  * it, with a twist whenever the whale pitches; each fluke beat heaves and rocks the whole body.
+ *
+ * The camera travels with the visitor: the travel is camera-relative and softly framed by each
+ * whale's projected hull (head, flippers, flukes), so the animals descend and rise with the page
+ * and ease along the frame's edges instead of leaving it.
  */
-import type { V3 } from './whale3dAnatomy.ts';
-import { articulate, orientWhale, qAxisAngle, qMul, qNorm, qRotate, vAdd, vCross, vSub, vScale, vLen, vNorm, vDot, X_AXIS, Y_AXIS, Z_AXIS, type WhalePose } from './whale3dPose.ts';
+import { PART_BODY, PART_FIN, SPINE_NODES, buildWhaleGeometry, type V3 } from './whale3dAnatomy.ts';
+import { articulate, orientWhale, qAxisAngle, qMul, qNorm, qRotate, skinFrames, skinVertex, vAdd, vCross, vSub, vScale, vLen, vNorm, vDot, X_AXIS, Y_AXIS, Z_AXIS, type WhalePose } from './whale3dPose.ts';
 
 export interface AmbientComposition {
   width: number;
@@ -47,6 +51,8 @@ export interface AmbientCamera {
 }
 
 export const AMBIENT_DISTANCE = 2.4;
+/** Drawn size relative to the original monumental framing: a touch smaller, so the frame holds them. */
+export const AMBIENT_SIZE = 0.9;
 const TAU = Math.PI * 2;
 const mod = (x: number, m: number) => ((x % m) + m) % m;
 const clamp = (x: number, a: number, b: number) => Math.max(a, Math.min(b, x));
@@ -55,12 +61,121 @@ const clamp = (x: number, a: number, b: number) => Math.max(a, Math.min(b, x));
 export function ambientCamera(width: number, height: number): AmbientCamera {
   const W = Math.max(1, width);
   const H = Math.max(1, height);
-  const px = Math.min(1.45 * W, 1.7 * H, Math.max(1.12 * W, 0.95 * H));
+  const px = AMBIENT_SIZE * Math.min(1.45 * W, 1.7 * H, Math.max(1.12 * W, 0.95 * H));
   const halfH = H / (2 * px);
   return { z: AMBIENT_DISTANCE, fov: (2 * Math.atan(halfH / AMBIENT_DISTANCE) * 180) / Math.PI, halfW: W / (2 * px), halfH, px };
 }
 /** Half the visible height at depth z (perspective: deeper water shows more of the ocean). */
 const halfHAt = (cam: AmbientCamera, z: number) => (cam.halfH * (cam.z - z)) / cam.z;
+
+/**
+ * Silhouette candidates of the mesh: per stretch of the body its outermost vertices across and up
+ * and down, per flipper and the flukes their extremes along every axis and diagonal. Skinned with
+ * the live articulation they bound the whole animal, tips included, at a fraction of the vertices.
+ */
+let hullCache: number[] | null = null;
+function hullVertices(): number[] {
+  if (hullCache) return hullCache;
+  const g = buildWhaleGeometry();
+  const groups = new Map<string, number[]>();
+  for (let v = 0; v < g.vertexCount; v++) {
+    const part = g.info[v * 4];
+    const key = part === PART_BODY || part === PART_FIN ? `b${Math.floor((g.spine[v] / SPINE_NODES) * 14)}` : `p${part}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(v);
+  }
+  const dirs: V3[] = [];
+  for (const x of [-1, 0, 1]) for (const y of [-1, 0, 1]) for (const z of [-1, 0, 1]) if (x || y || z) dirs.push([x, y, z]);
+  const picked = new Set<number>();
+  for (const [key, verts] of groups) {
+    const use = key[0] === 'b' ? dirs.filter((d) => d[2] === 0) : dirs;
+    for (const d of use) {
+      let best = verts[0], bestDot = -Infinity;
+      for (const v of verts) {
+        const dot = g.rest[v * 3] * d[0] + g.rest[v * 3 + 1] * d[1] + g.rest[v * 3 + 2] * d[2];
+        if (dot > bestDot) { bestDot = dot; best = v; }
+      }
+      picked.add(best);
+    }
+  }
+  return (hullCache = [...picked]);
+}
+
+/**
+ * The whale's projected extent as the ambient camera frames it: [left, right, bottom, top] in
+ * normalised device units (−1 … 1 is the viewport), from its skinned hull, flippers and flukes included.
+ */
+export function projectedBounds(pose: Pick<WhalePose, 'position' | 'quaternion' | 'scale' | 'articulation'>, cam: AmbientCamera): [number, number, number, number] {
+  const g = buildWhaleGeometry();
+  const frames = skinFrames(pose.articulation);
+  let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+  for (const v of hullVertices()) {
+    const local = skinVertex(frames, g, v);
+    const w = qRotate(pose.quaternion, [local[0] * pose.scale, local[1] * pose.scale, local[2] * pose.scale]);
+    const depth = Math.max(0.2, cam.z - (w[2] + pose.position[2]));
+    const x = ((w[0] + pose.position[0]) * cam.z) / (depth * cam.halfW);
+    const y = ((w[1] + pose.position[1]) * cam.z) / (depth * cam.halfH);
+    if (x < x0) x0 = x;
+    if (x > x1) x1 = x;
+    if (y < y0) y0 = y;
+    if (y > y1) y1 = y;
+  }
+  return [x0, x1, y0, y1];
+}
+
+/** Edge margin of the soft frame (device units) and the depth of its easing band. */
+const FRAME_MARGIN = 0.05;
+const FRAME_BAND = 0.3;
+/**
+ * How much of its span a whale may let the frame crop while it passes through: at the sides a
+ * cinematic cut through the head or flukes (a side-on whale is nearly as wide as a desktop
+ * screen, and two of them share it), at the top and bottom only a fluke tip or a flipper of a
+ * steeply pitched animal (on a wide screen a pitched whale is taller than the frame itself).
+ */
+const SIDE_CROP = 0.42;
+const END_CROP = 0.12;
+/**
+ * While the visitor scrolls, the whale may lead the way a little further out of the frame on the
+ * side it is heading for (its head below the frame on a dive): the descent still reads on a wide
+ * screen, where a diving whale is as tall as the frame and would otherwise be held mid-screen.
+ */
+const LEAD_CROP = 0.2;
+/** And while the two pass close, one may rise above the other with a little more of it cropped. */
+const PASS_CROP = 0.12;
+/**
+ * How far each whale leads the camera while the visitor scrolls (its frame-centre, device units):
+ * down the page A sinks lower than B, up the page B rises higher than A, as they rest. They
+ * spread over the screen instead of gathering at the same edge, and a reversal never crosses them.
+ */
+const LEAD_DOWN = [-0.42, -0.12];
+const LEAD_UP = [0.12, 0.42];
+/**
+ * Where a whale's frame-centre may sit along one axis, given its projected span, the frame's
+ * edges (lo, hi) and how much of the span each edge may crop: its whole extent inside the margin
+ * when that fits, else held between the two.
+ */
+function frameRange(span: number, lo: number, hi: number, cropLo: number, cropHi = cropLo): [number, number] {
+  const min = lo + FRAME_MARGIN + span * (0.5 - cropLo);
+  const max = hi - FRAME_MARGIN - span * (0.5 - cropHi);
+  // Too tall to fit: centred, shifted toward the edge that may crop more
+  return min <= max ? [min, max] : [(min + max) / 2, (min + max) / 2];
+}
+/**
+ * A soft frame for one axis. `v` is the whale's wanted on-screen velocity (scene units/s); it
+ * returns the velocity it may actually have: heading outward it is eased away as the hull nears
+ * the frame (never a wall: a smooth taper through the band), and past the frame a gentle inward
+ * swim brings it back. `c` and the range are in device units, `unit` converts them to scene units.
+ */
+function softFrame(v: number, c: number, range: [number, number], unit: number): number {
+  const [lo, hi] = range;
+  const toHi = (hi - c) / FRAME_BAND;
+  const toLo = (c - lo) / FRAME_BAND;
+  if (v > 0) v *= smooth(toHi);
+  else if (v < 0) v *= smooth(toLo);
+  const past = Math.max(0, c - hi) - Math.max(0, lo - c);
+  // Inward, with a soft start and a capped pace: an animal swimming back into frame, not a snap
+  return v - clamp(past * unit * 1.6, -0.3, 0.3) * smooth(Math.abs(past) / 0.05);
+}
 
 // C2 easing: acceleration is continuous too, so curvature-driven banking never snaps at a
 // behavior boundary (a cubic smoothstep only preserves position and velocity).
@@ -182,6 +297,18 @@ export interface TravelState {
   drift: [number, number];
   dv: [number, number];
   da: [number, number];
+  /**
+   * Per whale: the vertical rate the scroll asks for before the frame eases it. The heading keeps
+   * most of it, so held at the frame's edge the whale still reads as diving (or climbing) with the
+   * page sliding past it: the camera, not the animal, has stopped.
+   */
+  di: [number, number];
+  /** Per whale: sideways offset the frame's sides have eased into the path, and its rate. */
+  side: [number, number];
+  sideV: [number, number];
+  /** Per whale: depth offset taken to pass the other (one slips behind), and its rate. */
+  deep: [number, number];
+  deepV: [number, number];
   /** Per whale: roll clock (s) and distance swum (body lengths, sets the tail beat). */
   roll: [number, number];
   swim: [number, number];
@@ -202,8 +329,17 @@ export interface TravelState {
   surge: number;
 }
 export const newTravel = (seconds = 0): TravelState => ({
-  s: 0, sv: 0, drift: [0, 0], dv: [0, 0], da: [0, 0], roll: [seconds, seconds], swim: [0, 0], fwd: [null, null], spin: [[0, 0, 0], [0, 0, 0]], up: [[0, 1, 0], [0, 1, 0]], bend: [[0, 0], [0, 0]], att: [[0, 0, 0, 0], [0, 0, 0, 0]], bank: [[0, 0], [0, 0]], ahead: 0, surge: 0
+  s: 0, sv: 0, drift: [0, 0], dv: [0, 0], da: [0, 0], di: [0, 0], side: [0, 0], sideV: [0, 0], deep: [0, 0], deepV: [0, 0], roll: [seconds, seconds], swim: [0, 0], fwd: [null, null], spin: [[0, 0, 0], [0, 0, 0]], up: [[0, 1, 0], [0, 1, 0]], bend: [[0, 0], [0, 0]], att: [[0, 0, 0, 0], [0, 0, 0, 0]], bank: [[0, 0], [0, 0]], ahead: 0, surge: 0
 });
+/**
+ * How much of the frame's easing the heading follows. The rest is the camera reframing: held at
+ * the edge the whale still points and beats along the scroll's dive (or climb) with the page
+ * sliding past it, and a slow animal is never swung about by its own framing (a heading that
+ * followed it fully would pitch the whale taller, which the frame would then answer again).
+ */
+const FRAME_FOLLOW = 0.2;
+/** The vertical rate a whale's heading follows: the scroll's intent, partly eased by the frame. */
+const headingRise = (st: TravelState, i: number) => st.di[i] + (st.dv[i] - st.di[i]) * FRAME_FOLLOW;
 /** The swim pace under a scroll signal (1 at rest). */
 const paceAt = (s: number) => 1 + PACE * Math.min(1, Math.abs(s));
 /**
@@ -315,10 +451,12 @@ function steer(st: TravelState, i: number, want: V3, dt: number, s: number) {
 /**
  * Advance the travel by dt toward a scroll target (−1 … 1). The signal follows critically damped,
  * so a reversal eases through zero; the drift rate follows that with a lag, so the heading's
- * vertical component stays continuous; a whale carried out of view re-enters from the far edge,
- * and at rest each one drifts home into the frame. While the visitor scrolls, the wander's clock
- * runs ahead (PACE): the whales swim faster, so the descent or climb is carried by their own
- * swimming, never by sliding.
+ * vertical component stays continuous. The travel is the camera's as much as the whale's: the
+ * camera follows the visitor down (or up) the page, so each whale's on-screen motion is softly
+ * framed by its own projected hull. Nearing an edge it eases off and runs along it, and at rest
+ * it drifts home into its composed place. While the visitor scrolls, the wander's clock runs
+ * ahead (PACE): the whales swim faster, so the descent or climb is carried by their own swimming,
+ * never by sliding.
  */
 export function stepTravel(st: TravelState, target: number, dt: number, seconds: number, c: AmbientComposition) {
   if (!(dt > 0)) return;
@@ -338,32 +476,74 @@ export function stepTravel(st: TravelState, target: number, dt: number, seconds:
   const pace = paceAt(s);
   st.ahead += (pace - 1) * dt;
   const t = seconds + st.ahead;
+  // The frame's top: the viewport's, or the composed sea surface where the cover shows one
+  const top = Number.isFinite(c.surfaceY) ? clamp(1 - (2 * c.surfaceY) / Math.max(1, c.height), -0.2, 1) : 1;
+  // The two keep their distance as framed, not only along their paths: the frame can herd both
+  // toward the same band (on a wide screen two diving whales each fill its height), so they swim
+  // clear of each other (B the more, A the calmer yielding a little), with a soft ramp that
+  // steers, not bounces. Side by side or one slipping behind the other rather than stacked: the
+  // frame has room across and in depth, while stacking would push one out of the top or bottom
+  const framed = [0, 1].map((i) => vAdd(ambientPath(i, t, c), [st.side[i], st.drift[i], st.deep[i]]));
+  const gap = vSub(framed[1], framed[0]);
+  const weighted: V3 = [2.5 * gap[0], gap[1], 2 * gap[2]];
+  const apart: V3 = vLen(weighted) > 1e-4 ? vNorm(weighted) : [0, 0, -1];
+  const clear = Math.min(0.5, (2.2 * Math.log1p(Math.exp((0.95 - vLen(gap)) * 5))) / 5);
   for (let i = 0; i < 2; i++) {
+    const yieldTo = (i === 0 ? -0.6 : 1) * clear;
     const a = ambientPath(i, t - 0.6, c);
     const b = ambientPath(i, t + 0.6, c);
     const p = ambientPath(i, t, c);
     const vh = (Math.hypot(b[0] - a[0], b[2] - a[2]) / 1.2) * pace;
+    const vx = ((b[0] - a[0]) / 1.2) * pace;
     const vy = ((b[1] - a[1]) / 1.2) * pace;
+    // Where the camera sees the whole animal now, and how many body lengths one device unit spans
+    // at its depth
+    const [x0, x1, y0, y1] = projectedBounds(sampleAmbientWhale(i, seconds, c, st), cam);
+    const unitY = halfHAt(cam, p[2] + st.deep[i]);
+    const unitX = (unitY * cam.halfW) / cam.halfH;
     const k = s >= 0 ? K_DOWN[i] : K_UP[i];
     // While the visitor scrolls, the scroll owns the vertical: the whale gives up its own climb or
     // descent and dives (or rises) with it, so the direction always reads
     let cmd = -s * k * Math.max(vh, 0.05) * (1 + 0.5 * Math.abs(s)) - vy * Math.min(1, 1.8 * Math.abs(s));
-    const vis = halfHAt(cam, p[2]) + 0.75;
-    const span = 2 * vis;
-    const rest = st.drift[i] - span * Math.round(st.drift[i] / span);
     const calm = 1 - Math.min(1, Math.abs(s) / 0.2);
-    cmd -= clamp(rest * 0.1, -0.03, 0.03) * calm;
+    cmd -= clamp(st.drift[i] * 0.1, -0.03, 0.03) * calm;
     cmd += clamp(c.avoid?.[i] ?? 0, -0.07, 0.07) * calm;
-    const da = (cmd - st.dv[i]) / 0.45;
-    st.dv[i] += da * dt;
-    st.da[i] = da;
-    st.drift[i] += st.dv[i] * dt;
-    const y = p[1] + st.drift[i];
-    if (y < -vis) st.drift[i] += span;
-    else if (y > vis) st.drift[i] -= span;
+    cmd += apart[1] * yieldTo;
+    const intent = (cmd - st.di[i]) / 0.45;
+    st.di[i] += intent * dt;
+    // The camera keeps the animal in frame: what it may actually travel on screen (path + drift),
+    // eased toward the edges from its whole projected height, flukes and flippers included
+    const urge = Math.min(1, Math.abs(s));
+    const lead = LEAD_CROP * urge;
+    const crop = END_CROP + PASS_CROP * Math.min(1, clear / 0.25);
+    const rangeY = frameRange(y1 - y0, -1, top, crop + (s > 0 ? lead : 0), crop + (s < 0 ? lead : 0));
+    // While scrolling, each whale's own lead: it follows the page down (or up) as far as its level
+    const level = smooth(urge / 0.6);
+    if (s > 0 && LEAD_DOWN[i] > rangeY[0]) rangeY[0] = Math.min(rangeY[1], rangeY[0] + (LEAD_DOWN[i] - rangeY[0]) * level);
+    if (s < 0 && LEAD_UP[i] < rangeY[1]) rangeY[1] = Math.max(rangeY[0], rangeY[1] + (LEAD_UP[i] - rangeY[1]) * level);
+    const dv = softFrame(vy + st.di[i], (y0 + y1) / 2, rangeY, unitY) - vy;
+    st.da[i] = (dv - st.dv[i]) / dt;
+    st.dv[i] = dv;
+    st.drift[i] += dv * dt;
+    // The sides frame it the same way, though there it may pass through with its head or flukes
+    // cropped. This is the camera panning, slowly, so it never swings the heading; the offset
+    // drifts home to the composed path whenever the frame allows
+    const home = -clamp(st.side[i] * 0.2, -0.035, 0.035);
+    const side = softFrame(vx + home + apart[0] * yieldTo, (x0 + x1) / 2, frameRange(x1 - x0, -1, 1, SIDE_CROP), unitX) - vx;
+    st.sideV[i] += (side - st.sideV[i]) * (1 - Math.exp(-dt / 0.3));
+    st.side[i] += st.sideV[i] * dt;
+    // Depth: the one behind slips further back to pass (neither is drawn toward the camera), and
+    // while the visitor scrolls a whale near the camera eases back, as the camera draws away, so
+    // it is never too tall to travel down (or up) the frame; at rest the offset drifts home
+    const back = Math.min(0, 0.05 - p[2]) * urge;
+    let deep = Math.min(0, apart[2] * yieldTo) - clamp((st.deep[i] - back) * 0.25, -0.06, 0.06);
+    if (deep > 0) deep *= smooth((0.45 - p[2] - st.deep[i]) / 0.25);
+    st.deepV[i] += (deep - st.deepV[i]) * (1 - Math.exp(-dt / 0.4));
+    st.deep[i] += st.deepV[i] * dt;
+    const rise = headingRise(st, i);
     st.roll[i] += dt * (1 + 1.4 * Math.max(0, s) - 0.45 * Math.max(0, -s));
-    st.swim[i] += (dt * (CADENCE[i] * (1 - 0.65 * glideAt(i, t)) + Math.hypot(vh, vy + st.dv[i]))) / WHALE_SCALE[i];
-    steer(st, i, vNorm(pathVelocity(i, t, c, st.dv[i], s)), dt, s);
+    st.swim[i] += (dt * (CADENCE[i] * (1 - 0.65 * glideAt(i, t)) + Math.hypot(vh, vy + rise))) / WHALE_SCALE[i];
+    steer(st, i, vNorm(pathVelocity(i, t, c, rise, s)), dt, s);
     // Body flex follows the turning with a lag: a 30-tonne animal bends into a turn
     const [turn, climb] = curvature(i, t, c, st);
     const lag = 1 - Math.exp(-dt / 0.45);
@@ -389,7 +569,7 @@ function curvature(i: number, seconds: number, c: AmbientComposition, travel?: T
   const p = ambientPath(i, seconds, c);
   const before = ambientPath(i, seconds - h, c);
   const after = ambientPath(i, seconds + h, c);
-  const vel = pathVelocity(i, seconds, c, travel?.dv[i] ?? 0, travel?.s ?? 0);
+  const vel = travel ? pathVelocity(i, seconds, c, headingRise(travel, i), travel.s) : pathVelocity(i, seconds, c, 0, 0);
   const acceleration = vScale([after[0] + before[0] - p[0] * 2, after[1] + before[1] - p[1] * 2, after[2] + before[2] - p[2] * 2], 1 / (h * h));
   acceleration[1] += travel?.da[i] ?? 0;
   const speed = Math.max(0.005, vLen(vel));
@@ -414,7 +594,7 @@ export function sampleAmbientWhale(i: number, seconds: number, c: AmbientComposi
   const p = ambientPath(i, t, c);
   const s = travel?.s ?? 0;
   // Capped pitch: a dive keeps the whale's side to the camera and its basis well defined
-  const vel = pathVelocity(i, t, c, travel?.dv[i] ?? 0, s);
+  const vel = travel ? pathVelocity(i, t, c, headingRise(travel, i), s) : pathVelocity(i, t, c, 0, 0);
   const speed = Math.max(0.005, vLen(vel));
   // The heading the whale holds (steered), or the path's own tangent for a stateless sample
   const forward = travel?.fwd[i] ?? vNorm(vel);
@@ -437,7 +617,7 @@ export function sampleAmbientWhale(i: number, seconds: number, c: AmbientComposi
   const heave = 0.013 * scale * articulation.amplitude * Math.sin(beat - 2.4);
   const rock = 0.028 * articulation.amplitude * Math.sin(beat - 1.2);
   const lift = qRotate(level, Y_AXIS);
-  const position: V3 = [p[0] + lift[0] * heave, p[1] + (travel?.drift[i] ?? 0) + lift[1] * heave, p[2] + lift[2] * heave];
+  const position: V3 = [p[0] + (travel?.side[i] ?? 0) + lift[0] * heave, p[1] + (travel?.drift[i] ?? 0) + lift[1] * heave, p[2] + (travel?.deep[i] ?? 0) + lift[2] * heave];
   return {
     position,
     quaternion: qNorm(qMul(qAxisAngle(qRotate(level, X_AXIS), rock), level)),
