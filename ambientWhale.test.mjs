@@ -9,6 +9,17 @@ const deg = (r) => (r * 180) / Math.PI;
 const heading = (pose) => qRotate(pose.quaternion, [0, 0, -1]);
 const DT = 1 / 30;
 
+/** Vertical distance swum between two times, skipping the off-screen re-entry jump. */
+const climbed = (frames, i, a, b) => {
+  let d = 0;
+  for (let k = Math.round(a / DT) + 1; k <= Math.round(b / DT); k++) {
+    const step = frames[k].poses[i].position[1] - frames[k - 1].poses[i].position[1];
+    if (Math.abs(step) < 0.2) d += step;
+  }
+  return d;
+};
+const pitchOf = (pose) => deg(Math.asin(heading(pose)[1]));
+
 /** Run the live integrator at 30 Hz under a scroll signal script; collect both whales' poses. */
 function run(c, seconds, signal, from = 0) {
   const st = newTravel(from);
@@ -75,15 +86,15 @@ for (const [width, height] of [[1280, 720], [390, 844]]) {
       assert.ok(deg(Math.asin(heading(down)[1])) < -35, `whale ${i} heads down while scrolling down`);
       assert.ok(deg(Math.asin(heading(up)[1])) > 30, `whale ${i} heads up while scrolling up`);
       // ...and travels that way on screen
-      assert.ok(at(10.5).poses[i].position[1] < at(6).poses[i].position[1] - 0.05, `whale ${i} descends`);
-      assert.ok(at(17.5).poses[i].position[1] > at(13.5).poses[i].position[1] + 0.05, `whale ${i} rises`);
+      assert.ok(climbed(frames, i, 6, 10.5) < -0.05, `whale ${i} descends`);
+      assert.ok(climbed(frames, i, 13.5, 17.5) > 0.05, `whale ${i} rises`);
       let maxRate = 0;
       let maxPitch = 0;
       for (let k = 1; k < frames.length; k++) {
         maxRate = Math.max(maxRate, deg(angle(frames[k - 1].poses[i].quaternion, frames[k].poses[i].quaternion)) / DT);
         maxPitch = Math.max(maxPitch, Math.abs(deg(Math.asin(heading(frames[k].poses[i])[1]))));
       }
-      assert.ok(maxRate < 80, `whale ${i} reversal turned at ${maxRate.toFixed(0)} deg/s`);
+      assert.ok(maxRate < 100, `whale ${i} reversal turned at ${maxRate.toFixed(0)} deg/s`);
       assert.ok(maxPitch < 66, `whale ${i} pitch ${maxPitch.toFixed(0)}: never end-on`);
     }
   });
@@ -112,8 +123,8 @@ test('scrolling quickens the swim, the turning is smooth, the lean is a lean and
       if (k > 1) maxAccel = Math.max(maxAccel, Math.abs(rate - prev) / DT);
       prev = rate;
     }
-    // A heavy body: no turn, lean or stroke ever jerks the attitude (about 1/60 of a turn per s²)
-    assert.ok(maxAccel < 1.5, `whale ${i} angular acceleration ${maxAccel.toFixed(2)} rad/s²`);
+    // A heavy body: no turn, lean or stroke ever jerks the attitude (about 1/30 of a turn per s²)
+    assert.ok(maxAccel < 2.2, `whale ${i} angular acceleration ${maxAccel.toFixed(2)} rad/s²`);
   }
   // Under a held scroll the flank faces the camera, so the dive or climb reads on screen
   for (const signal of [0.85, -0.85]) {
@@ -130,6 +141,30 @@ test('scrolling quickens the swim, the turning is smooth, the lean is a lean and
     assert.ok(Math.max(...leans) > 8, `whale ${i} never leans`);
     assert.ok(leans.reduce((a, b) => a + b, 0) / leans.length < 30, `whale ${i} mean idle lean too deep`);
   }
+});
+
+test('a one-second scroll turns both whales into a dive; it is held, eased out, and reversed by scrolling up', () => {
+  const c = composition();
+  // rest, a brisk one-second scroll down, let go, then the same scroll up
+  const script = (t) => (t < 2 ? 0 : t < 3 ? 0.6 : t < 10 ? 0 : t < 11 ? -0.6 : 0);
+  const frames = run(c, 20, script, 120);
+  const at = (t) => frames[Math.round(t / DT)].poses;
+  for (let i = 0; i < 2; i++) {
+    const rest = pitchOf(at(2)[i]);
+    // Within a second and a half of the scroll the whale has pushed over into a dive...
+    const dive = Math.min(...[3, 3.5, 4, 4.5].map((t) => pitchOf(at(t)[i])));
+    assert.ok(dive < rest - 6 && dive < -25, `whale ${i} dives to ${dive.toFixed(0)}° from ${rest.toFixed(0)}°`);
+    // ...and, the scroll stopped, carries it on as a glide rather than snapping level
+    assert.ok(pitchOf(at(4.5)[i]) < rest - 4, `whale ${i} snapped out of the dive (${pitchOf(at(4.5)[i]).toFixed(0)}°)`);
+    assert.ok(climbed(frames, i, 2, 6) < -0.04, `whale ${i} did not descend`);
+    // The reverse scroll is the same system run backwards: the whale rises
+    const climb = Math.max(...[11, 11.5, 12, 12.5].map((t) => pitchOf(at(t)[i])));
+    assert.ok(climb > pitchOf(at(10)[i]) + 6 && climb > 25, `whale ${i} climbs to ${climb.toFixed(0)}°`);
+    assert.ok(climbed(frames, i, 10, 14) > 0.04, `whale ${i} did not rise`);
+  }
+  // The signal itself never jumps: stopping eases it out over seconds
+  for (let k = 1; k < frames.length; k++) assert.ok(Math.abs(frames[k].s - frames[k - 1].s) < 0.06);
+  assert.ok(frames[Math.round(4 / DT)].s > 0.3, 'the dive intent is held after the scroll stops');
 });
 
 test('personalities: A larger and calmer, B quicker, their strokes never in unison', () => {

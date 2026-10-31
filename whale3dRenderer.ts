@@ -70,9 +70,9 @@ export interface WhaleState {
  */
 export const WHALE_LOOK = {
   ink: [9, 34, 82] as [number, number, number],
-  inkFar: [40, 78, 130] as [number, number, number],
+  inkFar: [26, 58, 112] as [number, number, number],
   contrast: 1.3,
-  farFade: 0.25,
+  farFade: 0.12,
   gamma: 1.3,
   tone: 0.14
 };
@@ -252,10 +252,14 @@ void main() {
   float pigment = vInfo.z;
   // Ink: pigment (dark back, pale belly) shaded by the light, deepening toward the silhouette
   // and into the core shadow, so the broad flank turns like a modelled surface
+  // A raking light from above models the mass: the ridge of the back and the upper flank catch a
+  // wet sheen, the flank turns through a core shadow below it, and the countershading keeps the
+  // throat and belly pale beneath that shadow
   float shade = 1.0 - clamp(lambert, 0.0, 1.0);
-  float core = smoothstep(-0.05, -0.45, lambert);
-  float ink = pigment * (0.28 + 0.62 * pow(shade, 1.15)) + 0.1 * core + 0.3 * rim * rim * rim;
-  ink = smoothstep(0.04, 1.0, ink);
+  float core = smoothstep(0.0, -0.5, lambert);
+  float sheen = pow(max(dot(n, normalize(uLight + vec3(0.0, 0.0, 1.0))), 0.0), 14.0);
+  float ink = pigment * (0.4 + 0.52 * pow(shade, 1.3)) + 0.24 * core * (1.0 - 0.4 * pigment) + 0.3 * rim * rim * rim - 0.2 * sheen * pigment;
+  ink = smoothstep(0.04, 0.97, ink);
   // The throat pleats: a pale pouch engraved with grooves running along the body. The groove
   // phase is the angle around the body at rest, so the grooves travel with the skin.
   float pleat = smoothstep(0.25, 0.85, vMarks.z) * (vInfo.x < 0.5 ? 1.0 : 0.0);
@@ -391,11 +395,11 @@ void main() {
       vec2 gny = vec2(ax1.a - ax0.a, ay1.a - ay0.a) * both;
       vec2 gm = vec2(mx1.r - mx0.r, my1.r - my0.r);
       covGrad += gc;
-      jxx += gc.x * gc.x + gd.x * gd.x + 0.35 * (gnx.x * gnx.x + gny.x * gny.x) + 0.6 * gm.x * gm.x;
-      jyy += gc.y * gc.y + gd.y * gd.y + 0.35 * (gnx.y * gnx.y + gny.y * gny.y) + 0.6 * gm.y * gm.y;
-      jxy += gc.x * gc.y + gd.x * gd.y + 0.35 * (gnx.x * gnx.y + gny.x * gny.y) + 0.6 * gm.x * gm.y;
+      jxx += gc.x * gc.x + gd.x * gd.x + 0.2 * (gnx.x * gnx.x + gny.x * gny.x) + 0.6 * gm.x * gm.x;
+      jyy += gc.y * gc.y + gd.y * gd.y + 0.2 * (gnx.y * gnx.y + gny.y * gny.y) + 0.6 * gm.y * gm.y;
+      jxy += gc.x * gc.y + gd.x * gd.y + 0.2 * (gnx.x * gnx.y + gny.x * gny.y) + 0.6 * gm.x * gm.y;
       silE += dot(gc, gc);
-      inE += dot(gd, gd) + 0.35 * (dot(gnx, gnx) + dot(gny, gny)) + 0.6 * dot(gm, gm);
+      inE += dot(gd, gd) + 0.2 * (dot(gnx, gnx) + dot(gny, gny)) + 0.6 * dot(gm, gm);
     }
   }
   float n = float(SX * SY);
@@ -408,12 +412,15 @@ void main() {
 
   float glyph = 0.0;
   float alpha = 0.0;
+  // Drawing class for the composite: 1 line work, else the tone cell's level (0.2 … 0.8)
+  float cls = 1.0;
   if (lum) {
     // Luminance: mean ink (thinned at the silhouette by coverage) through the density ramp
     float v = pow(clamp(ink * smoothstep(0.15, 0.6, coverage), 0.0, 1.0), uGamma);
     if (coverage > 0.22 && v > 0.04) {
       glyph = rampGlyph(v, cellIx);
       alpha = 1.0;
+      cls = 0.2 + 0.6 * v;
     }
   } else {
     float eye = eyeSum / n;
@@ -465,13 +472,18 @@ void main() {
       // Throat grooves engraved along the body: doubled lines where they run level
       glyph = along ? (level ? (groove > 0.3 ? uMarkG.x : uEdgeA.x) : strokeGlyph(axisA)) : uMarkG.w;
       alpha = 0.55 + 0.4 * max(v, groove);
+      cls = 0.4;
     } else if (coverage > 0.3) {
       // The body's mass as an engraver's tone scale: stipple in the light, hatching that runs
       // along the body through the mid tones, crosshatch in the shadow. No cell inside the body
       // is left empty except in the brightest light, so the form keeps its weight.
       float t = clamp(v * (app > 0.5 ? 0.8 : 1.0) + uTone * (app > 0.5 ? 0.5 : 1.0), 0.0, 1.0);
       float q = clamp(t * 6.0 + (d - 0.5) * 0.9, 0.0, 6.0);
+      // Foreshortened (head- or tail-on) the body has no stroke direction to hatch along: carry
+      // its tone a step lighter in stipple, so the form stays modelled instead of setting as a block
+      if (!along) q = max(0.0, q - 1.1);
       int L = int(floor(q + 0.5));
+      cls = 0.2 + 0.1 * float(L);
       // Engraved lines are spaced across the stroke direction: every other line in the light
       // tones, every line in the mid tones (the spacing, not the glyph, carries the tone)
       float sa = sin(axisA), ca = cos(axisA);
@@ -508,7 +520,7 @@ void main() {
     }
   }
   // B: tone toward the far ink with depth (the farther of two whales recedes)
-  outCell = vec4(glyph / 255.0, alpha, clamp(depth * 0.6, 0.0, 1.0), 1.0);
+  outCell = vec4(glyph / 255.0, alpha, clamp(depth * 0.6, 0.0, 1.0), cls);
 }
 `;
 
@@ -531,16 +543,31 @@ uniform float uMaskStrength;
 uniform sampler2D uGeometryMask;
 uniform vec3 uWater;
 uniform float uWaterOpacity;
+uniform vec2 uHalo;
+uniform float uInvert;
 out vec4 outColor;
 void main() {
   vec2 fc = vec2(gl_FragCoord.x, uCanvasH - gl_FragCoord.y);
   ivec2 cell = ivec2(floor(fc / uCell));
   vec4 c = texelFetch(uCells, cell, 0);
   float gi = floor(c.r * 255.0 + 0.5);
-  float protection = mix(1.0, texture(uReadingMask, fc / uMaskCanvas).r, uMaskStrength);
-  float silhouette = texture(uGeometryMask, gl_FragCoord.xy / uMaskCanvas).a;
-  float waterAlpha = silhouette * uWaterOpacity * uOpacity * protection;
+  // The whale is the subject: the water it displaces is cleared of the current under the body
+  // and, feathered, a little beyond it, so the fluid never frays or dissolves the outline
+  vec2 guv = gl_FragCoord.xy / uMaskCanvas;
+  float silhouette = texture(uGeometryMask, guv).a;
+  float halo = texture(uGeometryMask, guv + uHalo).a + texture(uGeometryMask, guv - uHalo).a
+    + texture(uGeometryMask, guv + vec2(uHalo.x, -uHalo.y)).a + texture(uGeometryMask, guv - vec2(uHalo.x, -uHalo.y)).a;
+  float shield = max(silhouette, 0.8 * smoothstep(0.0, 2.0, halo));
+  float waterAlpha = shield * uWaterOpacity * uOpacity;
   if ((c.g <= 0.0 || gi < 0.5) && waterAlpha <= 0.003) discard;
+  // Line work (silhouette, contours, mouth, eye) is class 1; the body's tone cells carry their
+  // engraver's level 0 … 1 below it
+  float line = step(0.95, c.a);
+  float level = clamp((c.a - 0.2) / 0.6, 0.0, 1.0) * (1.0 - line);
+  // Priority near the copy: the body's tone recedes softly behind a line of text while its drawing
+  // stays, so the animal is never cut out of the scene and the type still reads first
+  float near = texture(uReadingMask, fc / uMaskCanvas).r * uMaskStrength;
+  float protection = 1.0 - near * mix(0.86, 0.6, line);
   vec2 local = floor(fc - vec2(cell) * uCell);
   vec2 tile = vec2(mod(gi, uAtlasCols), floor(gi / uAtlasCols));
   float a = texelFetch(uAtlas, ivec2(tile * uTile + min(local, uTile - 1.0)), 0).a * min(1.0, c.g * uContrast) * uOpacity;
@@ -548,6 +575,10 @@ void main() {
   a *= 1.0 - uFarFade * c.b;
   a *= protection;
   vec3 col = mix(uInk, uInkFar, c.b);
+  // The drawing and the deepest shadow take the strongest ink (deeper on light water, brighter
+  // on the abyss), so the contour holds the form and the modelling reads in depth
+  float strong = max(line, smoothstep(0.55, 1.0, level));
+  col = mix(col, mix(col * 0.66, mix(col, vec3(1.0), 0.3), uInvert), strong * (1.0 - 0.6 * c.b));
   outColor = vec4(col * a + uWater * waterAlpha * (1.0 - a), a + waterAlpha * (1.0 - a));
 }
 `;
@@ -614,7 +645,7 @@ export class WhaleAsciiRenderer {
   private readonly readingCanvas = document.createElement('canvas');
   private readonly readingTexture = new THREE.CanvasTexture(this.readingCanvas);
   private readonly occluder = { center: new THREE.Vector3(), radius: 0, amount: 0 };
-  private readonly light = new THREE.Vector3(-0.5, 0.62, 0.6).normalize();
+  private readonly light = new THREE.Vector3(-0.42, 0.8, 0.42).normalize();
   private readonly tmp = new THREE.Vector3();
   private readonly onLost = (e: Event) => {
     e.preventDefault();
@@ -749,7 +780,9 @@ export class WhaleAsciiRenderer {
         uMaskStrength: { value: 0 },
         uGeometryMask: { value: null },
         uWater: { value: new THREE.Vector3(1, 1, 1) },
-        uWaterOpacity: { value: 0 }
+        uWaterOpacity: { value: 0 },
+        uHalo: { value: new THREE.Vector2() },
+        uInvert: { value: 0 }
       }
     });
     this.rawMaterial = new THREE.ShaderMaterial({
@@ -801,7 +834,13 @@ export class WhaleAsciiRenderer {
     this.gbuffer.setSize(Math.max(1, Math.round(this.cssW * this.gscale)), Math.max(1, Math.round(this.cssH * this.gscale)));
   }
 
-  /** Stage 1 line boxes, feathered at quarter resolution and sampled once per output pixel. */
+  /**
+   * How near each point is to the reading text (0 open water … 1 on a line), from Stage 1 line
+   * boxes at quarter resolution. Only the blurred shadow of each box is drawn (the boxes sit off
+   * the canvas), so the field has no edge anywhere: it swells toward the copy and fades over a
+   * few lines' height. The composite uses it to let the whale's tone recede behind the text while
+   * its drawing stays, never to cut a shape out of the animal.
+   */
   setReadingZones(rects: readonly { left: number; top: number; width: number; height: number }[], strength = 1) {
     const u = this.compositeMaterial.uniforms;
     u.uMaskStrength.value = strength;
@@ -811,16 +850,16 @@ export class WhaleAsciiRenderer {
       this.readingCanvas.width = w; this.readingCanvas.height = h;
     }
     const ctx = this.readingCanvas.getContext('2d')!;
-    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h);
-    // A generous, soft halo: monumental whales pass behind whole columns, and the type must keep
-    // clean water around it rather than ink right up to its letters
-    ctx.fillStyle = 'rgb(18,18,18)';
-    ctx.shadowColor = 'rgb(18,18,18)'; ctx.shadowBlur = 10;
+    ctx.shadowBlur = 0; ctx.shadowOffsetX = 0;
+    ctx.fillStyle = '#000'; ctx.fillRect(0, 0, w, h);
+    const off = w + 64;
+    ctx.fillStyle = '#fff';
+    ctx.shadowColor = '#fff'; ctx.shadowBlur = 9; ctx.shadowOffsetX = off;
     for (const r of rects) {
-      if (r.top > this.cssH || r.top + r.height < 0) continue;
-      ctx.fillRect((r.left - 14) / 4, (r.top - 10) / 4, (r.width + 28) / 4, (r.height + 20) / 4);
+      if (r.top > this.cssH + 40 || r.top + r.height < -40) continue;
+      ctx.fillRect((r.left - 4) / 4 - off, (r.top - 2) / 4, (r.width + 8) / 4, (r.height + 4) / 4);
     }
-    ctx.shadowBlur = 0;
+    ctx.shadowBlur = 0; ctx.shadowOffsetX = 0;
     this.readingTexture.needsUpdate = true;
   }
 
@@ -962,6 +1001,9 @@ export class WhaleAsciiRenderer {
       pu.uGeometryMask.value = maskTex;
       setRgb(pu.uWater.value, this.style.water);
       pu.uWaterOpacity.value = this.style.waterOpacity;
+      // The feathered margin of cleared water: about one and a half character cells
+      pu.uHalo.value.set((1.5 * cw) / W, (0.9 * ch) / H);
+      pu.uInvert.value = this.style.invert ? 1 : 0;
       setRgb(pu.uInk.value, this.style.ink);
       setRgb(pu.uInkFar.value, this.style.inkFar);
       pu.uOpacity.value = this.style.opacity;

@@ -109,9 +109,10 @@ export function mountAmbientWhales(host: HTMLElement): () => void {
     const dy = Math.max(-vh() * 0.25, Math.min(vh() * 0.25, finite(y - lastScroll, 0)));
     lastScroll = y;
     const raw = dt > 0 ? dy / dt : 0;
-    scrollVel = finite(scrollVel + (raw - scrollVel) * (1 - Math.exp(-dt / 0.18)), 0);
-    // About one viewport per second reads as a brisk scroll (signal near 0.8)
-    stepTravel(travel, Math.tanh(scrollVel / (vh() * 0.9)), dt, seconds, composition);
+    scrollVel = finite(scrollVel + (raw - scrollVel) * (1 - Math.exp(-dt / 0.12)), 0);
+    // Even an unhurried reading scroll (a quarter viewport per second) visibly turns the whales;
+    // about one viewport per second is a brisk scroll (signal near 0.9)
+    stepTravel(travel, Math.tanh(scrollVel / (vh() * 0.6)), dt, seconds, composition);
   };
   const drawAmbient = (dt: number, h: number) => {
     if (canvas.parentElement !== host) host.appendChild(canvas);
@@ -162,7 +163,7 @@ export function mountAmbientWhales(host: HTMLElement): () => void {
     // Deep blue on light water (the cinematic scene's own look, so the handoff never shifts), pale
     // on the abyss; the silhouette clears the water behind it so the form reads over the ocean field
     const near = WHALE_LOOK.ink, far = WHALE_LOOK.inkFar;
-    ascii.setStyle({ opacity: presence * mix(1 - 0.06 * composition.weight, 1, h), gamma: WHALE_LOOK.gamma, tone: WHALE_LOOK.tone, contrast: WHALE_LOOK.contrast, farFade: WHALE_LOOK.farFade, invert: ink > 0.5, water: [water, water, water], waterOpacity: 0.82 * (1 - h),
+    ascii.setStyle({ opacity: presence * mix(1 - 0.06 * composition.weight, 1, h), gamma: WHALE_LOOK.gamma, tone: WHALE_LOOK.tone, contrast: WHALE_LOOK.contrast, farFade: WHALE_LOOK.farFade, invert: ink > 0.5, water: [water, water, water], waterOpacity: 0.93 * (1 - h),
       ink: [mix(near[0], 178, ink), mix(near[1], 204, ink), mix(near[2], 214, ink)], inkFar: [mix(far[0], 112, ink), mix(far[1], 151, ink), mix(far[2], 165, ink)] });
     const zones = readingZones.read();
     if (maskDirty || h > 0 || zones !== lastZones || lastHeroVersion !== heroZone.version || lastGlobeVersion !== globeZone.version) {

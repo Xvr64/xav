@@ -128,7 +128,7 @@ const smoothstep = (a: number, b: number, x: number) => {
 const spow = (v: number, e: number) => Math.sign(v) * Math.abs(v) ** e;
 
 /** The raised hump the dorsal fin sits on: what gives the species its name. */
-export const humpAt = (s: number) => 0.011 * Math.exp(-(((s - 0.61) / 0.055) ** 2));
+export const humpAt = (s: number) => 0.016 * Math.exp(-(((s - 0.61) / 0.065) ** 2));
 
 /**
  * Tubercles: the knobs on a humpback's rostrum and lower jaw, each holding a sensory hair. Three
@@ -231,8 +231,8 @@ function buildBody(b: PartBuilder) {
       if (s < MOUTH_END_S + 0.01 && Math.abs(c) > 0.25) {
         const crease = Math.exp(-(((y - ym) / 0.0058) ** 2)) * smoothstep(0.004, 0.03, s) * (1 - smoothstep(MOUTH_END_S - 0.02, MOUTH_END_S + 0.01, s));
         const side = Math.abs(c);
-        x -= Math.sign(x) * 0.0058 * crease * side;
-        y -= 0.0018 * crease;
+        x -= Math.sign(x) * 0.0075 * crease * side;
+        y -= 0.0024 * crease;
         if (crease > 0.38) region = REGION_MOUTH;
       }
       // Tubercles raise the skin of the rostrum (upper surface) and the chin
@@ -386,7 +386,7 @@ function buildFin(b: PartBuilder) {
       const z = zle + chord * xc;
       const s = z + 0.5;
       const top = centreAt(s) + topAt(s) + humpAt(s);
-      const y = top - 0.008 + v * 0.036 * (1 - 0.35 * xc) + v * v * 0.004;
+      const y = top - 0.008 + v * 0.043 * (1 - 0.35 * xc) + v * v * 0.005;
       b.pos.push(side * 0.5 * thick * AIRFOIL(xc), y, z);
       b.info.push(PART_FIN, REGION_SKIN, 0.95, Math.min(1, s / BODY_END));
       b.spine.push(spineIndexOf(s));
@@ -395,7 +395,7 @@ function buildFin(b: PartBuilder) {
   loftIndices(b, 0, RINGS, AROUND);
   const tip = b.pos.length / 3;
   const s = 0.615 + 0.048 + 0.003;
-  b.pos.push(0, centreAt(s) + topAt(s) + humpAt(s) - 0.008 + 0.0405, s - 0.5);
+  b.pos.push(0, centreAt(s) + topAt(s) + humpAt(s) - 0.008 + 0.0485, s - 0.5);
   b.info.push(PART_FIN, REGION_SKIN, 0.95, s);
   b.spine.push(spineIndexOf(s));
   capIndices(b, (RINGS - 1) * AROUND, AROUND, tip, false);
