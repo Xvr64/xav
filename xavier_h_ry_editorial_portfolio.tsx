@@ -4,7 +4,7 @@ import { Eye, Download, X, Check } from 'lucide-react';
 import { AsciiText, DecodeSoundToggle, useEditorialScroll } from './TerminalEditorial';
 import { mountLanternCursor } from './lanternCursor';
 import { CV_DATA } from './cvData';
-import { FluidOceanBackground } from './FluidOceanBackground';
+import { ReadingZoneTracker } from './ReadingZoneTracker';
 import { JourneyGlobe } from './JourneyGlobe';
 import { AsciiWhaleBackground } from './AsciiWhaleBackground';
 import { WhaleConvergence } from './WhaleConvergence';
@@ -23,7 +23,7 @@ import { HadalFloor } from './HadalFloor';
 // ============================================================================
 // PAGE COMPOSITION — the layers and sections live in their own modules:
 //   cvData.ts (content) · abyssPalette.ts (the descent's colours) · oceanDirection.ts (shared
-//   whale lanes and reading zones) · FluidOceanBackground.tsx · AsciiWhaleBackground.tsx ·
+//   whale lanes and reading zones) · ReadingZoneTracker.tsx · AsciiWhaleBackground.tsx ·
 //   JourneyGlobe.tsx · OceanEntry.tsx (cover and introduction) · portfolioStyles.ts
 // ============================================================================
 
@@ -173,7 +173,7 @@ export default function App() {
     <div className="terminal-portfolio min-h-screen w-full max-w-full bg-[var(--ocean-background)] text-[#171717] antialiased selection:bg-neutral-700 selection:text-[#EDEDED]">
       <style>{GLOBAL_PORTFOLIO_CSS}</style>
 
-      <FluidOceanBackground />
+      <ReadingZoneTracker />
       <HeroCurrentLayer />
       <WhaleStretch sectionId="experience" lanes={LANES_EXPERIENCE} narrowLanes={LANES_EXPERIENCE_NARROW} />
       <GlobeDive />

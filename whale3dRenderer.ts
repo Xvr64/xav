@@ -552,7 +552,7 @@ void main() {
   vec4 c = texelFetch(uCells, cell, 0);
   float gi = floor(c.r * 255.0 + 0.5);
   // The whale is the subject: the water it displaces is cleared of the current under the body
-  // and, feathered, a little beyond it, so the fluid never frays or dissolves the outline
+  // and, feathered, a little beyond it, so nothing beneath frays or dissolves the outline
   vec2 guv = gl_FragCoord.xy / uMaskCanvas;
   float silhouette = texture(uGeometryMask, guv).a;
   float halo = texture(uGeometryMask, guv + uHalo).a + texture(uGeometryMask, guv - uHalo).a

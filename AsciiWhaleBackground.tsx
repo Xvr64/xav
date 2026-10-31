@@ -12,7 +12,6 @@ import {
   globeScrollProgress,
   inkMixFromAbyss
 } from './abyssPalette';
-import { fluidOceanLive, syncFluidOcean } from './FluidOceanBackground';
 import {
   READING_WHALE_ALPHA,
   ambientWhalesLive,
@@ -1773,10 +1772,9 @@ export const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.m
         lastWashAbyss = abyss;
         applyAbyssWash(abyss);
       }
-      // The Asciify fluid is the water whenever it is live: ink follows the same abyss value,
-      // the page background (--ocean-background) shows through this canvas, and the canvas's
-      // own generative water below is kept only as the fallback without WebGL2.
-      const fluidLive = !isFocus && fluidOceanLive();
+      // The water is the plain page background (--ocean-background), which follows the abyss
+      // and shows through this canvas; only the focus view still draws its own generative water.
+      const plainWater = !isFocus;
 
       // MIGRATION — one scroll clock, including the final handoff. No elapsed-time easing.
       // Stop scrolling and every scene layer holds its exact frame immediately.
@@ -1828,9 +1826,6 @@ export const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.m
       fxClock += dt * (1 - eng) + Math.abs(migP - lastMigP) * 24 * eng;
       lastMigP = migP;
       const fx = migActive ? migP * 24 : fxClock;
-      if (fluidLive) syncFluidOcean(abyss, migActive ? 0 : 1);
-      const waterLevel = Math.round(255 * (1 - abyss));
-      const waterRgb = `rgb(${waterLevel}, ${waterLevel}, ${waterLevel})`;
 
       // Reuse the cached backdrop and animation loop for an exact neutral background.
       if (waterBackdropCtx && (!backdropValid || abyss !== lastBackdropDepth)) {
@@ -1840,13 +1835,13 @@ export const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.m
         lastBackdropDepth = abyss;
         backdropValid = true;
       }
-      if (backdropValid && !fluidLive) ctx.drawImage(waterBackdropCanvas, 0, 0, w, h);
+      if (backdropValid && !plainWater) ctx.drawImage(waterBackdropCanvas, 0, 0, w, h);
 
       const cols = gridCols;
       const rows = gridRows;
 
       // 1B. Draw pre-rendered static hydrographic dot grid in 1 drawImage call
-      if (!fluidLive) ctx.drawImage(bgGridCanvas, 0, 0, w, h);
+      if (!plainWater) ctx.drawImage(bgGridCanvas, 0, 0, w, h);
 
       // 2. Generative ASCII Ocean Shader (Separable Harmonics: 0 inner-loop trig calls, 0 random flicker)
       const oCols = oceanCols;
@@ -1895,8 +1890,8 @@ export const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.m
       // Light crests belong to the surface; deeper water turns slate
       const crestThreshold = 0.38 + depth * 0.5;
 
-      // Skipped entirely while the Asciify fluid draws the water
-      const minOceanRow = fluidLive || migActive ? oRows : 0;
+      // Skipped entirely over plain water
+      const minOceanRow = plainWater || migActive ? oRows : 0;
       for (let or = minOceanRow; or < oRows; or++) {
         const rs1 = rowSin1[or];
         const rc1 = rowCos1[or];
@@ -2576,41 +2571,6 @@ export const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.m
             }
           }
         }
-      }
-
-      // 4B. WHALE OCCLUSION — the whale silhouette (body + its one-cell halo rim) is filled with
-      // the exact water colour, so the Asciify fluid underneath never shows through a whale.
-      // Done before everything drawn behind the whales, which therefore reads exactly as before.
-      if (fluidLive && curMaxC >= curMinC && curMaxR >= curMinR) {
-        const oMinC = Math.max(1, curMinC - 1);
-        const oMaxC = Math.min(cols - 2, curMaxC + 1);
-        const oMinR = Math.max(1, curMinR - 1);
-        const oMaxR = Math.min(rows - 2, curMaxR + 1);
-        ctx.globalAlpha = 1;
-        ctx.fillStyle = waterRgb;
-        ctx.beginPath();
-        for (let r = oMinR; r <= oMaxR; r++) {
-          const up = (r - 1) * cols;
-          const mid = r * cols;
-          const down = (r + 1) * cols;
-          let runStart = -1;
-          for (let c = oMinC; c <= oMaxC + 1; c++) {
-            let covered = false;
-            if (c <= oMaxC) {
-              for (let k = c - 1; k <= c + 1 && !covered; k++) {
-                covered = occBuf[up + k] > 0 || occBuf[mid + k] > 0 || occBuf[down + k] > 0;
-              }
-            }
-            // Right behind a line of text the thinned whale lets the typography show through
-            if (covered && readingBuf[mid + c] === 2) covered = false;
-            if (covered && runStart < 0) runStart = c;
-            else if (!covered && runStart >= 0) {
-              ctx.rect(runStart * cellSize, r * cellSize, (c - runStart) * cellSize, cellSize);
-              runStart = -1;
-            }
-          }
-        }
-        ctx.fill();
       }
 
       // 4C. MIGRATION SCENE — the spherical ocean, its wakes and the trails (behind the whales)
