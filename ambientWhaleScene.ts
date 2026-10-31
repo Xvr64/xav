@@ -187,6 +187,10 @@ export const deepDiveAt = (t: number) => windowAt(mod(t, 211), 60, 96, 16);
 const ROLL_PERIOD = [290, 230];
 const ROLL_START = [200, 150];
 /** One full, unhurried roll about the body axis (20 s of the whale's own roll clock). */
+const rollRateAt = (i: number, clock: number) => {
+  const u = clamp((mod(clock + i * 79, ROLL_PERIOD[i]) - ROLL_START[i]) / 20, 0, 1);
+  return TAU * 30 * u * u * (1 - u) * (1 - u) / 20;
+};
 export const rollAt = (i: number, clock: number) => TAU * smooth((mod(clock + i * 79, ROLL_PERIOD[i]) - ROLL_START[i]) / 20);
 
 /** Relative body sizes: A the larger, majestic animal, B a little smaller. */
@@ -291,6 +295,14 @@ export function ambientPath(i: number, t: number, c: AmbientComposition): V3 {
 /** The scroll's influence on the whales, integrated by their owner at a fixed or frame step. */
 export interface TravelState {
   /** Smoothed scroll signal: + scrolling down, − up (about ±1 at a brisk scroll). */
+  /** Water-space trajectory, integrated along the held heading; framing is separate. */
+  /** Fast directional intent, separate from the slow activity/speed signal. */
+  intent: number;
+  intentLife: number;
+  intentPixels: number;
+  position: [V3 | null, V3 | null];
+  speed: [number, number];
+  tailBend: [[number, number], [number, number]];
   s: number;
   sv: number;
   /** Per whale: vertical offset from the wander path, its rate and acceleration. */
@@ -329,8 +341,20 @@ export interface TravelState {
   surge: number;
 }
 export const newTravel = (seconds = 0): TravelState => ({
-  s: 0, sv: 0, drift: [0, 0], dv: [0, 0], da: [0, 0], di: [0, 0], side: [0, 0], sideV: [0, 0], deep: [0, 0], deepV: [0, 0], roll: [seconds, seconds], swim: [0, 0], fwd: [null, null], spin: [[0, 0, 0], [0, 0, 0]], up: [[0, 1, 0], [0, 1, 0]], bend: [[0, 0], [0, 0]], att: [[0, 0, 0, 0], [0, 0, 0, 0]], bank: [[0, 0], [0, 0]], ahead: 0, surge: 0
+  intent: 0, intentLife: 0, intentPixels: 0, position: [null, null], speed: [0, 0], tailBend: [[0, 0], [0, 0]], s: 0, sv: 0, drift: [0, 0], dv: [0, 0], da: [0, 0], di: [0, 0], side: [0, 0], sideV: [0, 0], deep: [0, 0], deepV: [0, 0], roll: [seconds, seconds], swim: [0, 0], fwd: [null, null], spin: [[0, 0, 0], [0, 0, 0]], up: [[0, 1, 0], [0, 1, 0]], bend: [[0, 0], [0, 0]], att: [[0, 0, 0, 0], [0, 0, 0, 0]], bank: [[0, 0], [0, 0]], ahead: 0, surge: 0
 });
+/** Accumulate real document movement: tiny direction noise never starts a maneuver.
+ * This only changes intent. Pose, velocity and stroke phase remain continuous. */
+export function noteScrollIntent(st: TravelState, pixels: number) {
+  if (!Number.isFinite(pixels) || pixels === 0) return;
+  if (Math.sign(pixels) !== Math.sign(st.intentPixels)) st.intentPixels = 0;
+  st.intentPixels += pixels;
+  if (Math.abs(st.intentPixels) < 6) return;
+  st.intent = Math.sign(st.intentPixels);
+  st.intentLife = 1.1;
+  st.intentPixels = st.intent * 6;
+}
+
 /**
  * How much of the frame's easing the heading follows. The rest is the camera reframing: held at
  * the edge the whale still points and beats along the scroll's dive (or climb) with the page
@@ -379,7 +403,7 @@ function pathVelocity(i: number, t: number, c: AmbientComposition, dv: number, s
 /**
  * Turn a held heading toward the wanted one: a critically damped spring in yaw and pitch whose
  * angular acceleration and rate are both limited. Where a path slows almost to a stop its tangent
- * can swing at any speed; the animal instead pivots at its own pace: it eases into a turn, sweeps
+ * can swing at any speed; the animal instead swims a wider arc at its own pace: it eases into a turn, sweeps
  * through it and eases out with a little follow-through, as a heavy body must. The rate limit is
  * a soft saturation, so no turn ever runs at a machine-constant speed. Big turns are made in yaw
  * about the vertical, as a whale turns, never by looping over the top; pitch only ever moves
@@ -401,7 +425,9 @@ function steer(st: TravelState, i: number, want: V3, dt: number, s: number) {
   // the inertia of its mass
   const urge = Math.min(1, Math.abs(s));
   const k = 2.2 * (1 + 0.4 * urge);
-  const maxTurn = MAX_TURN[i] * (1 + 0.2 * urge);
+  // Minimum turning radius grows with speed: never rotate in place at a slow path cusp.
+  const maxTurn = Math.min(MAX_TURN[i] * (1 + 0.2 * urge),
+    Math.max(0.65, st.speed[i] / (WHALE_SCALE[i] * 0.25)));
   const maxAccel = MAX_TURN_ACCEL[i] * (1 + 0.5 * urge);
   const eYaw = Math.atan2(Math.sin(wantYaw - a[0]), Math.cos(wantYaw - a[0]));
   const ePitch = wantPitch - a[1];
@@ -460,7 +486,14 @@ function steer(st: TravelState, i: number, want: V3, dt: number, s: number) {
  */
 export function stepTravel(st: TravelState, target: number, dt: number, seconds: number, c: AmbientComposition) {
   if (!(dt > 0)) return;
+  // Bounded integration steps keep steering stable across refresh rates and delayed frames.
+  if (dt > 1 / 60 + 1e-8) {
+    const n = Math.ceil(dt * 60), h = dt / n;
+    for (let k = 0; k < n; k++) stepTravel(st, target, h, seconds - dt + (k + 1) * h, c);
+    return;
+  }
   const cam = ambientCamera(c.width, c.height);
+  st.intentLife = Math.max(0, st.intentLife - dt);
   const goal = clamp(target, -1, 1);
   // A scroll is answered within a beat; when the visitor slows or stops, the whales carry the
   // dive (or climb) on as a glide and ease out of it over a couple of seconds, never snapping back
@@ -483,7 +516,7 @@ export function stepTravel(st: TravelState, target: number, dt: number, seconds:
   // clear of each other (B the more, A the calmer yielding a little), with a soft ramp that
   // steers, not bounces. Side by side or one slipping behind the other rather than stacked: the
   // frame has room across and in depth, while stacking would push one out of the top or bottom
-  const framed = [0, 1].map((i) => vAdd(ambientPath(i, t, c), [st.side[i], st.drift[i], st.deep[i]]));
+  const framed = [0, 1].map((i) => vAdd(st.position[i] ?? ambientPath(i, t, c), [st.side[i], st.drift[i], st.deep[i]]));
   const gap = vSub(framed[1], framed[0]);
   const weighted: V3 = [2.5 * gap[0], gap[1], 2 * gap[2]];
   const apart: V3 = vLen(weighted) > 1e-4 ? vNorm(weighted) : [0, 0, -1];
@@ -492,10 +525,28 @@ export function stepTravel(st: TravelState, target: number, dt: number, seconds:
     const yieldTo = (i === 0 ? -0.6 : 1) * clear;
     const a = ambientPath(i, t - 0.6, c);
     const b = ambientPath(i, t + 0.6, c);
-    const p = ambientPath(i, t, c);
+    const reference = ambientPath(i, t, c);
+    const p = st.position[i] ?? reference;
     const vh = (Math.hypot(b[0] - a[0], b[2] - a[2]) / 1.2) * pace;
-    const vx = ((b[0] - a[0]) / 1.2) * pace;
-    const vy = ((b[1] - a[1]) / 1.2) * pace;
+    const pathY = ((b[1] - a[1]) / 1.2) * pace;
+    const wanted = pathVelocity(i, t, c, st.di[i], s);
+    // A bounded pursuit correction rejoins the habitat curve by swimming toward it.
+    // Vertical scroll travel belongs to the swim; only horizontal/depth wander is homed.
+    // Direction takes the fast route; propulsion still uses the heavy, smoothed speed response.
+    // Fade the request at its end so a short wheel notch flows back into ambient swimming.
+    const intentWeight = smooth(st.intentLife / 0.45);
+    const steering = s + (st.intent * 0.85 - s) * intentWeight;
+    const turnVertical = -steering * (steering >= 0 ? K_DOWN[i] : K_UP[i]);
+    wanted[1] += (turnVertical * Math.hypot(wanted[0], wanted[2]) - wanted[1]) * intentWeight;
+    const horizontal = Math.max(1e-5, Math.hypot(wanted[0], wanted[2]));
+    for (const axis of [0, 2]) wanted[axis] += 0.055 * Math.tanh((reference[axis] - p[axis]) * 2);
+    wanted[1] *= Math.hypot(wanted[0], wanted[2]) / horizontal;
+    const desiredSpeed = Math.max(0.035 + Math.abs(c.avoid?.[i] ?? 0) * (1 - Math.min(1, Math.abs(s) / 0.2)), vLen(wanted));
+    st.speed[i] += (desiredSpeed - st.speed[i]) * (1 - Math.exp(-dt / (i === 0 ? 1.1 : 0.8)));
+    steer(st, i, vNorm(wanted), dt, s);
+    const velocity = vScale(st.fwd[i]!, st.speed[i]);
+    const vx = velocity[0], vy = velocity[1];
+    st.position[i] = vAdd(p, vScale(velocity, dt));
     // Where the camera sees the whole animal now, and how many body lengths one device unit spans
     // at its depth
     const [x0, x1, y0, y1] = projectedBounds(sampleAmbientWhale(i, seconds, c, st), cam);
@@ -504,7 +555,7 @@ export function stepTravel(st: TravelState, target: number, dt: number, seconds:
     const k = s >= 0 ? K_DOWN[i] : K_UP[i];
     // While the visitor scrolls, the scroll owns the vertical: the whale gives up its own climb or
     // descent and dives (or rises) with it, so the direction always reads
-    let cmd = -s * k * Math.max(vh, 0.05) * (1 + 0.5 * Math.abs(s)) - vy * Math.min(1, 1.8 * Math.abs(s));
+    let cmd = -s * k * Math.max(vh, 0.05) * (1 + 0.5 * Math.abs(s)) - pathY * Math.min(1, 1.8 * Math.abs(s));
     const calm = 1 - Math.min(1, Math.abs(s) / 0.2);
     cmd -= clamp(st.drift[i] * 0.1, -0.03, 0.03) * calm;
     cmd += clamp(c.avoid?.[i] ?? 0, -0.07, 0.07) * calm;
@@ -521,7 +572,7 @@ export function stepTravel(st: TravelState, target: number, dt: number, seconds:
     const level = smooth(urge / 0.6);
     if (s > 0 && LEAD_DOWN[i] > rangeY[0]) rangeY[0] = Math.min(rangeY[1], rangeY[0] + (LEAD_DOWN[i] - rangeY[0]) * level);
     if (s < 0 && LEAD_UP[i] < rangeY[1]) rangeY[1] = Math.max(rangeY[0], rangeY[1] + (LEAD_UP[i] - rangeY[1]) * level);
-    const dv = softFrame(vy + st.di[i], (y0 + y1) / 2, rangeY, unitY) - vy;
+    const dv = softFrame(vy, (y0 + y1) / 2, rangeY, unitY) - vy;
     st.da[i] = (dv - st.dv[i]) / dt;
     st.dv[i] = dv;
     st.drift[i] += dv * dt;
@@ -540,14 +591,21 @@ export function stepTravel(st: TravelState, target: number, dt: number, seconds:
     if (deep > 0) deep *= smooth((0.45 - p[2] - st.deep[i]) / 0.25);
     st.deepV[i] += (deep - st.deepV[i]) * (1 - Math.exp(-dt / 0.4));
     st.deep[i] += st.deepV[i] * dt;
-    const rise = headingRise(st, i);
     st.roll[i] += dt * (1 + 1.4 * Math.max(0, s) - 0.45 * Math.max(0, -s));
-    st.swim[i] += (dt * (CADENCE[i] * (1 - 0.65 * glideAt(i, t)) + Math.hypot(vh, vy + rise))) / WHALE_SCALE[i];
-    steer(st, i, vNorm(pathVelocity(i, t, c, rise, s)), dt, s);
+    st.swim[i] += (dt * (CADENCE[i] * (1 - 0.65 * glideAt(i, t)) + st.speed[i])) / WHALE_SCALE[i];
+
     // Body flex follows the turning with a lag: a 30-tonne animal bends into a turn
-    const [turn, climb] = curvature(i, t, c, st);
-    const lag = 1 - Math.exp(-dt / 0.45);
+    let [turn, climb] = curvature(i, t, c, st);
+    // The head anticipates the same desired trajectory that steering is following. The body
+    // bends before the centre has finished turning, then releases as the heading aligns.
+    const desired = vNorm(wanted);
+    const bodyFrame = orientWhale(st.fwd[i]!, st.up[i], st.bank[i][0]);
+    turn = clamp(turn + intentWeight * 1.1 * vDot(desired, qRotate(bodyFrame, X_AXIS)), -1.05, 1.05);
+    climb = clamp(climb + intentWeight * 1.1 * vDot(desired, qRotate(bodyFrame, Y_AXIS)), -1.05, 1.05);
+    const lag = 1 - Math.exp(-dt / (intentWeight > 0 ? 0.09 : 0.28));
     st.bend[i] = [st.bend[i][0] + (turn - st.bend[i][0]) * lag, st.bend[i][1] + (climb - st.bend[i][1]) * lag];
+    const tailLag = 1 - Math.exp(-dt / (i === 0 ? 0.85 : 0.65));
+    for (let axis = 0; axis < 2; axis++) st.tailBend[i][axis] += (st.bend[i][axis] - st.tailBend[i][axis]) * tailLag;
     // The lean is a spring a little under critical damping: the whale rolls into a turn, carries
     // the lean through it and settles back level with a breath of overshoot. Pitching adds a
     // twist, so a pull-up from a dive (or a push-over into one) is carved, spiralling, in 3D.
@@ -572,7 +630,7 @@ function curvature(i: number, seconds: number, c: AmbientComposition, travel?: T
   const vel = travel ? pathVelocity(i, seconds, c, headingRise(travel, i), travel.s) : pathVelocity(i, seconds, c, 0, 0);
   const acceleration = vScale([after[0] + before[0] - p[0] * 2, after[1] + before[1] - p[1] * 2, after[2] + before[2] - p[2] * 2], 1 / (h * h));
   acceleration[1] += travel?.da[i] ?? 0;
-  const speed = Math.max(0.005, vLen(vel));
+  const speed = Math.max(0.005, travel ? travel.speed[i] : vLen(vel));
   const forward = travel?.fwd[i] ?? vNorm(vel);
   const level = orientWhale(forward, travel ? travel.up[i] : Y_AXIS);
   const scale = WHALE_SCALE[i];
@@ -591,11 +649,11 @@ export function sampleAmbientWhale(i: number, seconds: number, c: AmbientComposi
   // Heading and curvature come from a symmetric chord over 2.4 s: on a smooth arc it is the
   // tangent. With travel state the heading, back, curvature and lean are the integrated ones.
   const t = seconds + (travel?.ahead ?? 0);
-  const p = ambientPath(i, t, c);
+  const p = travel?.position[i] ?? ambientPath(i, t, c);
   const s = travel?.s ?? 0;
   // Capped pitch: a dive keeps the whale's side to the camera and its basis well defined
   const vel = travel ? pathVelocity(i, t, c, headingRise(travel, i), s) : pathVelocity(i, t, c, 0, 0);
-  const speed = Math.max(0.005, vLen(vel));
+  const speed = Math.max(0.005, travel ? travel.speed[i] : vLen(vel));
   // The heading the whale holds (steered), or the path's own tangent for a stateless sample
   const forward = travel?.fwd[i] ?? vNorm(vel);
   const back = travel ? travel.up[i] : Y_AXIS;
@@ -608,8 +666,8 @@ export function sampleAmbientWhale(i: number, seconds: number, c: AmbientComposi
   // Gathering speed takes power strokes; easing off is a glide.
   const glide = glideAt(i, t);
   const surge = travel ? travel.surge : 0;
-  const effort = ((0.45 + Math.min(0.45, (speed / scale) * 2.8)) * (1 - 0.92 * glide) + 0.4 * Math.abs(s)) * (1 + 0.45 * Math.min(0, surge)) + 0.55 * Math.max(0, surge);
-  const articulation = articulate({ distance: travel ? travel.swim[i] : seconds * (i === 0 ? 0.115 : 0.135), effort, turn, climb, bank: lean, phase: i * 2.3, stride: STRIDE[i] });
+  const effort = (travel ? Math.min(0.35, Math.hypot(...travel.bend[i]) * 0.32) : 0) + ((0.45 + Math.min(0.45, (speed / scale) * 2.8)) * (1 - 0.92 * glide) + 0.4 * Math.abs(s)) * (1 + 0.45 * Math.min(0, surge)) + 0.55 * Math.max(0, surge);
+  const articulation = articulate({ distance: travel ? travel.swim[i] : seconds * (i === 0 ? 0.115 : 0.135), effort, powerStroke: 0.18 * (1 - glide), turn, climb, tailTurn: travel?.tailBend[i][0], tailClimb: travel?.tailBend[i][1], bank: lean, rollRate: rollRateAt(i, travel?.roll[i] ?? seconds), phase: i * 2.3, stride: STRIDE[i] });
   // Each beat of the flukes heaves the whole body and rocks it about its centre of mass: the
   // downstroke lifts the chest and dips the head, the upstroke lets it settle
   const level = orientWhale(forward, back, bank);

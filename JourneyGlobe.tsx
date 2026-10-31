@@ -3,7 +3,7 @@ import { loadLandDots, type LandDots } from './glyphcssGlobe';
 import type { LocationItem } from './cvData';
 import { abyssFromProgress, globeScrollGeometry, globeScrollProgress, lerpN } from './abyssPalette';
 import { convergence, convergenceProgress, diveWake, globeRevealAt, setGlobeZone } from './oceanDirection';
-import { mountCinematicScroll, type CinematicStops } from './cinematicScroll';
+import { CINEMATIC_SPEED, mountCinematicScroll, type CinematicStops } from './cinematicScroll';
 
 const PlainText = ({ text }: { text: string }) => <>{text}</>;
 
@@ -646,7 +646,7 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
     if (globeIo) globeIo.observe(runway || stage);
 
     // Two complete films. These knots only pace playback; they never require input.
-    // Preserve the whale timing and shorten the full city journey (including release) by 25%.
+    // Base pacing (city journey already 25% shorter); CINEMATIC_SPEED then scales whales and cities alike.
     const WHALE_STOPS = [0, 0.15, 0.3, 0.45, 0.84];
     const WHALE_SEC = [2.0, 2.6, 2.6, 3.8];
     const EARTH_SEC = 2.6;
@@ -673,7 +673,8 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
       // The last city's dwell ends where the stage releases into the following section
       y.push(g0 + runwayTravel);
       dur.push(1.4 * 0.75);
-      return { y, dur, earth };
+      // Scale every phase equally, including city holds and the final release.
+      return { y, dur: dur.map(seconds => seconds / CINEMATIC_SPEED), earth };
     };
     const cinematic = mountCinematicScroll(cinematicStops);
     skipRef.current = cinematic.skip;

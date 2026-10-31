@@ -68,6 +68,9 @@ export interface CinematicScroll {
   destroy(): void;
 }
 
+export const CINEMATIC_SPEED = 1.5;
+const RATE_EASE_SECONDS = 0.12 / CINEMATIC_SPEED;
+
 export const timelineTimes = (st: CinematicStops): number[] => {
   const t = [0];
   for (const d of st.dur) t.push(t[t.length - 1] + d);
@@ -144,8 +147,8 @@ export function mountCinematicScroll(stops: () => CinematicStops | null): Cinema
     const dt = Math.max(0, (now - play.last) / 1000);
     play.last = now;
     // Integrate a short velocity transition exactly: direction changes keep position AND speed.
-    const decay = Math.exp(-dt / 0.12);
-    const distance = play.direction * dt + (play.rate - play.direction) * 0.12 * (1 - decay);
+    const decay = Math.exp(-dt / RATE_EASE_SECONDS);
+    const distance = play.direction * dt + (play.rate - play.direction) * RATE_EASE_SECONDS * (1 - decay);
     play.rate = play.direction + (play.rate - play.direction) * decay;
     play.time = Math.max(times[play.lo], Math.min(times[play.hi], play.time + distance));
     const end = times[play.target];

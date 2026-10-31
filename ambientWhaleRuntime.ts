@@ -4,7 +4,7 @@ import { createConvergenceLayer, type ConvergenceLayer } from './convergenceLaye
 import { sampleConvergence } from './convergenceScene';
 import { globeFrame } from './JourneyGlobe';
 import { ambientWhalesLive, convergence, convergenceProgress, globeZone, readingZones, smoothStepRange, whaleDirection, whaleStage } from './oceanDirection';
-import { ambientCamera, newTravel, projectedBounds, sampleAmbientWhale, stepTravel, type AmbientComposition } from './ambientWhaleScene';
+import { ambientCamera, newTravel, noteScrollIntent, projectedBounds, sampleAmbientWhale, stepTravel, type AmbientComposition } from './ambientWhaleScene';
 import { qConj, qMul, qRotate, qSlerp, vLerp, skinFrames, type Articulation, type Quat } from './whale3dPose';
 import { globeScrollGeometry, inkMixFromAbyss } from './abyssPalette';
 import { waterShade } from './terminalMotion';
@@ -144,6 +144,9 @@ export function mountAmbientWhales(host: HTMLElement): () => void {
     const y = scrollY;
     // A jump (anchor link, restore) is not a swim: cap what one frame can contribute
     const dy = Math.max(-vh() * 0.25, Math.min(vh() * 0.25, finite(y - lastScroll, 0)));
+    // Observe direction before velocity smoothing can conceal a reversal. Anchor jumps do not
+    // trigger a maneuver, and cinematic poses are still sampled from their own timeline.
+    if (Math.abs(y - lastScroll) < vh() * 0.25) noteScrollIntent(travel, dy);
     lastScroll = y;
     const raw = dt > 0 ? dy / dt : 0;
     scrollVel = finite(scrollVel + (raw - scrollVel) * (1 - Math.exp(-dt / 0.12)), 0);

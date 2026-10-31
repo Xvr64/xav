@@ -146,6 +146,9 @@ export interface Articulation {
   /** Body curvature toward the whale's +X (right) and +Y (back), per body length. */
   bendYaw: number;
   bendPitch: number;
+  /** Optional delayed caudal steering; absent for deterministic cinematic poses. */
+  tailYaw?: number;
+  tailPitch?: number;
   flipperL: FlipperPose;
   flipperR: FlipperPose;
   /** Extra pitch of the flukes on the peduncle (trailing edge down +), and their spanwise flex. */
@@ -160,6 +163,11 @@ export interface SwimInput {
   effort: number;
   /** Path curvature in the whale's frame, per body length: + toward its right / its back. */
   turn?: number;
+  tailTurn?: number;
+  tailClimb?: number;
+  rollRate?: number;
+  /** Smooth phase asymmetry for a stronger power stroke and slower recovery. */
+  powerStroke?: number;
   climb?: number;
   /** Current bank angle (radians), used to trim the flippers. */
   bank?: number;
@@ -173,7 +181,8 @@ export interface SwimInput {
 export function articulate(input: SwimInput): Articulation {
   const effort = Math.max(0, Math.min(1.6, input.effort));
   const stride = input.stride ?? 0.95;
-  const stroke = (input.distance / stride) * Math.PI * 2 + (input.phase ?? 0);
+  const phase = (input.distance / stride) * Math.PI * 2 + (input.phase ?? 0);
+  const stroke = phase + Math.max(0, Math.min(0.25, input.powerStroke ?? 0)) * Math.sin(phase);
   // Glide keeps a residual undulation; the stroke deepens with effort
   const amplitude = 0.16 + 0.84 * effort;
   const turn = input.turn ?? 0;
@@ -184,7 +193,7 @@ export function articulate(input: SwimInput): Articulation {
   // Flippers: spread for gliding, trimmed against a turn (the inside one lowered and swept back),
   // and carried by the stroke: they lift and fall as the body wave passes under them, sweep back
   // on the downstroke and feather their leading edge, so the long wings ride the swim
-  const trim = Math.max(-0.5, Math.min(0.5, turn * 0.35 + bank * 0.25));
+  const trim = Math.max(-0.5, Math.min(0.5, turn * 0.35 + bank * 0.25 + (input.rollRate ?? 0) * 0.28));
   const glide = 1 - Math.min(1, effort);
   const base = { sweep: 0.05 - 0.12 * glide, dihedral: 0.1 * glide - 0.04 * climb, twist: -0.06 * climb };
   const lift = 0.13 * amplitude * beat;
@@ -197,8 +206,10 @@ export function articulate(input: SwimInput): Articulation {
     amplitude,
     bendYaw: turn,
     bendPitch: climb,
+    tailYaw: input.tailTurn,
+    tailPitch: input.tailClimb,
     flipperL: { sweep: base.sweep - trim * 0.4 + fold, dihedral: base.dihedral + trim + lift, twist: base.twist + feather },
-    flipperR: { sweep: base.sweep + trim * 0.4 + fold, dihedral: base.dihedral - trim + lift, twist: base.twist + feather },
+    flipperR: { sweep: base.sweep + trim * 0.4 + fold, dihedral: base.dihedral - trim + lift * 0.88 + 0.015 * amplitude * Math.sin(stroke + 0.3), twist: base.twist + feather * 0.9 },
     fluke: 0.5 * amplitude * Math.cos(stroke - 2 * Math.PI * 0.9 - 0.98),
     flukeFlex: 0.09 * amplitude * Math.sin(stroke - 2 * Math.PI * 0.95 - 0.98)
   };
@@ -239,8 +250,14 @@ export function spineFrames(a: Articulation, outP: Float32Array, outQ: Float32Ar
   const tan: V3[] = [];
   for (let i = 0; i < n; i++) {
     const s = i * ds;
-    const yaw = a.bendYaw * (s - PIVOT_S);
-    const pitch = -a.bendPitch * (s - PIVOT_S) + strokeAngle(a, s);
+    // Delayed curvature grows continuously behind the shoulders: the head initiates a turn,
+    // the torso carries it and the caudal stock follows through after the head straightens.
+    const rear = Math.max(0, (s - PIVOT_S) / (1 - PIVOT_S));
+    const lagWeight = rear * rear * (3 - 2 * rear);
+    const yawBend = a.bendYaw + ((a.tailYaw ?? a.bendYaw) - a.bendYaw) * lagWeight;
+    const pitchBend = a.bendPitch + ((a.tailPitch ?? a.bendPitch) - a.bendPitch) * lagWeight;
+    const yaw = yawBend * (s - PIVOT_S);
+    const pitch = -pitchBend * (s - PIVOT_S) + strokeAngle(a, s);
     const q = qMul(qAxisAngle(Y_AXIS, yaw), qAxisAngle(X_AXIS, pitch));
     outQ.set(q, offset + i * 4);
     tan.push(qRotate(q, Z_AXIS));

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { AMBIENT_SIZE, ambientCamera, ambientPath, newTravel, projectedBounds, rollAt, sampleAmbientWhale, socialAt, stepTravel } from './ambientWhaleScene.ts';
+import { AMBIENT_SIZE, ambientCamera, ambientPath, newTravel, noteScrollIntent, projectedBounds, rollAt, sampleAmbientWhale, socialAt, stepTravel } from './ambientWhaleScene.ts';
 import { qRotate, vLen, vSub } from './whale3dPose.ts';
 
 const composition = (width = 1280, height = 720) => ({ width, height, scroll: 0, weight: 0, lanes: [{ x: 0.79, y: 0.8 }, { x: 0.15, y: 0.9 }], surfaceY: -Infinity });
@@ -231,4 +231,74 @@ test('ambient sampling is repeatable; rolls are occasional; social motion is bou
   assert.equal(socialAt(145), 1);
   assert.equal(socialAt(200), 0);
   assert.ok(ambientPath(0, 10, c).every(Number.isFinite));
+});
+
+
+test('water-space travel follows the held heading through repeated reversals, with caudal lag', () => {
+  const c = composition();
+  const st = newTravel();
+  let lag = 0;
+  for (let k = 0; k < 1200; k++) {
+    const before = st.position.map(p => p && [...p]);
+    stepTravel(st, Math.sin(k / 90) * .9, 1/60, k/60, c);
+    for (let i = 0; i < 2; i++) {
+      if (before[i]) {
+        const delta = vSub(st.position[i], before[i]);
+        const distance = vLen(delta);
+        assert.ok(distance > 0, 'the whale swims forward throughout a reversal');
+        const alignment = delta.reduce((a, v, axis) => a + v * st.fwd[i][axis], 0) / distance;
+        assert.ok(alignment > .99999, 'steering and displacement share one trajectory');
+      }
+      lag = Math.max(lag, Math.abs(st.bend[i][0] - st.tailBend[i][0]), Math.abs(st.bend[i][1] - st.tailBend[i][1]));
+    }
+  }
+  assert.ok(lag > .02, 'the tail follows turns later than the torso');
+});
+
+test('trajectory integration agrees at 30 and 60 Hz', () => {
+  const c = composition();
+  const simulate = hz => {
+    const st = newTravel();
+    for (let k=1;k<=hz*12;k++) stepTravel(st, .6, 1/hz, k/hz, c);
+    return st;
+  };
+  const a=simulate(30), b=simulate(60);
+  for(let i=0;i<2;i++) {
+    assert.ok(vLen(vSub(a.position[i],b.position[i])) < 1e-6);
+    assert.ok(vLen(vSub(a.fwd[i],b.fwd[i])) < 1e-6);
+  }
+});
+
+
+test('direction intent bends both whales within 100 ms without snapping their heading', () => {
+  const c = composition(), st = newTravel();
+  for(let k=0;k<240;k++) stepTravel(st,.8,1/60,k/60,c);
+  const before = st.bend.map(b=>[...b]);
+  const headings = st.fwd.map(f=>[...f]);
+  noteScrollIntent(st,-30);
+  assert.deepEqual(st.fwd,headings, 'input only changes intent, never transforms');
+  for(let k=1;k<=6;k++) stepTravel(st,.8,1/60,4+k/60,c); // old velocity still points down
+  for(let i=0;i<2;i++) {
+    assert.ok(st.bend[i][1]>before[i][1]+.1, 'upward flex begins before smoothed scroll changes sign');
+    assert.ok(st.bend[i][1]>st.tailBend[i][1], 'head/torso lead the delayed caudal bend');
+    assert.ok(vLen(vSub(st.fwd[i],headings[i]))<.15, 'the full turn is not instantaneous');
+  }
+});
+
+test('tiny scroll noise is ignored; rapid genuine reversals keep continuous, bounded body poses', () => {
+  const st=newTravel(),c=composition();
+  for(let k=0;k<60;k++) noteScrollIntent(st,k%2?1:-1);
+  assert.equal(st.intentLife,0);
+  let previous=null;
+  for(let k=0;k<1200;k++) {
+    if(k%20===0) noteScrollIntent(st,k%40===0?30:-30);
+    stepTravel(st,Math.sin(k/90),1/60,k/60,c);
+    const poses=[0,1].map(i=>sampleAmbientWhale(i,k/60,c,st));
+    for(let i=0;i<2;i++) {
+      assert.ok(Math.abs(st.bend[i][0])<=1.05 && Math.abs(st.bend[i][1])<=1.05);
+      assert.ok([...poses[i].position,...poses[i].quaternion].every(Number.isFinite));
+      if(previous) assert.ok(angle(previous[i].quaternion,poses[i].quaternion)<.05);
+    }
+    previous=poses;
+  }
 });
