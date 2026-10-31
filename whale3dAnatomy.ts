@@ -87,16 +87,16 @@ export function monotoneCurve(knots: readonly (readonly [number, number])[]): (x
 // keeled tail stock.
 const PROFILE: readonly (readonly [number, number, number, number, number])[] = [
   [0.0, 0.0, 0.0, 0.0, -0.012],
-  [0.01, 0.022, 0.013, 0.024, -0.012],
-  [0.035, 0.043, 0.025, 0.047, -0.012],
-  [0.08, 0.062, 0.037, 0.068, -0.011],
-  [0.15, 0.081, 0.053, 0.092, -0.01],
-  [0.23, 0.1, 0.071, 0.112, -0.008],
-  [0.31, 0.115, 0.09, 0.124, -0.005],
-  [0.39, 0.12, 0.104, 0.12, -0.001],
-  [0.47, 0.116, 0.109, 0.104, 0.004],
-  [0.55, 0.104, 0.108, 0.085, 0.009],
-  [0.62, 0.086, 0.101, 0.07, 0.012],
+  [0.01, 0.024, 0.013, 0.025, -0.012],
+  [0.035, 0.046, 0.025, 0.049, -0.012],
+  [0.08, 0.066, 0.038, 0.071, -0.011],
+  [0.15, 0.087, 0.055, 0.097, -0.01],
+  [0.23, 0.107, 0.074, 0.118, -0.008],
+  [0.31, 0.123, 0.094, 0.13, -0.005],
+  [0.39, 0.129, 0.109, 0.126, -0.001],
+  [0.47, 0.125, 0.114, 0.109, 0.004],
+  [0.55, 0.111, 0.112, 0.089, 0.009],
+  [0.62, 0.091, 0.104, 0.073, 0.012],
   [0.69, 0.065, 0.086, 0.058, 0.013],
   [0.77, 0.042, 0.064, 0.046, 0.011],
   [0.84, 0.025, 0.044, 0.033, 0.008],
@@ -280,7 +280,7 @@ const AIRFOIL = (xc: number) => 1.32 * Math.sqrt(Math.max(0, xc)) * (1 - xc) ** 
 function flipperShape(): { pos: number[]; rings: number; around: number } {
   const RINGS = 30;
   const AROUND = 14;
-  const LEN = 0.31;
+  const LEN = 0.33;
   const pos: number[] = [];
   for (let k = 0; k < RINGS; k++) {
     const t = k / (RINGS - 1);
@@ -309,7 +309,7 @@ function buildFlipper(b: PartBuilder, part: number, mirror: boolean, shape: Retu
   const base = b.pos.length / 3;
   const { pos, rings, around } = shape;
   for (let v = 0; v < pos.length; v += 3) {
-    const span = pos[v] / 0.31;
+    const span = pos[v] / 0.33;
     b.pos.push(mirror ? -pos[v] : pos[v], pos[v + 1], pos[v + 2]);
     // Humpback flippers are pale; the tips dissolve before the root
     const underside = pos[v + 1] < 0 ? 0 : 1;
@@ -319,7 +319,7 @@ function buildFlipper(b: PartBuilder, part: number, mirror: boolean, shape: Retu
   const local: PartBuilder = newPart();
   loftIndices(local, 0, rings, around);
   const tip = b.pos.length / 3;
-  b.pos.push(mirror ? -0.31 : 0.31, -0.022, 0.05 + 0.002);
+  b.pos.push(mirror ? -0.33 : 0.33, -0.022, 0.05 + 0.002);
   b.info.push(part, REGION_SKIN, 0.4, 0.72);
   b.spine.push(spineIndexOf(FLIPPER_ROOT_S));
   capIndices(local, (rings - 1) * around, around, tip - base, false);
@@ -467,10 +467,10 @@ export function buildWhaleGeometry(): WhaleGeometry {
   const shape = flipperShape();
   const flipR = newPart();
   buildFlipper(flipR, PART_FLIPPER_R, false, shape);
-  orientOutward(flipR, (x, _y, z) => [x, -0.022 * (x / 0.31) ** 2, z]);
+  orientOutward(flipR, (x, _y, z) => [x, -0.022 * (x / 0.33) ** 2, z]);
   const flipL = newPart();
   buildFlipper(flipL, PART_FLIPPER_L, true, shape);
-  orientOutward(flipL, (x, _y, z) => [x, -0.022 * (x / 0.31) ** 2, z]);
+  orientOutward(flipL, (x, _y, z) => [x, -0.022 * (x / 0.33) ** 2, z]);
   const fluke = newPart();
   buildFlukes(fluke);
   orientOutward(fluke, (x, _y, z) => [x, 0, z]);

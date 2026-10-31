@@ -167,6 +167,18 @@ test('a one-second scroll turns both whales into a dive; it is held, eased out, 
   assert.ok(frames[Math.round(4 / DT)].s > 0.3, 'the dive intent is held after the scroll stops');
 });
 
+test('composition: a whale settled over copy swims toward open water, only while the page holds still', () => {
+  const free = run(composition(), 20, () => 0, 200);
+  const steered = run({ ...composition(), avoid: [0.07, -0.07] }, 20, () => 0, 200);
+  // A rises off the paragraph, B sinks below it, each by a good part of a viewport
+  assert.ok(climbed(steered, 0, 0, 19.9) - climbed(free, 0, 0, 19.9) > 0.25, 'A did not swim up toward open water');
+  assert.ok(climbed(steered, 1, 0, 19.9) - climbed(free, 1, 0, 19.9) < -0.25, 'B did not swim down toward open water');
+  // While the visitor scrolls, the scroll owns the vertical
+  const scrolling = (avoid) => run({ ...composition(), avoid }, 6, () => 0.85, 200);
+  const d = climbed(scrolling([0.07, 0.07]), 0, 0, 5.9) - climbed(scrolling([0, 0]), 0, 0, 5.9);
+  assert.ok(Math.abs(d) < 0.05, `composition fought the scroll by ${d.toFixed(3)}`);
+});
+
 test('personalities: A larger and calmer, B quicker, their strokes never in unison', () => {
   const c = composition();
   const frames = run(c, 300, () => 0);

@@ -400,8 +400,7 @@ export function createConvergenceLayer(canvas: HTMLCanvasElement, firstCity: { l
       ascii.setStyle({ mode: 'shape', cellW: 6, cellH: 10 });
     },
     render(p) {
-      ascii.setReadingZones([], 0);
-      ascii.setStyle({ ...WHALE_LOOK, invert: false, waterOpacity: 0 });
+      ascii.setStyle({ ...WHALE_LOOK, invert: false });
       const f = sampleConvergence(p, view);
       f.whales.forEach((w, i) =>
         ascii.setWhale(i, { visible: w.visible, position: w.position, quaternion: w.quaternion, scale: w.scale, articulation: w.articulation, dissolve: w.dissolve })

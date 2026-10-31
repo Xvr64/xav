@@ -47,9 +47,6 @@ export interface AsciiStyle {
   gamma: number;
   /** Lift of the body's engraving tone scale (0 … 1): more line work, the modelling kept. */
   tone: number;
-  /** Optional ocean displacement under the true silhouette, never under rectangular tiles. */
-  water: [number, number, number];
-  waterOpacity: number;
 }
 
 export interface WhaleState {
@@ -69,12 +66,12 @@ export interface WhaleState {
  * recedes without washing out, and engraving tones lifted toward full ink.
  */
 export const WHALE_LOOK = {
-  ink: [9, 34, 82] as [number, number, number],
-  inkFar: [26, 58, 112] as [number, number, number],
-  contrast: 1.3,
+  ink: [24, 60, 89] as [number, number, number],
+  inkFar: [44, 84, 116] as [number, number, number],
+  contrast: 1.45,
   farFade: 0.12,
   gamma: 1.3,
-  tone: 0.14
+  tone: 0.18
 };
 
 export const DEFAULT_STYLE: AsciiStyle = {
@@ -89,9 +86,7 @@ export const DEFAULT_STYLE: AsciiStyle = {
   farFade: WHALE_LOOK.farFade,
   invert: false,
   gamma: WHALE_LOOK.gamma,
-  tone: WHALE_LOOK.tone,
-  water: [255, 255, 255],
-  waterOpacity: 0
+  tone: WHALE_LOOK.tone
 };
 
 // ---- Glyph atlas -----------------------------------------------------------------------------
@@ -286,7 +281,8 @@ void main() {
   gInk = vec4(clamp(ink, 0.0, 1.0), depth, n.x * 0.5 + 0.5, n.y * 0.5 + 0.5);
   // Screen direction of the body axis (for hatching along the form), and how strongly it shows
   vec2 tan2 = normalize(vViewTan).xy;
-  float axial = length(tan2) > 0.32 ? fract(atan(tan2.y, tan2.x) / 3.14159265 + 1.0) : 0.0;
+  // (0 means none, so an exactly level axis is kept just above it)
+  float axial = length(tan2) > 0.32 ? max(fract(atan(tan2.y, tan2.x) / 3.14159265 + 1.0), 0.002) : 0.0;
   gMask = vec4(mouth, eye, axial, coverage);
   // Engraving marks: pleat pouch, groove line, tubercles, and appendages (kept pale and crisp)
   gMarks = vec4(pleat, groove * pleat, knob, vInfo.x > 0.5 && vInfo.x < 3.5 ? 1.0 : 0.0);
@@ -375,7 +371,10 @@ void main() {
       grooveSum += mk.g * c;
       knobSum += mk.b * c;
       appSum += mk.a * c;
-      if (m.b > 0.0) axis += vec2(cos(m.b * 6.2831853), sin(m.b * 6.2831853)) * c;
+      // The axis angle wraps (0 and 1 are the same direction), so it is read unfiltered: a linear
+      // blend of 0.99 and 0.01 would turn a level body's hatching vertical
+      float ax = texelFetch(uMask, ivec2(uv * vec2(textureSize(uMask, 0))), 0).b;
+      if (ax > 0.0) axis += vec2(cos(ax * 6.2831853), sin(ax * 6.2831853)) * c;
       covCentroid += (vec2(float(i), float(j)) + 0.5) / vec2(float(SX), float(SY)) * c;
       // Gradients (uv y up): silhouette from coverage, occluding contours from depth, creases
       // from normals, and the mouth line from its mask
@@ -446,6 +445,8 @@ void main() {
     float axisLen = length(axis) / body;
     float axisA = fract(atan(axis.y, axis.x) / 6.2831853 + 1.0) * 3.14159265;
     bool along = axisLen > 0.55;
+    // The jaw line runs with the head; its crease mask is too thin to orient itself reliably
+    if (mouthLine && !silhouette && along) lineA = axisA;
     bool level = axisA < 0.42 || axisA > 2.72;
     if (eye > 0.14 && coverage > 0.4) {
       glyph = uMarkG.z;
@@ -505,9 +506,9 @@ void main() {
         else if (onLine || d < 0.55) { glyph = level ? (onLine ? uMarkG.x : uEdgeA.x) : strokeGlyph(axisA); alpha = 0.8; }
         else { glyph = uToneG.x; alpha = 0.6; }
       } else if (L == 4) {
-        // Cross-hatching: strokes along the body, crossed by strokes across it between them
-        float crossA = mod(axisA + 1.5707963, 3.14159265);
-        glyph = !along ? uToneG.y : (onLine ? strokeGlyph(axisA) : strokeGlyph(crossA));
+        // Cross-hatching: strokes along the body, and between them doubled lines (level) or
+        // crossings, so the deeper tone reads as denser engraving, never as a picket of bars
+        glyph = !along ? uToneG.y : (onLine ? strokeGlyph(axisA) : (level ? uMarkG.x : uToneG.y));
         alpha = 0.88;
       } else if (L == 5) {
         glyph = d < 0.5 ? uToneG.z : (along ? strokeGlyph(axisA) : uToneG.y);
@@ -537,13 +538,6 @@ uniform vec3 uInkFar;
 uniform float uOpacity;
 uniform float uContrast;
 uniform float uFarFade;
-uniform sampler2D uReadingMask;
-uniform vec2 uMaskCanvas;
-uniform float uMaskStrength;
-uniform sampler2D uGeometryMask;
-uniform vec3 uWater;
-uniform float uWaterOpacity;
-uniform vec2 uHalo;
 uniform float uInvert;
 out vec4 outColor;
 void main() {
@@ -551,35 +545,23 @@ void main() {
   ivec2 cell = ivec2(floor(fc / uCell));
   vec4 c = texelFetch(uCells, cell, 0);
   float gi = floor(c.r * 255.0 + 0.5);
-  // The whale is the subject: the water it displaces is cleared of the current under the body
-  // and, feathered, a little beyond it, so nothing beneath frays or dissolves the outline
-  vec2 guv = gl_FragCoord.xy / uMaskCanvas;
-  float silhouette = texture(uGeometryMask, guv).a;
-  float halo = texture(uGeometryMask, guv + uHalo).a + texture(uGeometryMask, guv - uHalo).a
-    + texture(uGeometryMask, guv + vec2(uHalo.x, -uHalo.y)).a + texture(uGeometryMask, guv - vec2(uHalo.x, -uHalo.y)).a;
-  float shield = max(silhouette, 0.8 * smoothstep(0.0, 2.0, halo));
-  float waterAlpha = shield * uWaterOpacity * uOpacity;
-  if ((c.g <= 0.0 || gi < 0.5) && waterAlpha <= 0.003) discard;
+  // Nothing but the glyphs: no panel, no fill and no mask, so a whale's silhouette stays whole
+  // wherever it swims (the copy keeps its own halo above this layer)
+  if (c.g <= 0.0 || gi < 0.5) discard;
   // Line work (silhouette, contours, mouth, eye) is class 1; the body's tone cells carry their
   // engraver's level 0 … 1 below it
   float line = step(0.95, c.a);
   float level = clamp((c.a - 0.2) / 0.6, 0.0, 1.0) * (1.0 - line);
-  // Priority near the copy: the body's tone recedes softly behind a line of text while its drawing
-  // stays, so the animal is never cut out of the scene and the type still reads first
-  float near = texture(uReadingMask, fc / uMaskCanvas).r * uMaskStrength;
-  float protection = 1.0 - near * mix(0.86, 0.6, line);
   vec2 local = floor(fc - vec2(cell) * uCell);
   vec2 tile = vec2(mod(gi, uAtlasCols), floor(gi / uAtlasCols));
   float a = texelFetch(uAtlas, ivec2(tile * uTile + min(local, uTile - 1.0)), 0).a * min(1.0, c.g * uContrast) * uOpacity;
-  if (gi < 0.5) a = 0.0;
   a *= 1.0 - uFarFade * c.b;
-  a *= protection;
   vec3 col = mix(uInk, uInkFar, c.b);
   // The drawing and the deepest shadow take the strongest ink (deeper on light water, brighter
   // on the abyss), so the contour holds the form and the modelling reads in depth
   float strong = max(line, smoothstep(0.55, 1.0, level));
   col = mix(col, mix(col * 0.66, mix(col, vec3(1.0), 0.3), uInvert), strong * (1.0 - 0.6 * c.b));
-  outColor = vec4(col * a + uWater * waterAlpha * (1.0 - a), a + waterAlpha * (1.0 - a));
+  outColor = vec4(col * a, a);
 }
 `;
 
@@ -642,8 +624,6 @@ export class WhaleAsciiRenderer {
   private cssH = 1;
   private dpr = 1;
   private gscale: number;
-  private readonly readingCanvas = document.createElement('canvas');
-  private readonly readingTexture = new THREE.CanvasTexture(this.readingCanvas);
   private readonly occluder = { center: new THREE.Vector3(), radius: 0, amount: 0 };
   private readonly light = new THREE.Vector3(-0.42, 0.8, 0.42).normalize();
   private readonly tmp = new THREE.Vector3();
@@ -661,10 +641,6 @@ export class WhaleAsciiRenderer {
 
   constructor(canvas: HTMLCanvasElement, opts: WhaleAsciiRendererOptions = {}) {
     this.canvas = canvas;
-    this.readingCanvas.width = this.readingCanvas.height = 1;
-    this.readingCanvas.getContext('2d')!.fillRect(0, 0, 1, 1);
-    this.readingTexture.flipY = false;
-    this.readingTexture.generateMipmaps = false;
     const maxWhales = opts.maxWhales ?? 2;
     this.gscale = opts.gbufferScale ?? 0.75;
     this.renderer = new THREE.WebGLRenderer({ canvas, alpha: true, premultipliedAlpha: true, antialias: false, powerPreference: 'high-performance' });
@@ -775,13 +751,6 @@ export class WhaleAsciiRenderer {
         uOpacity: { value: 1 },
         uContrast: { value: WHALE_LOOK.contrast },
         uFarFade: { value: WHALE_LOOK.farFade },
-        uReadingMask: { value: this.readingTexture },
-        uMaskCanvas: { value: new THREE.Vector2(1, 1) },
-        uMaskStrength: { value: 0 },
-        uGeometryMask: { value: null },
-        uWater: { value: new THREE.Vector3(1, 1, 1) },
-        uWaterOpacity: { value: 0 },
-        uHalo: { value: new THREE.Vector2() },
         uInvert: { value: 0 }
       }
     });
@@ -832,35 +801,6 @@ export class WhaleAsciiRenderer {
   setResolution(scale: number) {
     this.gscale = Math.max(0.35, Math.min(0.75, scale));
     this.gbuffer.setSize(Math.max(1, Math.round(this.cssW * this.gscale)), Math.max(1, Math.round(this.cssH * this.gscale)));
-  }
-
-  /**
-   * How near each point is to the reading text (0 open water … 1 on a line), from Stage 1 line
-   * boxes at quarter resolution. Only the blurred shadow of each box is drawn (the boxes sit off
-   * the canvas), so the field has no edge anywhere: it swells toward the copy and fades over a
-   * few lines' height. The composite uses it to let the whale's tone recede behind the text while
-   * its drawing stays, never to cut a shape out of the animal.
-   */
-  setReadingZones(rects: readonly { left: number; top: number; width: number; height: number }[], strength = 1) {
-    const u = this.compositeMaterial.uniforms;
-    u.uMaskStrength.value = strength;
-    if (strength <= 0) return;
-    const w = Math.ceil(this.cssW / 4), h = Math.ceil(this.cssH / 4);
-    if (this.readingCanvas.width !== w || this.readingCanvas.height !== h) {
-      this.readingCanvas.width = w; this.readingCanvas.height = h;
-    }
-    const ctx = this.readingCanvas.getContext('2d')!;
-    ctx.shadowBlur = 0; ctx.shadowOffsetX = 0;
-    ctx.fillStyle = '#000'; ctx.fillRect(0, 0, w, h);
-    const off = w + 64;
-    ctx.fillStyle = '#fff';
-    ctx.shadowColor = '#fff'; ctx.shadowBlur = 9; ctx.shadowOffsetX = off;
-    for (const r of rects) {
-      if (r.top > this.cssH + 40 || r.top + r.height < -40) continue;
-      ctx.fillRect((r.left - 4) / 4 - off, (r.top - 2) / 4, (r.width + 8) / 4, (r.height + 4) / 4);
-    }
-    ctx.shadowBlur = 0; ctx.shadowOffsetX = 0;
-    this.readingTexture.needsUpdate = true;
   }
 
   setWhale(i: number, state: WhaleState | null) {
@@ -997,12 +937,6 @@ export class WhaleAsciiRenderer {
       pu.uCell.value.set(cw, ch);
       pu.uTile.value.set(cw, ch);
       pu.uCanvasH.value = H;
-      pu.uMaskCanvas.value.set(W, H);
-      pu.uGeometryMask.value = maskTex;
-      setRgb(pu.uWater.value, this.style.water);
-      pu.uWaterOpacity.value = this.style.waterOpacity;
-      // The feathered margin of cleared water: about one and a half character cells
-      pu.uHalo.value.set((1.5 * cw) / W, (0.9 * ch) / H);
       pu.uInvert.value = this.style.invert ? 1 : 0;
       setRgb(pu.uInk.value, this.style.ink);
       setRgb(pu.uInkFar.value, this.style.inkFar);
@@ -1030,7 +964,6 @@ export class WhaleAsciiRenderer {
     this.cells.dispose();
     this.atlasTexture?.dispose();
     this.skinTexture.dispose();
-    this.readingTexture.dispose();
     this.whales[0]?.mesh.geometry.dispose();
     for (const w of this.whales) w.material.dispose();
     this.cellMaterial.dispose();

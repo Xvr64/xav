@@ -3,7 +3,7 @@ import { WHALE_LOOK, WhaleAsciiRenderer, type WhaleState } from './whale3dRender
 import { createConvergenceLayer, type ConvergenceLayer } from './convergenceLayer';
 import { sampleConvergence } from './convergenceScene';
 import { globeFrame } from './JourneyGlobe';
-import { ambientWhalesLive, convergence, convergenceProgress, globeZone, heroZone, readingZones, smoothStepRange, whaleDirection, whaleStage } from './oceanDirection';
+import { ambientWhalesLive, convergence, convergenceProgress, globeZone, readingZones, smoothStepRange, whaleDirection, whaleStage } from './oceanDirection';
 import { ambientCamera, newTravel, sampleAmbientWhale, stepTravel, type AmbientComposition } from './ambientWhaleScene';
 import { qConj, qMul, qRotate, qSlerp, vLerp, skinFrames, type Articulation, type Quat } from './whale3dPose';
 import { globeScrollGeometry, inkMixFromAbyss } from './abyssPalette';
@@ -35,10 +35,6 @@ export function mountAmbientWhales(host: HTMLElement): () => void {
   let lastDraw = 0;
   let seconds = 0;
   let dirty = true;
-  let maskDirty = true;
-  let lastZones: ReturnType<typeof readingZones.read> | null = null;
-  let lastHeroVersion = -1;
-  let lastGlobeVersion = -1;
   let frameCount = 0;
   let meanMs = 0;
   let quality = innerWidth < 768 ? 0.5 : 0.65;
@@ -55,7 +51,49 @@ export function mountAmbientWhales(host: HTMLElement): () => void {
   const reduced = () => motion.matches || forceReduced;
   const vw = () => Math.max(1, innerWidth || 1);
   const vh = () => Math.max(1, innerHeight || 1);
-  const composition: AmbientComposition = { width: vw(), height: vh(), scroll: 0, weight: finite(whaleDirection.weight, 0), lanes: whaleDirection.lanes.map(l => ({ ...l })), surfaceY: whaleDirection.surfaceY };
+  const avoid = [0, 0];
+  const composition: AmbientComposition = { width: vw(), height: vh(), scroll: 0, weight: finite(whaleDirection.weight, 0), lanes: whaleDirection.lanes.map(l => ({ ...l })), surfaceY: whaleDirection.surfaceY, avoid };
+  /** Share of a screen box covered by reading text (line boxes, capped at 1). */
+  const textCover = (rects: ReturnType<typeof readingZones.read>, x0: number, y0: number, x1: number, y1: number) => {
+    let sum = 0;
+    for (const r of rects) {
+      const w = Math.min(x1, r.left + r.width) - Math.max(x0, r.left);
+      const h = Math.min(y1, r.top + r.height) - Math.max(y0, r.top);
+      if (w > 0 && h > 0) sum += w * h;
+    }
+    return Math.min(1, sum / Math.max(1, (x1 - x0) * (y1 - y0)));
+  };
+  /**
+   * Composition: where a whale's torso (the densest engraving) has settled over a block of copy,
+   * it drifts toward whichever side, above or below, holds less text. Eased, so it reads as the
+   * animal choosing open water, never as a correction.
+   */
+  const composeAround = (dt: number) => {
+    const rects = readingZones.read();
+    for (let i = 0; i < 2; i++) {
+      const sp = ambientWhalesLive.spines[i];
+      let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+      for (let n = 10; n <= 30; n++) {
+        const x = sp[n * 2], y = sp[n * 2 + 1];
+        if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+        x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y);
+      }
+      let want = 0;
+      if (x1 > x0 && rects.length) {
+        const girth = 0.08 * ambientCamera(vw(), vh()).px;
+        x0 = Math.max(0, x0 - girth); x1 = Math.min(vw(), x1 + girth);
+        y0 -= girth; y1 += girth;
+        if (x1 > x0 && y1 > 0 && y0 < vh()) {
+          const shift = vh() * 0.3;
+          const here = textCover(rects, x0, y0, x1, y1);
+          const up = textCover(rects, x0, y0 - shift, x1, y1 - shift);
+          const down = textCover(rects, x0, y0 + shift, x1, y1 + shift);
+          want = Math.max(-1, Math.min(1, (down - up) * 4)) * 0.07 * Math.min(1, here / 0.12);
+        }
+      }
+      avoid[i] = finite(avoid[i] + (want - avoid[i]) * (1 - Math.exp(-dt / 1.2)), 0);
+    }
+  };
   // The scroll's direction drives the whales' travel: + down, - up (smoothed, saturating)
   const travel = newTravel(0);
   let lastScroll = scrollY;
@@ -86,7 +124,6 @@ export function mountAmbientWhales(host: HTMLElement): () => void {
     viewKey = key;
     ascii.resize(w, h, dpr);
     ascii.setStyle({ mode: 'shape', cellW: 6, cellH: 10 });
-    maskDirty = true;
     return true;
   };
   const publishSpines = () => {
@@ -112,6 +149,7 @@ export function mountAmbientWhales(host: HTMLElement): () => void {
     scrollVel = finite(scrollVel + (raw - scrollVel) * (1 - Math.exp(-dt / 0.12)), 0);
     // Even an unhurried reading scroll (a quarter viewport per second) visibly turns the whales;
     // about one viewport per second is a brisk scroll (signal near 0.9)
+    composeAround(dt);
     stepTravel(travel, Math.tanh(scrollVel / (vh() * 0.6)), dt, seconds, composition);
   };
   const drawAmbient = (dt: number, h: number) => {
@@ -158,19 +196,12 @@ export function mountAmbientWhales(host: HTMLElement): () => void {
     ascii.setOccluder([0, 0, 0], 0, 0);
     const abyss = 1 - waterShade(scrollY, globeScrollGeometry.start, globeScrollGeometry.travel, innerHeight) / 255;
     const ink = inkMixFromAbyss(abyss);
-    const water = (1 - abyss) * 255;
-    const presence = reduced() ? (globeZone.rects.length ? 0.35 : 0.8) : h > 0 ? 1 : whaleDirection.presence;
-    // Deep blue on light water (the cinematic scene's own look, so the handoff never shifts), pale
-    // on the abyss; the silhouette clears the water behind it so the form reads over the ocean field
+    const presence = reduced() ? (globeZone.rects.length ? 0.5 : 1) : h > 0 ? 1 : whaleDirection.presence;
+    // Deep ocean blue on light water (the cinematic scene's own look, so the handoff never shifts),
+    // a pale sea-glass on the abyss. Nothing masks or fills behind them: the glyphs are the whale.
     const near = WHALE_LOOK.ink, far = WHALE_LOOK.inkFar;
-    ascii.setStyle({ opacity: presence * mix(1 - 0.06 * composition.weight, 1, h), gamma: WHALE_LOOK.gamma, tone: WHALE_LOOK.tone, contrast: WHALE_LOOK.contrast, farFade: WHALE_LOOK.farFade, invert: ink > 0.5, water: [water, water, water], waterOpacity: 0.93 * (1 - h),
-      ink: [mix(near[0], 178, ink), mix(near[1], 204, ink), mix(near[2], 214, ink)], inkFar: [mix(far[0], 112, ink), mix(far[1], 151, ink), mix(far[2], 165, ink)] });
-    const zones = readingZones.read();
-    if (maskDirty || h > 0 || zones !== lastZones || lastHeroVersion !== heroZone.version || lastGlobeVersion !== globeZone.version) {
-      ascii.setReadingZones([...zones, ...heroZone.rects, ...(h > 0 ? [] : globeZone.rects)], 1 - h);
-      lastZones = zones; lastHeroVersion = heroZone.version; lastGlobeVersion = globeZone.version;
-      maskDirty = false;
-    }
+    ascii.setStyle({ opacity: presence * mix(1 - 0.06 * composition.weight, 1, h), gamma: WHALE_LOOK.gamma, tone: WHALE_LOOK.tone, contrast: WHALE_LOOK.contrast, farFade: WHALE_LOOK.farFade, invert: ink > 0.5,
+      ink: [mix(near[0], 196, ink), mix(near[1], 218, ink), mix(near[2], 228, ink)], inkFar: [mix(far[0], 132, ink), mix(far[1], 168, ink), mix(far[2], 182, ink)] });
     if (debugAngles) {
       const d = debugAngles;
       const qy = new THREE.Quaternion().setFromEuler(new THREE.Euler(d.pitch, d.yaw, d.roll, 'YXZ'));
@@ -213,7 +244,7 @@ export function mountAmbientWhales(host: HTMLElement): () => void {
     }
     if (running) raf = requestAnimationFrame(frame);
   };
-  const schedule = () => { dirty = true; maskDirty = true; if (!raf && !document.hidden && !disposed) { last = performance.now(); raf = requestAnimationFrame(frame); } };
+  const schedule = () => { dirty = true; if (!raf && !document.hidden && !disposed) { last = performance.now(); raf = requestAnimationFrame(frame); } };
   const visibility = () => { cancelAnimationFrame(raf); raf = 0; last = performance.now(); if (!document.hidden) schedule(); };
   const onMotion = () => { anchor = null; setReady(); schedule(); };
   ascii.onContextLost = () => { canvas.style.visibility = 'hidden'; setReady(); cancelAnimationFrame(raf); raf = 0; ambientWhalesLive.presence = 0; };
@@ -235,10 +266,14 @@ export function mountAmbientWhales(host: HTMLElement): () => void {
       /** Advance the live whales by `sec` at 30 Hz under a fixed scroll signal (−1 up … 1 down). */
       simulate: (sec: number, signal: number) => {
         debugTime = null; debugAngles = null; anchor = null;
-        for (let k = 0; k < Math.round(sec * 30); k++) { seconds += 1 / 30; stepTravel(travel, signal, 1 / 30, seconds, composition); }
+        for (let k = 0; k < Math.round(sec * 30); k++) {
+          seconds += 1 / 30; composeAround(1 / 30); stepTravel(travel, signal, 1 / 30, seconds, composition);
+          // Keep the projected spines current, so the composition sees where each whale now is
+          if (!inCinema && k % 6 === 5) drawAmbient(1 / 30, 0);
+        }
         lastScroll = scrollY; scrollVel = 0;
         if (!inCinema) drawAmbient(1 / 30, 0);
-        return { s: travel.s, pitch: travel.fwd.map(f => (f ? Math.round(Math.asin(f[1]) * 573) / 10 : null)), drift: travel.drift.map(d => Math.round(d * 100) / 100) };
+        return { s: travel.s, pitch: travel.fwd.map(f => (f ? Math.round(Math.asin(f[1]) * 573) / 10 : null)), drift: travel.drift.map(d => Math.round(d * 100) / 100), avoid: avoid.map(a => Math.round(a * 1000) / 1000) };
       },
       state: () => ({ seconds, current, handoff, inCinema, frameCount, meanMs, quality, reduced: reduced(), contexts: 1, parent: canvas.parentElement?.dataset, presence: ambientWhalesLive.presence, travel, camera: ambientCamera(vw(), vh()) }),
       renderer: ascii

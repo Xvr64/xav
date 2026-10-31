@@ -88,8 +88,8 @@ test('anatomy: humpback proportions — long flippers, broad flukes, stout body'
   // Pectoral flippers reach about a third of the body length; flukes span about a third
   assert.ok(flipperReach > 0.27 && flipperReach < 0.36, `flipper ${flipperReach}`);
   assert.ok(flukeMax - flukeMin > 0.29 && flukeMax - flukeMin < 0.38, `fluke span ${flukeMax - flukeMin}`);
-  assert.ok(bodyW > 0.17 && bodyW < 0.25, `body width ${bodyW}`);
-  assert.ok(bodyTop - bodyBottom > 0.17 && bodyTop - bodyBottom < 0.26, `body depth ${bodyTop - bodyBottom}`);
+  assert.ok(bodyW > 0.17 && bodyW < 0.27, `body width ${bodyW}`);
+  assert.ok(bodyTop - bodyBottom > 0.17 && bodyTop - bodyBottom < 0.28, `body depth ${bodyTop - bodyBottom}`);
 });
 
 test('skinning: the rest pose reproduces the rest mesh exactly', () => {

@@ -26,6 +26,12 @@ export interface AmbientComposition {
   weight: number;
   lanes: readonly { x: number; y: number }[];
   surfaceY: number;
+  /**
+   * Per whale, a gentle vertical swim (body lengths/s, + up) toward open water when its torso has
+   * settled over a block of reading text. Composition, not masking: applied only while the page
+   * holds still, so the copy reads beside the animal instead of through it.
+   */
+  avoid?: readonly number[];
 }
 
 export interface AmbientCamera {
@@ -49,7 +55,7 @@ const clamp = (x: number, a: number, b: number) => Math.max(a, Math.min(b, x));
 export function ambientCamera(width: number, height: number): AmbientCamera {
   const W = Math.max(1, width);
   const H = Math.max(1, height);
-  const px = Math.min(1.3 * W, 1.5 * H, Math.max(0.98 * W, 0.84 * H));
+  const px = Math.min(1.45 * W, 1.7 * H, Math.max(1.12 * W, 0.95 * H));
   const halfH = H / (2 * px);
   return { z: AMBIENT_DISTANCE, fov: (2 * Math.atan(halfH / AMBIENT_DISTANCE) * 180) / Math.PI, halfW: W / (2 * px), halfH, px };
 }
@@ -81,8 +87,8 @@ const CADENCE = [0.065, 0.028];
 /** Stretches where each whale stops beating and coasts on its momentum. */
 const glideAt = (i: number, t: number) => (i === 0 ? windowAt(mod(t, 71), 28, 52, 8) : windowAt(mod(t + 23, 53), 30, 41, 6));
 /** tan(dive angle) and tan(climb angle): B dives more steeply, both rise a little more gently. */
-const K_DOWN = [1.45, 1.7];
-const K_UP = [1.3, 1.5];
+const K_DOWN = [1.6, 1.9];
+const K_UP = [1.4, 1.6];
 /**
  * The steepest a heading may tilt, as tan(pitch): about 35° at rest (restrained, unhurried),
  * opening to about 64° while the visitor scrolls. The whale is still seen from the side.
@@ -321,7 +327,7 @@ export function stepTravel(st: TravelState, target: number, dt: number, seconds:
   // A scroll is answered within a beat; when the visitor slows or stops, the whales carry the
   // dive (or climb) on as a glide and ease out of it over a couple of seconds, never snapping back
   const easing = goal * st.s >= 0 && Math.abs(goal) < Math.abs(st.s);
-  const w = easing ? 0.95 : 3.4;
+  const w = easing ? 1.3 : 3.4;
   st.sv += (w * w * (goal - st.s) - 2 * w * st.sv) * dt;
   st.s += st.sv * dt;
   const s = st.s;
@@ -347,6 +353,7 @@ export function stepTravel(st: TravelState, target: number, dt: number, seconds:
     const rest = st.drift[i] - span * Math.round(st.drift[i] / span);
     const calm = 1 - Math.min(1, Math.abs(s) / 0.2);
     cmd -= clamp(rest * 0.1, -0.03, 0.03) * calm;
+    cmd += clamp(c.avoid?.[i] ?? 0, -0.07, 0.07) * calm;
     const da = (cmd - st.dv[i]) / 0.45;
     st.dv[i] += da * dt;
     st.da[i] = da;
