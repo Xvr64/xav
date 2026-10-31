@@ -1,16 +1,5 @@
-/**
- * Assisted scrolling for the one cinematic stretch of the page: the whales becoming the Earth and
- * the Globe's city journey. Everything there is already a pure function of the document's scroll
- * position, so this controller never keeps a progress of its own: one deliberate gesture picks
- * the next checkpoint (a resting point of the choreography) and the controller glides the real
- * scroll position to it over a scene-appropriate time. The visuals, the white-to-black descent,
- * reloads and history all follow the scroll, so nothing can drift out of sync and no scroll debt
- * builds up. Outside the stretch, and past either end of it, native scrolling is untouched.
- *
- *   gestures   wheel (mouse or trackpad, momentum filtered), keys, touch swipes
- *   stepping   one checkpoint per gesture; a gesture during a glide extends it by at most one
- *              more; a reversal turns back from wherever the glide is to the checkpoint behind
- *   motion     a cubic Hermite from the current position and velocity to rest on the target
+/** Two gesture-triggered timelines. Elapsed time drives playback; document scroll is its output.
+ * Renderers continue using that synchronized scroll position, preserving the existing visuals.
  */
 
 /** Recognises deliberate wheel gestures in a stream of deltas (momentum tails are not new input). */
@@ -65,249 +54,265 @@ export function createWheelGestures(): WheelGestures {
   };
 }
 
-/** Index of the checkpoint a step in `dir` should aim for, from position `pos` (and a glide's target). */
-export function nextCheckpoint(cps: readonly number[], pos: number, dir: -1 | 1, target: number | null, eps = 2): number | null {
-  if (!cps.length) return null;
-  if (dir > 0) {
-    let next = cps.findIndex((y) => y > pos + eps);
-    if (next < 0) return null;
-    // Extending a glide in the same direction: one beyond its target, never further than one
-    // beyond the checkpoint the glide is about to reach
-    if (target !== null && cps[target] > pos + eps) next = Math.min(target + 1, next + 1, cps.length - 1);
-    return next;
-  }
-  let prev = -1;
-  for (let i = cps.length - 1; i >= 0; i--) if (cps[i] < pos - eps) { prev = i; break; }
-  if (prev < 0) return null;
-  if (target !== null && cps[target] < pos - eps) prev = Math.max(target - 1, prev - 1, 0);
-  return prev;
-}
-
-/** Cubic Hermite from (y0, v0) to rest at y1 over `dur` s: position at time t. */
-export function glideAt(y0: number, v0: number, y1: number, dur: number, t: number): { y: number; v: number } {
-  if (dur <= 0 || t >= dur) return { y: y1, v: 0 };
-  const s = Math.max(0, t / dur);
-  const s2 = s * s, s3 = s2 * s;
-  const m0 = v0 * dur;
-  const y = (2 * s3 - 3 * s2 + 1) * y0 + (s3 - 2 * s2 + s) * m0 + (-2 * s3 + 3 * s2) * y1;
-  const dy = ((6 * s2 - 6 * s) * y0 + (3 * s2 - 4 * s + 1) * m0 + (-6 * s2 + 6 * s) * y1) / dur;
-  return { y, v: dy };
-}
-
+/** Choreography knots are timing cues, never input checkpoints. */
 export interface CinematicStops {
-  /** Document scroll positions of the checkpoints, ascending; the first and last are the stretch's ends. */
   y: number[];
-  /** Seconds the choreography takes from checkpoint i to i + 1 (length y.length - 1). */
   dur: number[];
+  /** The Earth is complete and resting at Doha at this knot. */
+  earth: number;
 }
 
 export interface CinematicScroll {
-  /** Glide to checkpoint `index` (e.g. a city chosen from the timeline). */
   goTo(index: number): void;
+  skip(): void;
   destroy(): void;
 }
 
-/**
- * Bind the controller to the window. `stops()` is read live (geometry follows resizes and font
- * loads); it returns null while the stretch is unavailable (reduced motion, not measured yet).
- */
-export function mountCinematicScroll(stops: () => CinematicStops | null): CinematicScroll {
-  const gestures = createWheelGestures();
-  let raf = 0;
-  let driving = false;
-  let glide: { from: number; v0: number; to: number; dur: number; t0: number } | null = null;
-  let vel = 0;
-  let lastY = window.scrollY;
-  let lastT = performance.now();
-  let settleTimer = 0;
-  let nativeDir = 0;
-  let pointerHeld = false;
+export const timelineTimes = (st: CinematicStops): number[] => {
+  const t = [0];
+  for (const d of st.dur) t.push(t[t.length - 1] + d);
+  return t;
+};
 
-  const scrollTo = (y: number) => window.scrollTo({ top: y, behavior: 'instant' as ScrollBehavior });
-  /** Within the stretch, and not at an edge facing out of it (where native scrolling takes over). */
-  const captures = (st: CinematicStops, pos: number, dir: number) => {
-    const first = st.y[0], last = st.y[st.y.length - 1];
-    if (pos < first - 2 || pos > last + 2) return false;
-    if (dir < 0 && pos <= first + 2 && !glide) return false;
-    if (dir > 0 && pos >= last - 2 && !glide) return false;
-    return true;
+/** Continuous whale choreography; gentle, automatic slow arrivals at each city. */
+export function timelineY(st: CinematicStops, time: number): number {
+  const times = timelineTimes(st);
+  let i = 0;
+  while (i < st.dur.length - 1 && time > times[i + 1]) i++;
+  const u = Math.max(0, Math.min(1, (time - times[i]) / st.dur[i]));
+  const slope = (k: number) => {
+    if (k === 0 || k >= st.earth) return 0;
+    const a = (st.y[k] - st.y[k - 1]) / st.dur[k - 1];
+    const b = (st.y[k + 1] - st.y[k]) / st.dur[k];
+    // Harmonic mean is monotone and shares velocity across choreography knots.
+    return 2 * a * b / (a + b || 1);
   };
-  /** Choreography time between two positions: the stages' own durations, prorated. */
-  const durationBetween = (st: CinematicStops, a: number, b: number) => {
-    const lo = Math.min(a, b), hi = Math.max(a, b);
-    let sec = 0;
-    for (let i = 0; i < st.dur.length; i++) {
-      const s0 = st.y[i], s1 = st.y[i + 1];
-      const span = s1 - s0;
-      if (span <= 0) continue;
-      const overlap = Math.min(hi, s1) - Math.max(lo, s0);
-      if (overlap > 0) sec += st.dur[i] * (overlap / span);
-    }
-    return Math.max(0.45, sec);
+  const u2 = u * u, u3 = u2 * u;
+  return (2*u3 - 3*u2 + 1) * st.y[i] + (u3 - 2*u2 + u) * st.dur[i] * slope(i)
+    + (-2*u3 + 3*u2) * st.y[i + 1] + (u3 - u2) * st.dur[i] * slope(i + 1);
+}
+
+/** Resume a deep link / native scrollbar position without snapping to a timing cue. */
+export function timelineTime(st: CinematicStops, y: number): number {
+  const times = timelineTimes(st);
+  let lo = 0, hi = times[times.length - 1];
+  for (let i = 0; i < 40; i++) {
+    const mid = (lo + hi) / 2;
+    if (timelineY(st, mid) < y) lo = mid; else hi = mid;
+  }
+  return (lo + hi) / 2;
+}
+
+/** Only the section start, Doha, and section end can be gesture destinations. */
+export function sequenceTarget(st: CinematicStops, y: number, dir: -1 | 1): number | null {
+  const last = st.y.length - 1;
+  if (dir > 0) return y < st.y[st.earth] - 2 ? st.earth : y < st.y[last] - 2 ? last : null;
+  return y > st.y[st.earth] + 2 ? st.earth : y > st.y[0] + 2 ? 0 : null;
+}
+
+export function mountCinematicScroll(stops: () => CinematicStops | null): CinematicScroll {
+  let gestures = createWheelGestures();
+  let raf = 0;
+  let play: { time: number; target: number; direction: -1 | 1; rate: number; last: number; lo: number; hi: number } | null = null;
+  let lastWheel = -Infinity;
+  let wheelLocked = false;
+  let entryGesture: -1 | 0 | 1 = 0;
+  let lastDirection: -1 | 1 = 1;
+  let expectedY: number | null = null;
+  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
+  const geometry = () => reduced.matches ? null : stops();
+  const scrollTo = (y: number) => {
+    window.scrollTo({ top: y, behavior: 'instant' as ScrollBehavior });
+    expectedY = window.scrollY;
+  };
+  const cancel = () => {
+    cancelAnimationFrame(raf);
+    raf = 0;
+    play = null;
+  };
+  const finish = () => {
+    cancel();
+    // Events seen during playback never queue the next film, including momentum at its end.
+    wheelLocked = true;
+    gestures = createWheelGestures();
   };
   const frame = (now: number) => {
     raf = 0;
-    const st = stops();
-    if (!glide || !st) { glide = null; driving = false; return; }
-    const to = st.y[Math.min(glide.to, st.y.length - 1)];
-    const { y, v } = glideAt(glide.from, glide.v0, to, glide.dur, (now - glide.t0) / 1000);
-    vel = v;
-    driving = true;
-    scrollTo(y);
-    lastY = y;
-    if ((now - glide.t0) / 1000 >= glide.dur) {
-      glide = null;
-      vel = 0;
-      // Let the final scroll event pass before native scrolls count again
-      requestAnimationFrame(() => (driving = false));
-      return;
-    }
+    const st = geometry();
+    if (!play || !st) { cancel(); return; }
+    const times = timelineTimes(st);
+    const dt = Math.max(0, (now - play.last) / 1000);
+    play.last = now;
+    // Integrate a short velocity transition exactly: direction changes keep position AND speed.
+    const decay = Math.exp(-dt / 0.12);
+    const distance = play.direction * dt + (play.rate - play.direction) * 0.12 * (1 - decay);
+    play.rate = play.direction + (play.rate - play.direction) * decay;
+    play.time = Math.max(times[play.lo], Math.min(times[play.hi], play.time + distance));
+    const end = times[play.target];
+    const done = play.direction > 0 ? play.time >= end : play.time <= end;
+    scrollTo(timelineY(st, done ? end : play.time));
+    if (done) { finish(); return; }
     raf = requestAnimationFrame(frame);
   };
-  const glideTo = (index: number) => {
-    const st = stops();
+  const goTo = (index: number) => {
+    const st = geometry();
     if (!st) return;
-    const i = Math.max(0, Math.min(st.y.length - 1, index));
-    const pos = window.scrollY;
-    if (Math.abs(st.y[i] - pos) < 1 && !glide) return;
-    // From wherever the stage is now, at the speed it is moving: never a snap, never a restart
-    const moving = glide && Math.sign(st.y[i] - pos) === Math.sign(vel) ? vel : 0;
-    glide = { from: pos, v0: moving, to: i, dur: durationBetween(st, pos, st.y[i]), t0: performance.now() };
+    const target = Math.max(0, Math.min(st.y.length - 1, index));
+    const time = play?.time ?? timelineTime(st, window.scrollY);
+    const end = timelineTimes(st)[target];
+    if (Math.abs(end - time) < 0.0001) return;
+    const direction = end > time ? 1 : -1;
+    lastDirection = direction;
+    expectedY = window.scrollY;
+    play = { time, target, direction, rate: play?.rate ?? 0, last: performance.now(),
+      lo: Math.min(target, window.scrollY >= st.y[st.earth] - 2 ? st.earth : 0),
+      hi: Math.max(target, window.scrollY <= st.y[st.earth] + 2 ? st.earth : st.y.length - 1) };
     if (!raf) raf = requestAnimationFrame(frame);
   };
   const step = (dir: -1 | 1) => {
-    const st = stops();
+    const st = geometry();
     if (!st) return;
-    const next = nextCheckpoint(st.y, window.scrollY, dir, glide ? glide.to : null);
-    if (next !== null) glideTo(next);
+    if (play) {
+      if (dir === play.direction) return; // no extension, restart or queued input
+      lastDirection = dir;
+      play.direction = dir;
+      play.target = dir > 0 ? play.hi : play.lo;
+      return;
+    }
+    const target = sequenceTarget(st, window.scrollY, dir);
+    if (target !== null) goTo(target);
   };
-
+  const captures = (st: CinematicStops, pos: number, dir: number, distance = 0) => {
+    if (play) return true;
+    const first = st.y[0], last = st.y[st.y.length - 1];
+    if (pos < first - 2) return dir > 0 && pos + distance >= first;
+    if (pos > last + 2) return dir < 0 && pos + distance <= last;
+    return dir > 0 ? pos < last - 2 : pos > first + 2;
+  };
+  const editable = (t: EventTarget | null) =>
+    t instanceof HTMLElement && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName));
+  const nestedScroller = (t: EventTarget | null) => {
+    let el = t instanceof HTMLElement ? t : null;
+    while (el && el !== document.body && el !== document.documentElement) {
+      if (el.scrollHeight > el.clientHeight && /auto|scroll/.test(getComputedStyle(el).overflowY)) return true;
+      el = el.parentElement;
+    }
+    return false;
+  };
   const onWheel = (e: WheelEvent) => {
-    if (e.ctrlKey) return; // pinch-zoom
-    const st = stops();
+    if (e.defaultPrevented || e.ctrlKey || editable(e.target) || nestedScroller(e.target)) return;
+    const st = geometry();
     if (!st) return;
-    const delta = e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? window.innerHeight : 1);
-    if (Math.abs(delta) < Math.abs(e.deltaX) || delta === 0) return;
-    const dir = Math.sign(delta);
-    const pos = window.scrollY;
-    if (!captures(st, pos, dir)) {
-      // Native scrolling outside; still listen, so momentum carried in is not a fresh gesture
-      gestures.feed(delta, e.timeStamp || performance.now());
+    const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? window.innerHeight : 1;
+    const delta = e.deltaY * unit;
+    if (Math.abs(e.deltaY) < Math.abs(e.deltaX) || !delta) return;
+    const now = performance.now();
+    const quiet = now - lastWheel >= GESTURE_GAP_MS;
+    if (quiet) entryGesture = 0;
+    lastWheel = now;
+    const dir = Math.sign(delta) as -1 | 1;
+    // Keep an uninterrupted tail captured even at the outer endpoints, until a new gesture.
+    if (wheelLocked && !quiet) {
+      const g = gestures.feed(delta, now);
+      if (!g || g === lastDirection) { e.preventDefault(); return; }
+      // A reversal needs the full intent threshold too: tiny trackpad sign bounces cannot unlock.
+      wheelLocked = false;
+      if (captures(st, window.scrollY, g, delta)) { e.preventDefault(); step(g); }
+      return;
+    }
+    if (wheelLocked) { wheelLocked = false; gestures = createWheelGestures(); }
+    if (!captures(st, window.scrollY, dir, delta)) {
+      const g = gestures.feed(delta, now);
+      if (g) entryGesture = g;
       return;
     }
     e.preventDefault();
-    const g = gestures.feed(delta, e.timeStamp || performance.now());
-    if (g) step(g);
+    const g = gestures.feed(delta, now);
+    const entering = window.scrollY < st.y[0] - 2 || window.scrollY > st.y[st.y.length - 1] + 2;
+    if (g || (entering && entryGesture === dir)) {
+      step(g || dir);
+      entryGesture = 0;
+    }
   };
-
-  const editable = (t: EventTarget | null) =>
-    t instanceof HTMLElement && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName));
   const onKey = (e: KeyboardEvent) => {
-    if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey || editable(e.target)) return;
-    let dir = 0;
+    if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey || editable(e.target) || nestedScroller(e.target)) return;
+    if (e.key === 'Escape' && play) {
+      const st = geometry();
+      if (st) scrollTo(st.y[play.direction > 0 ? st.y.length - 1 : 0]);
+      finish();
+      e.preventDefault();
+      return;
+    }
+    // Home / End / Tab retain native navigation and release the animation immediately.
+    if (['Home', 'End', 'Tab'].includes(e.key)) { cancel(); return; }
+    let dir: -1 | 0 | 1 = 0;
     if (e.key === 'ArrowDown' || e.key === 'PageDown' || (e.key === ' ' && !e.shiftKey)) dir = 1;
     else if (e.key === 'ArrowUp' || e.key === 'PageUp' || (e.key === ' ' && e.shiftKey)) dir = -1;
     if (!dir) return;
-    // A focused control keeps its own keys (Space on a button)
     if (e.key === ' ' && e.target instanceof HTMLElement && e.target.closest('button, a, summary, [role="button"]')) return;
-    const st = stops();
-    if (!st || !captures(st, window.scrollY, dir)) return;
+    const st = geometry();
+    const distance = dir * (e.key.startsWith('Arrow') ? 40 : window.innerHeight * 0.85);
+    if (!st || !captures(st, window.scrollY, dir, distance)) return;
     e.preventDefault();
-    if (!e.repeat) step(dir as -1 | 1);
+    if (!e.repeat) step(dir);
   };
 
-  let touchY = 0;
-  let touchDir = 0;
-  let touchCaptured = false;
+  let touchY = 0, touchX = 0;
+  let touchCaptured = false, touchEligible = false, touchStartedPlaying = false;
   const onTouchStart = (e: TouchEvent) => {
-    if (e.touches.length !== 1) return;
-    touchY = e.touches[0].clientY;
-    touchDir = 0;
+    touchEligible = e.touches.length === 1 && !editable(e.target) && !nestedScroller(e.target);
     touchCaptured = false;
+    touchStartedPlaying = !!play;
+    if (!touchEligible) return;
+    touchY = e.touches[0].clientY;
+    touchX = e.touches[0].clientX;
   };
   const onTouchMove = (e: TouchEvent) => {
-    if (e.touches.length !== 1) return;
-    const dy = touchY - e.touches[0].clientY; // + means the page would scroll down
-    if (!touchDir) {
-      if (Math.abs(dy) < 6) return;
-      touchDir = Math.sign(dy);
-      const st = stops();
-      touchCaptured = !!st && captures(st, window.scrollY, touchDir);
-    }
+    if (!touchEligible || e.touches.length !== 1) return;
+    const dy = touchY - e.touches[0].clientY;
+    if (Math.abs(dy) < 6 || Math.abs(dy) < Math.abs(touchX - e.touches[0].clientX)) return;
+    const st = geometry();
+    touchCaptured ||= !!st && captures(st, window.scrollY, Math.sign(dy), dy);
     if (touchCaptured && e.cancelable) e.preventDefault();
   };
   const onTouchEnd = (e: TouchEvent) => {
-    if (!touchCaptured) return;
-    const t = e.changedTouches[0];
-    const dy = t ? touchY - t.clientY : 0;
-    if (Math.abs(dy) >= 24) step(Math.sign(dy) as -1 | 1);
+    const dy = touchY - (e.changedTouches[0]?.clientY ?? touchY);
+    if (touchCaptured && (!touchStartedPlaying || play) && Math.abs(dy) >= 24) step(Math.sign(dy) as -1 | 1);
     touchCaptured = false;
+    touchEligible = false;
   };
-
-  /**
-   * A native scroll that ends inside the stretch (the scrollbar, find-in-page, a link, the
-   * momentum that carried the visitor in) settles on a checkpoint: onward in the direction it was
-   * going, or back to the nearer one if it barely left it.
-   */
-  const settle = () => {
-    settleTimer = 0;
-    if (glide || pointerHeld) return;
-    const st = stops();
-    if (!st) return;
-    const pos = window.scrollY;
-    const first = st.y[0], last = st.y[st.y.length - 1];
-    if (pos <= first + 2 || pos >= last - 2) return;
-    let i = 0;
-    while (i < st.y.length - 2 && st.y[i + 1] <= pos) i++;
-    const a = st.y[i], b = st.y[i + 1];
-    if (Math.abs(pos - a) <= 2 || Math.abs(pos - b) <= 2) return;
-    const f = (pos - a) / Math.max(1, b - a);
-    const target = nativeDir > 0 ? (f < 0.12 ? i : i + 1) : nativeDir < 0 ? (f > 0.88 ? i + 1 : i) : f < 0.5 ? i : i + 1;
-    glideTo(target);
-  };
+  const onTouchCancel = () => { touchCaptured = false; touchEligible = false; };
+  // Scrollbar drags, anchors and assistive navigation always override playback.
   const onScroll = () => {
-    const now = performance.now();
-    const y = window.scrollY;
-    if (!driving) {
-      if (y !== lastY) nativeDir = Math.sign(y - lastY);
-      vel = ((y - lastY) / Math.max(1, now - lastT)) * 1000;
-      window.clearTimeout(settleTimer);
-      settleTimer = window.setTimeout(settle, 220);
-    }
-    lastY = y;
-    lastT = now;
+    if (play && expectedY !== null && Math.abs(window.scrollY - expectedY) > 2) cancel();
   };
-  const onPointerDown = () => (pointerHeld = true);
-  const onPointerUp = () => {
-    pointerHeld = false;
-    window.clearTimeout(settleTimer);
-    settleTimer = window.setTimeout(settle, 220);
+  const onPointerDown = (e: PointerEvent) => {
+    if (e.pointerType === 'mouse' && e.clientX >= document.documentElement.clientWidth) cancel();
   };
-
+  const onReduced = () => { if (reduced.matches) cancel(); };
   window.addEventListener('wheel', onWheel, { passive: false });
   window.addEventListener('keydown', onKey);
   window.addEventListener('touchstart', onTouchStart, { passive: true });
   window.addEventListener('touchmove', onTouchMove, { passive: false });
   window.addEventListener('touchend', onTouchEnd, { passive: true });
+  window.addEventListener('touchcancel', onTouchCancel, { passive: true });
   window.addEventListener('scroll', onScroll, { passive: true });
   window.addEventListener('pointerdown', onPointerDown, { passive: true });
-  window.addEventListener('pointerup', onPointerUp, { passive: true });
-  // A reload or history step may restore a position between checkpoints
-  settleTimer = window.setTimeout(settle, 400);
-
+  reduced.addEventListener('change', onReduced);
   return {
-    goTo: glideTo,
+    goTo,
+    skip: cancel,
     destroy() {
-      cancelAnimationFrame(raf);
-      window.clearTimeout(settleTimer);
+      cancel();
       window.removeEventListener('wheel', onWheel);
       window.removeEventListener('keydown', onKey);
       window.removeEventListener('touchstart', onTouchStart);
       window.removeEventListener('touchmove', onTouchMove);
       window.removeEventListener('touchend', onTouchEnd);
+      window.removeEventListener('touchcancel', onTouchCancel);
       window.removeEventListener('scroll', onScroll);
       window.removeEventListener('pointerdown', onPointerDown);
-      window.removeEventListener('pointerup', onPointerUp);
+      reduced.removeEventListener('change', onReduced);
     }
   };
 }

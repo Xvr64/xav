@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createWheelGestures, glideAt, nextCheckpoint, GESTURE_GAP_MS } from './cinematicScroll.ts';
+import { createWheelGestures, mountCinematicScroll, timelineY, timelineTime, timelineTimes, sequenceTarget, GESTURE_GAP_MS } from './cinematicScroll.ts';
 
 /** Feed a sequence of [delta, ms-after-previous] and count the gestures recognised. */
 const gesturesIn = (events, g = createWheelGestures()) => {
@@ -39,37 +39,258 @@ test('a fresh flick during a fading momentum tail, and any reversal, are new ges
   assert.deepEqual(gesturesIn([[60, 0], [60, 16], [-40, 16]]), [1, -1]);
 });
 
-test('stepping: one checkpoint per gesture, a glide extends by at most one, reversal turns back', () => {
-  const cps = [0, 100, 200, 300, 400];
-  assert.equal(nextCheckpoint(cps, 0, 1, null), 1);
-  assert.equal(nextCheckpoint(cps, 100, 1, null), 2);
-  assert.equal(nextCheckpoint(cps, 400, 1, null), null);
-  assert.equal(nextCheckpoint(cps, 0, -1, null), null);
-  // Mid-glide from 100 toward 200: another gesture aims one further, never two
-  assert.equal(nextCheckpoint(cps, 140, 1, 2), 3);
-  assert.equal(nextCheckpoint(cps, 140, 1, 3), 3);
-  // Reversing mid-glide returns to the checkpoint just behind the stage, not to the start
-  assert.equal(nextCheckpoint(cps, 140, -1, 2), 1);
-  // Between checkpoints with no glide (a scrollbar drag): onward or back to the neighbours
-  assert.equal(nextCheckpoint(cps, 250, 1, null), 3);
-  assert.equal(nextCheckpoint(cps, 250, -1, null), 2);
+
+const stops = {
+  y: [100, 250, 400, 550, 940, 1150, 1600, 2100, 2600, 3100, 3600, 4100, 4300],
+  dur: [2, 2.6, 2.6, 3.8, 2.6, 2.1, 2.2, 2.1, 2.2, 2.1, 2.2, 1.05],
+  earth: 5,
+};
+
+/** Exercise the mounted production listeners and RAF clock, not just progress helpers. */
+function browser(t, initialY = 100, reducedMotion = false) {
+  let now = 1000, next = 0;
+  const frames = new Map(), listeners = new Map(), mediaListeners = new Set();
+  class Element {
+    tagName = 'DIV'; scrollHeight = 0; clientHeight = 0; parentElement = null;
+    isContentEditable = false;
+    closest() { return null; }
+  }
+  const body = new Element();
+  const media = { matches: reducedMotion,
+    addEventListener: (_, fn) => mediaListeners.add(fn),
+    removeEventListener: (_, fn) => mediaListeners.delete(fn) };
+  const emit = (kind, fields = {}) => {
+    const e = { target: body, defaultPrevented: false, cancelable: true,
+      preventDefault() { this.defaultPrevented = true; }, ...fields };
+    for (const fn of listeners.get(kind) ?? []) fn(e);
+    return e;
+  };
+  const win = {
+    scrollY: initialY, innerHeight: 800,
+    matchMedia: () => media,
+    scrollTo({top}) { this.scrollY = Math.max(0, Math.round(top)); },
+    addEventListener(kind, fn) { if (!listeners.has(kind)) listeners.set(kind, new Set()); listeners.get(kind).add(fn); },
+    removeEventListener(kind, fn) { listeners.get(kind)?.delete(fn); },
+  };
+  const originals = new Map();
+  for (const [key, value] of Object.entries({ window: win, document: { body, documentElement: {clientWidth:1200} },
+    HTMLElement: Element, getComputedStyle: () => ({overflowY:'visible'}),
+    requestAnimationFrame: fn => { frames.set(++next, fn); return next; },
+    cancelAnimationFrame: id => frames.delete(id) })) {
+    originals.set(key, Object.getOwnPropertyDescriptor(globalThis, key));
+    Object.defineProperty(globalThis, key, {value, configurable:true, writable:true});
+  }
+  t.mock.method(performance, 'now', () => now);
+  const controller = mountCinematicScroll(() => stops);
+  t.after(() => {
+    controller.destroy();
+    for (const [key, descriptor] of originals) {
+      if (descriptor) Object.defineProperty(globalThis, key, descriptor);
+      else delete globalThis[key];
+    }
+  });
+  return {
+    win, controller, emit,
+    get active() { return frames.size; },
+    advance(ms) {
+      const end = now + ms;
+      while (now < end) {
+        now = Math.min(end, now + 16);
+        const queued = [...frames.values()]; frames.clear();
+        for (const fn of queued) fn(now);
+        emit('scroll');
+      }
+    },
+    wheel(delta, extra = {}) {
+      const e = emit('wheel', {deltaY:delta, deltaX:0, deltaMode:0, ...extra});
+      if (!e.defaultPrevented) { win.scrollY += delta; emit('scroll'); }
+      return e;
+    },
+    reduced(value) { media.matches = value; for (const fn of mediaListeners) fn(); },
+    swipe(dy) {
+      emit('touchstart', {touches:[{clientY:500,clientX:100}]});
+      const e = emit('touchmove', {touches:[{clientY:500-dy,clientX:100}]});
+      emit('touchend', {changedTouches:[{clientY:500-dy,clientX:100}]});
+      return e;
+    },
+  };
+}
+
+test('only two forward targets and two reverse targets, regardless of internal timing cues', () => {
+  assert.equal(sequenceTarget(stops, 100, 1), 5);
+  assert.equal(sequenceTarget(stops, 500, 1), 5);
+  assert.equal(sequenceTarget(stops, 1150, 1), 12);
+  assert.equal(sequenceTarget(stops, 1600, 1), 12);
+  assert.equal(sequenceTarget(stops, 4300, -1), 5);
+  assert.equal(sequenceTarget(stops, 1150, -1), 0);
+  assert.equal(sequenceTarget(stops, 4300, 1), null);
+  assert.equal(sequenceTarget(stops, 100, -1), null);
 });
 
-test('the glide starts where the stage is, at its speed, and comes to rest on the checkpoint', () => {
-  const a = glideAt(100, 0, 200, 2, 0);
-  assert.equal(a.y, 100);
-  assert.equal(a.v, 0);
-  const end = glideAt(100, 0, 200, 2, 2);
-  assert.equal(end.y, 200);
-  assert.equal(end.v, 0);
-  // Velocity carried in is kept (no jolt on retargeting), and the path is monotone from rest
-  assert.ok(Math.abs(glideAt(100, 80, 300, 2, 0).v - 80) < 1e-9);
-  let prev = 100;
-  for (let t = 0; t <= 2; t += 0.05) {
-    const { y } = glideAt(100, 0, 200, 2, t);
-    assert.ok(y >= prev - 1e-9);
-    prev = y;
+test('timeline is monotone, invertible, continuous across whale cues and slow at city arrivals', () => {
+  const times = timelineTimes(stops);
+  let previous = 100;
+  for (let time = 0; time < times.at(-1); time += .03) {
+    const y = timelineY(stops, time);
+    assert.ok(y >= previous - 1e-8);
+    assert.ok(Math.abs(timelineTime(stops, y) - time) < 1e-5);
+    previous = y;
   }
-  // Eased: slow at both ends, fastest in the middle
-  assert.ok(glideAt(100, 0, 200, 2, 0.1).v < glideAt(100, 0, 200, 2, 1).v);
+  const speed = (time) => (timelineY(stops, time + .001) - timelineY(stops, time - .001)) / .002;
+  for (let i = 1; i < stops.earth; i++) assert.ok(speed(times[i]) > 10);
+  for (let i = stops.earth; i < times.length - 1; i++) assert.ok(speed(times[i]) < 1);
+});
+
+test('two wheel gestures complete both films without further input; third exits natively', t => {
+  const b = browser(t);
+  assert.ok(b.wheel(100).defaultPrevented);
+  b.advance(14000);
+  assert.equal(b.win.scrollY, 1150);
+  assert.equal(b.active, 0);
+  b.advance(3000);
+  assert.equal(b.win.scrollY, 1150, 'Doha waits indefinitely');
+  b.wheel(100);
+  const visited = new Set([5]);
+  for (let i = 0; i < 1000; i++) {
+    b.advance(16);
+    for (let c = 6; c <= 11; c++) if (Math.abs(b.win.scrollY - stops.y[c]) < 30) visited.add(c);
+  }
+  assert.equal(b.win.scrollY, 4300);
+  assert.equal(visited.size, 7, 'all seven city arrivals traversed');
+  assert.equal(b.wheel(100).defaultPrevented, false);
+  assert.equal(b.win.scrollY, 4400);
+});
+
+test('trackpad momentum and repeated forward strokes never extend or queue playback', t => {
+  const b = browser(t);
+  b.wheel(40);
+  for (let i = 0; i < 1100; i++) {
+    b.advance(16);
+    b.wheel(i % 60 === 0 ? 50 : 2);
+  }
+  assert.equal(b.win.scrollY, 1150, 'long tail cannot start the city journey');
+  assert.equal(b.active, 0);
+  b.advance(GESTURE_GAP_MS + 1);
+  b.wheel(40);
+  b.advance(16000);
+  assert.equal(b.win.scrollY, 4300);
+});
+
+test('reverse gestures replay each complete film in reverse', t => {
+  const b = browser(t, 4300);
+  b.wheel(-100); b.advance(16000);
+  assert.equal(b.win.scrollY, 1150);
+  b.wheel(-100); b.advance(14000);
+  assert.equal(b.win.scrollY, 100);
+  assert.equal(b.wheel(-100).defaultPrevented, false);
+});
+
+test('reversing mid-film preserves position and velocity and returns to that film start', t => {
+  const b = browser(t, 1150);
+  b.wheel(100); b.advance(3500);
+  const before = b.win.scrollY;
+  b.wheel(-100);
+  assert.equal(b.win.scrollY, before, 'no position snap');
+  b.advance(16);
+  assert.ok(b.win.scrollY >= before, 'forward velocity decelerates before turning');
+  b.advance(5000);
+  assert.equal(b.win.scrollY, 1150, 'city reversal stops at Doha, not the whales');
+  b.wheel(-100); b.advance(5000);
+  const whalePosition = b.win.scrollY;
+  b.wheel(100);
+  assert.equal(b.win.scrollY, whalePosition);
+  b.advance(7000);
+  assert.equal(b.win.scrollY, 1150);
+});
+
+test('keyboard repeats cannot queue a film; distinct keys work and Escape releases it', t => {
+  const b = browser(t);
+  b.emit('keydown', {key:'PageDown'});
+  b.advance(14000);
+  b.emit('keydown', {key:'PageDown',repeat:true});
+  b.advance(2000);
+  assert.equal(b.win.scrollY, 1150);
+  b.emit('keydown', {key:'PageDown'});
+  b.advance(16000);
+  assert.equal(b.win.scrollY, 4300);
+  assert.equal(b.emit('keydown', {key:'PageDown'}).defaultPrevented, false);
+  b.emit('keydown', {key:'PageUp'}); b.advance(2000);
+  b.emit('keydown', {key:'Escape'});
+  assert.equal(b.win.scrollY, 100);
+  assert.equal(b.active, 0);
+});
+
+test('two touch swipes complete both films and the next swipe is native', t => {
+  const b = browser(t);
+  assert.ok(b.swipe(100).defaultPrevented);
+  b.advance(14000);
+  assert.equal(b.win.scrollY, 1150);
+  b.swipe(100); b.advance(16000);
+  assert.equal(b.win.scrollY, 4300);
+  assert.equal(b.swipe(100).defaultPrevented, false);
+  b.swipe(-100); b.advance(16000);
+  assert.equal(b.win.scrollY, 1150);
+});
+
+test('reduced motion and native navigation release control without trapping the visitor', t => {
+  const b = browser(t, 100, true);
+  assert.equal(b.wheel(100).defaultPrevented, false);
+  assert.equal(b.emit('keydown', {key:'PageDown'}).defaultPrevented, false);
+  assert.equal(b.swipe(100).defaultPrevented, false);
+  assert.equal(b.active, 0);
+  b.reduced(false);
+  b.wheel(100); b.advance(2000);
+  assert.equal(b.active, 1);
+  b.reduced(true);
+  assert.equal(b.active, 0);
+});
+
+test('native scrolling elsewhere, entry crossing, skip, anchors, and cleanup', t => {
+  const b = browser(t, 0);
+  assert.equal(b.wheel(30).defaultPrevented, false);
+  assert.equal(b.win.scrollY, 30);
+  b.advance(300);
+  b.wheel(100); b.advance(14000);
+  assert.equal(b.win.scrollY, 1150);
+  b.wheel(100); b.advance(1000);
+  b.controller.skip();
+  const y = b.win.scrollY;
+  b.advance(3000);
+  assert.equal(b.win.scrollY, y);
+  b.controller.goTo(12); b.advance(1000);
+  b.win.scrollY = 5000; b.emit('scroll'); b.advance(2000);
+  assert.equal(b.win.scrollY, 5000, 'anchor navigation overrides playback');
+  b.controller.destroy();
+  assert.equal(b.wheel(-100).defaultPrevented, false);
+});
+
+
+test('tiny sign bounces in a continuing momentum tail cannot unlock the next film', t => {
+  const b = browser(t);
+  b.wheel(100);
+  for (let i = 0; i < 1000; i++) { b.advance(16); b.wheel(i % 5 === 0 ? -1 : 8); }
+  assert.equal(b.win.scrollY, 1150);
+  assert.equal(b.active, 0);
+  b.wheel(-60); b.advance(14000);
+  assert.equal(b.win.scrollY, 100, 'deliberate reverse still works without a pause');
+});
+
+test('a continuous approach gesture that crosses the section edge starts the full first film', t => {
+  const b = browser(t, 0);
+  b.wheel(40); b.advance(16);
+  b.wheel(40); b.advance(16);
+  b.wheel(40); b.advance(14000);
+  assert.equal(b.win.scrollY, 1150);
+});
+
+test('a swipe begun during playback cannot become queued input when lifted after completion', t => {
+  const b = browser(t);
+  b.wheel(100); b.advance(13000);
+  b.emit('touchstart', {touches:[{clientY:500,clientX:100}]});
+  b.emit('touchmove', {touches:[{clientY:400,clientX:100}]});
+  b.advance(2000);
+  b.emit('touchend', {changedTouches:[{clientY:400,clientX:100}]});
+  b.advance(3000);
+  assert.equal(b.win.scrollY, 1150);
+  assert.equal(b.active, 0);
 });

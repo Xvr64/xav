@@ -100,7 +100,7 @@ export const JOURNEY_LABEL_OFFSETS: Record<string, { dx: number; dy: number; ali
  * only source of truth. It deterministically yields the camera (great-circle position +
  * zoom), the route drawing, the destination markers, the active city, the dates, the
  * description and the timeline. Rendering happens on demand (one frame per scroll /
- * resize change) — no timers, no autoplay, nothing moves once scrolling stops.
+ * resize change). The cinematic controller drives that scroll using elapsed playback time.
  */
 export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations }) => {
   const [activeId, setActiveId] = useState<string>(() => locations[0]?.id || 'doha');
@@ -113,6 +113,7 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
   const activeIdRef = useRef(activeId);
   activeIdRef.current = activeId;
   const goToCityRef = useRef<(id: string) => void>((id) => setActiveId(id));
+  const skipRef = useRef<() => void>(() => {});
   const requestRenderRef = useRef<() => void>(() => {});
   const segs = useMemo(() => buildJourneyTimeline(locations), [locations]);
 
@@ -128,7 +129,7 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
     const ctx = offCanvas.getContext('2d', { alpha: true });
     if (!ctx) return;
 
-    const prefersReduced =
+    let prefersReduced =
       typeof window !== 'undefined' &&
       !!window.matchMedia &&
       window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -644,11 +645,8 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
         : null;
     if (globeIo) globeIo.observe(runway || stage);
 
-    // ---- Assisted scrolling: one gesture, one stage ------------------------------------------
-    // The resting points of the whole cinematic stretch, as document scroll positions: the
-    // convergence's own phases (approach, first circle, full orbit, sphere and unravelling), the
-    // Earth settling on Doha, each city's dwell, then the release into the next section. The
-    // durations are the choreography's: the circling takes longer than a short hop between cities.
+    // Two complete films. These knots only pace playback; they never require input.
+    // Preserve the whale timing and shorten the full city journey (including release) by 25%.
     const WHALE_STOPS = [0, 0.15, 0.3, 0.45, 0.84];
     const WHALE_SEC = [2.0, 2.6, 2.6, 3.8];
     const EARTH_SEC = 2.6;
@@ -656,7 +654,7 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
       if (prefersReduced || !runway || !pinned || runwayTravel <= 1 || !Number.isFinite(convergence.start)) return null;
       const y: number[] = [];
       const dur: number[] = [];
-      if (convergence.ready && convergence.length > 0) {
+      if (convergence.length > 0) {
         WHALE_STOPS.forEach((p, k) => {
           y.push(convergence.start + p * convergence.length);
           if (k > 0) dur.push(WHALE_SEC[k - 1]);
@@ -666,17 +664,19 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
         y.push(convergence.start);
       }
       const g0 = globeScrollGeometry.start;
+      const earth = y.length;
       segs.forEach((seg) => {
         if (seg.kind !== 'dwell') return;
         y.push(g0 + ((seg.start + seg.end) / 2) * runwayTravel);
-        dur.push(seg.i === 0 ? (y.length > 2 ? EARTH_SEC : 1.6) : 2.1 + 0.9 * Math.min(1, legAngleDeg[seg.i - 1] / 80));
+        dur.push(seg.i === 0 ? (y.length > 2 ? EARTH_SEC : 1.6) : 0.75 * (2.1 + 0.9 * Math.min(1, legAngleDeg[seg.i - 1] / 80)));
       });
       // The last city's dwell ends where the stage releases into the following section
       y.push(g0 + runwayTravel);
-      dur.push(1.4);
-      return { y, dur };
+      dur.push(1.4 * 0.75);
+      return { y, dur, earth };
     };
     const cinematic = mountCinematicScroll(cinematicStops);
+    skipRef.current = cinematic.skip;
     // Travel to a city = glide to that city's checkpoint
     goToCityRef.current = (id: string) => {
       const idx = locations.findIndex((l) => l.id === id);
@@ -694,6 +694,12 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
       resize();
       requestRender();
     };
+    const motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const onMotionChange = () => {
+      prefersReduced = motionQuery.matches;
+      onResize();
+    };
+    motionQuery.addEventListener('change', onMotionChange);
     convergence.listeners.add(onResize);
     resize();
     requestRender();
@@ -713,6 +719,8 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
     return () => {
       disposed = true;
       cinematic.destroy();
+      skipRef.current = () => {};
+      motionQuery.removeEventListener('change', onMotionChange);
       convergence.listeners.delete(onResize);
       convergence.length = 0;
       if (globeIo) globeIo.disconnect();
@@ -735,6 +743,10 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
   return (
     <div ref={stageRef} className="relative w-full max-w-full h-full overflow-hidden">
       <canvas ref={canvasRef} aria-hidden="true" className="absolute inset-0 w-full max-w-full h-full block" />
+      <a href="#skills" onClick={() => skipRef.current()}
+        className="absolute top-5 right-5 z-20 p-3 font-mono text-xs underline underline-offset-4 focus-visible:outline focus-visible:outline-2">
+        Skip animation
+      </a>
 
       {/* Subtle water-matched veil softens whale glyphs directly behind the destination caption */}
       <div
