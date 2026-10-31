@@ -3,6 +3,7 @@ import { loadLandDots, type LandDots } from './glyphcssGlobe';
 import type { LocationItem } from './cvData';
 import { abyssFromProgress, globeScrollGeometry, globeScrollProgress, lerpN } from './abyssPalette';
 import { convergence, convergenceProgress, diveWake, globeRevealAt, setGlobeZone } from './oceanDirection';
+import { mountCinematicScroll, type CinematicStops } from './cinematicScroll';
 
 const PlainText = ({ text }: { text: string }) => <>{text}</>;
 
@@ -298,10 +299,6 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
       cachedDocScrollable = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
     };
 
-    const progressGeometry = () => {
-      if (!runway || !pinned || runwayTravel <= 1) return null;
-      return { top: runwayDocTop + leadPx - window.scrollY, stickyTop, travel: runwayTravel };
-    };
     const measureProgress = (): number => {
       return globeScrollProgress();
     };
@@ -647,7 +644,40 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
         : null;
     if (globeIo) globeIo.observe(runway || stage);
 
-    // Travel to a city = scroll the page to the middle of that city's dwell
+    // ---- Assisted scrolling: one gesture, one stage ------------------------------------------
+    // The resting points of the whole cinematic stretch, as document scroll positions: the
+    // convergence's own phases (approach, first circle, full orbit, sphere and unravelling), the
+    // Earth settling on Doha, each city's dwell, then the release into the next section. The
+    // durations are the choreography's: the circling takes longer than a short hop between cities.
+    const WHALE_STOPS = [0, 0.15, 0.3, 0.45, 0.84];
+    const WHALE_SEC = [2.0, 2.6, 2.6, 3.8];
+    const EARTH_SEC = 2.6;
+    const cinematicStops = (): CinematicStops | null => {
+      if (prefersReduced || !runway || !pinned || runwayTravel <= 1 || !Number.isFinite(convergence.start)) return null;
+      const y: number[] = [];
+      const dur: number[] = [];
+      if (convergence.ready && convergence.length > 0) {
+        WHALE_STOPS.forEach((p, k) => {
+          y.push(convergence.start + p * convergence.length);
+          if (k > 0) dur.push(WHALE_SEC[k - 1]);
+        });
+      } else {
+        // Without the 3D layer the Globe shows itself throughout the lead: straight to Doha
+        y.push(convergence.start);
+      }
+      const g0 = globeScrollGeometry.start;
+      segs.forEach((seg) => {
+        if (seg.kind !== 'dwell') return;
+        y.push(g0 + ((seg.start + seg.end) / 2) * runwayTravel);
+        dur.push(seg.i === 0 ? (y.length > 2 ? EARTH_SEC : 1.6) : 2.1 + 0.9 * Math.min(1, legAngleDeg[seg.i - 1] / 80));
+      });
+      // The last city's dwell ends where the stage releases into the following section
+      y.push(g0 + runwayTravel);
+      dur.push(1.4);
+      return { y, dur };
+    };
+    const cinematic = mountCinematicScroll(cinematicStops);
+    // Travel to a city = glide to that city's checkpoint
     goToCityRef.current = (id: string) => {
       const idx = locations.findIndex((l) => l.id === id);
       if (idx < 0) return;
@@ -655,12 +685,9 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
         setActiveId(id);
         return;
       }
-      const dwell = segs.find((s) => s.kind === 'dwell' && s.i === idx);
-      const g = progressGeometry();
-      if (!dwell || !g) return;
-      const p = (dwell.start + dwell.end) / 2;
-      const targetTop = g.stickyTop - p * g.travel;
-      window.scrollTo({ top: window.scrollY + (g.top - targetTop), behavior: 'smooth' });
+      const st = cinematicStops();
+      if (!st) return;
+      cinematic.goTo(st.y.length - 1 - locations.length + idx);
     };
 
     const onResize = () => {
@@ -685,6 +712,7 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
 
     return () => {
       disposed = true;
+      cinematic.destroy();
       convergence.listeners.delete(onResize);
       convergence.length = 0;
       if (globeIo) globeIo.disconnect();
