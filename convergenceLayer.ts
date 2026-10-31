@@ -15,7 +15,7 @@ import * as THREE from 'three';
 import { SKIN_GLSL, WHALE_LOOK, WhaleAsciiRenderer, glyphIndex } from './whale3dRenderer.ts';
 import { PART_FLUKE, mulberry32, sampleWhaleSurface } from './whale3dAnatomy.ts';
 import { SKIN_ROWS } from './whale3dPose.ts';
-import { PHASE, earthSpin, orbitNormal, orbitPosition, sampleConvergence, type ConvergenceView } from './convergenceScene.ts';
+import { PHASE, earthSpin, orbitNormal, orbitPosition, prepareConvergence, sampleConvergence, type ConvergenceEntry, type ConvergenceStart, type ConvergenceView } from './convergenceScene.ts';
 import { loadLandDots } from './glyphcssGlobe';
 import { cameraBasis, lonLatToVec } from './JourneyGlobe';
 
@@ -211,6 +211,8 @@ const v3 = (c: [number, number, number]) => new THREE.Vector3(c[0] / 255, c[1] /
 export interface ConvergenceLayer {
   /** Stage size and where the Globe sits in it at the start of its journey (CSS px). */
   setView(view: ConvergenceView, dpr: number): void;
+  /** Where the film begins: the ambient whales and camera as the page last drew them (or none). */
+  setEntry(entry: ConvergenceEntry | null): void;
   /** Draw the scene at progress p (0 … 1); returns the frame's handoff values. */
   render(p: number): { globeReveal: number; layer: number };
   clear(): void;
@@ -303,8 +305,16 @@ export function createConvergenceLayer(canvas: HTMLCanvasElement, firstCity: { l
   particles.frustumCulled = false;
   ascii.overlay.add(particles);
 
+  let land: { xyz: Float32Array; bands: readonly number[] } | null = null;
+  let entry: ConvergenceEntry | null = null;
+  let start: ConvergenceStart | undefined;
+  let startKey = '';
+  /** Orbit phase the particle paths were built for. */
+  let builtPhase = 0;
   /** Build the particle set: graticule now, the land as soon as its dots have loaded. */
-  const buildParticles = (land: Float32Array | null, bands: readonly number[] | null) => {
+  const buildParticles = (phase: number) => {
+    builtPhase = phase;
+    const bands = land?.bands ?? null;
     const rnd = mulberry32(7);
     const geo: number[] = [];
     const kind: number[] = [];
@@ -320,7 +330,7 @@ export function createConvergenceLayer(canvas: HTMLCanvasElement, firstCity: { l
     if (land && bands) {
       for (let b = 0; b < 3; b++) {
         for (let d = bands[b]; d < bands[b + 1]; d++) {
-          geo.push(land[d * 3], land[d * 3 + 1], land[d * 3 + 2]);
+          geo.push(land.xyz[d * 3], land.xyz[d * 3 + 1], land.xyz[d * 3 + 2]);
           kind.push(b);
         }
       }
@@ -347,7 +357,7 @@ export function createConvergenceLayer(canvas: HTMLCanvasElement, firstCity: { l
       const rx = Math.cos(sp) * gx - Math.sin(sp) * gy;
       const ry = Math.sin(sp) * gx + Math.cos(sp) * gy;
       const D = [e[0] * rx + e[3] * ry + e[6] * gz, e[1] * rx + e[4] * ry + e[7] * gz, e[2] * rx + e[5] * ry + e[8] * gz];
-      const a = az(D) - az(orbitPosition(w, p));
+      const a = az(D) - az(orbitPosition(w, p, phase));
       return ((a % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
     };
     for (let i = 0; i < count; i++) {
@@ -383,11 +393,13 @@ export function createConvergenceLayer(canvas: HTMLCanvasElement, firstCity: { l
     particles.geometry.dispose();
     particles.geometry = g;
   };
-  buildParticles(null, null);
+  buildParticles(0);
   let disposed = false;
   loadLandDots()
     .then((dots) => {
-      if (!disposed) buildParticles(dots.xyz, dots.bands);
+      if (disposed) return;
+      land = dots;
+      buildParticles(builtPhase);
     })
     .catch(() => undefined);
 
@@ -399,9 +411,21 @@ export function createConvergenceLayer(canvas: HTMLCanvasElement, firstCity: { l
       // The same 6 × 10 px cell as the page's ambient whale glyphs at every size
       ascii.setStyle({ mode: 'shape', cellW: 6, cellH: 10 });
     },
+    setEntry(e) {
+      entry = e;
+      startKey = '';
+    },
     render(p) {
       ascii.setStyle({ ...WHALE_LOOK, invert: false });
-      const f = sampleConvergence(p, view);
+      // The entry is carried into this stage's world once per entry and view
+      const key = entry ? `${view.width}:${view.height}:${view.globeR}` : '';
+      if (key !== startKey) {
+        startKey = key;
+        start = entry ? prepareConvergence(entry, view) : undefined;
+        const phase = start?.phase ?? 0;
+        if (phase !== builtPhase) buildParticles(phase);
+      }
+      const f = sampleConvergence(p, view, start);
       f.whales.forEach((w, i) =>
         ascii.setWhale(i, { visible: w.visible, position: w.position, quaternion: w.quaternion, scale: w.scale, articulation: w.articulation, dissolve: w.dissolve })
       );

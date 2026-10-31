@@ -19,12 +19,20 @@ import {
   yawPitchRoll
 } from './whale3dPose.ts';
 import {
+  FILM_SECONDS,
+  FILM_STOPS,
   PHASE,
   WHALE_LEN,
   earthDistance,
+  filmSeconds,
   orbitAngle,
-  sampleConvergence
+  prepareConvergence,
+  sampleConvergence,
+  whaleLength
 } from './convergenceScene.ts';
+import { ambientCamera, sampleAmbientWhale } from './ambientWhaleScene.ts';
+import { WHALE_RIG } from './whaleRig.ts';
+import { CINEMATIC_SPEED } from './cinematicScroll.ts';
 
 const near = (a, b, eps = 1e-6) => Math.abs(a - b) <= eps;
 const vlen = (v) => Math.hypot(v[0], v[1], v[2]);
@@ -219,11 +227,29 @@ test('convergence: the whales circle each other repeatedly before they dissolve'
   const turns = (orbitAngle(PHASE.dissolve) - orbitAngle(PHASE.orbit)) / (2 * Math.PI);
   assert.ok(turns >= 2, `${turns.toFixed(2)} turns`);
   for (let k = 1; k <= 200; k++) assert.ok(orbitAngle(k / 200) > orbitAngle((k - 1) / 200), 'always forward');
+  const g = buildWhaleGeometry();
+  const skin = (w) => {
+    const fr = skinFrames(w.articulation);
+    const out = [];
+    for (let v = 0; v < g.vertexCount; v += 11) {
+      const l = skinVertex(fr, g, v);
+      const q = qRotate(w.quaternion, [l[0] * w.scale, l[1] * w.scale, l[2] * w.scale]);
+      out.push([q[0] + w.position[0], q[1] + w.position[1], q[2] + w.position[2]]);
+    }
+    return out;
+  };
   for (let k = 0; k <= 84; k++) {
     const f = sampleConvergence(k / 100, VIEWS[0]);
     const d = vlen(vsub(f.whales[0].position, f.whales[1].position));
-    // Centres more than a body length apart: the two bodies can never touch
-    assert.ok(d > WHALE_LEN * 1.15, `whales too close at ${k / 100}: ${d}`);
+    // Centres more than a body length apart, and the skinned bodies themselves well clear
+    assert.ok(d > WHALE_LEN, `whales too close at ${k / 100}: ${d}`);
+    if (k % 3 === 0) {
+      const a = skin(f.whales[0]);
+      const b = skin(f.whales[1]);
+      let clear = Infinity;
+      for (const x of a) for (const y of b) clear = Math.min(clear, vlen(vsub(x, y)));
+      assert.ok(clear > 0.3 * WHALE_LEN, `bodies ${clear.toFixed(3)} apart at ${k / 100}`);
+    }
     if (k / 100 < PHASE.dissolve) assert.ok(f.whales[0].visible && f.whales[1].visible && f.whales[0].dissolve === 0);
   }
   // Their strokes are not in unison
@@ -263,4 +289,116 @@ test('convergence: the final camera frames the Earth exactly where the Globe dra
     // Looking straight down -Z at the first city, north up
     assert.ok(near(f.camera.position[0], 0, 1e-9) && near(f.camera.position[1], 0, 1e-9));
   }
+});
+
+// ---- The film begins from the ambient whales ----------------------------------------------------
+
+/** The ambient whales and camera at time t, as the page would hand them to the convergence. */
+const entryAt = (t, view) => {
+  const comp = { width: view.width, height: view.height, scroll: 0, weight: 0, lanes: [{ x: 0.79, y: 0.8 }, { x: 0.15, y: 0.9 }], surfaceY: -Infinity, avoid: [0, 0] };
+  const cam = ambientCamera(view.width, view.height);
+  return { whales: [0, 1].map((i) => sampleAmbientWhale(i, t, comp)), camera: { position: [0, 0, cam.z], target: [0, 0, 0], fov: cam.fov } };
+};
+/** Screen px of a world point under a camera that looks at the origin (the convergence's). */
+const projectFilm = (c, view, x) => {
+  const back = vnorm(c.position);
+  const right = vnorm(cross([0, 1, 0], back));
+  const up = cross(back, right);
+  const f = view.height / 2 / Math.tan((c.fov * Math.PI) / 360);
+  const d = vsub(x, c.position);
+  const z = -dot(d, back);
+  return [c.centerX + (dot(d, right) / z) * f, c.centerY - (dot(d, up) / z) * f];
+};
+/** Screen px of an ambient-scene point under the ambient camera (looking down -Z). */
+const projectAmbient = (view, x) => {
+  const cam = ambientCamera(view.width, view.height);
+  const f = view.height / 2 / Math.tan((cam.fov * Math.PI) / 360);
+  const z = cam.z - x[2];
+  return [view.width / 2 + (x[0] / z) * f, view.height / 2 - (x[1] / z) * f];
+};
+const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+const vnorm = (a) => { const l = vlen(a); return [a[0] / l, a[1] / l, a[2] / l]; };
+const ENTRY_TIMES = [7, 48, 95, 133, 171, 222, 260, 301, 349, 402];
+
+test('convergence entry: the first frame is the ambient picture, every whale where and as it was', () => {
+  for (const view of [{ width: 1024, height: 768, globeX: 587, globeY: 361, globeR: 268 }, ...VIEWS]) {
+    for (const t of ENTRY_TIMES) {
+      const entry = entryAt(t, view);
+      const start = prepareConvergence(entry, view);
+      const f = sampleConvergence(0, view, start);
+      for (let i = 0; i < 2; i++) {
+        const a = entry.whales[i];
+        const w = f.whales[i];
+        // Snout, flukes, back and flank land on the same pixels: same place, size and attitude
+        for (const local of [[0, 0, -0.5], [0, 0, 0.45], [0, 0.1, 0], [0.12, 0, 0]]) {
+          const pa = qRotate(a.quaternion, local.map((c) => c * a.scale));
+          const pw = qRotate(w.quaternion, local.map((c) => c * w.scale));
+          const sa = projectAmbient(view, [a.position[0] + pa[0], a.position[1] + pa[1], a.position[2] + pa[2]]);
+          const sw = projectFilm(f.camera, view, [w.position[0] + pw[0], w.position[1] + pw[1], w.position[2] + pw[2]]);
+          assert.ok(Math.hypot(sa[0] - sw[0], sa[1] - sw[1]) < 0.01, `whale ${i} at t ${t}: ${sa} vs ${sw}`);
+        }
+        // ... and the same pose of the body: stroke, bend, flippers, flukes
+        for (const key of ['stroke', 'amplitude', 'bendYaw', 'bendPitch', 'fluke', 'flukeFlex']) {
+          assert.ok(near(w.articulation[key], a.articulation[key], 1e-6), `${key}: ${w.articulation[key]} vs ${a.articulation[key]}`);
+        }
+        assert.ok(near(w.articulation.flipperL.dihedral, a.articulation.flipperL.dihedral, 1e-9));
+      }
+    }
+  }
+});
+
+test('convergence entry: the bodies never change size, only the camera draws back', () => {
+  const view = VIEWS[0];
+  for (const t of ENTRY_TIMES.slice(0, 4)) {
+    const start = prepareConvergence(entryAt(t, view), view);
+    let reach = Infinity;
+    for (let k = 0; k <= 64; k++) {
+      const f = sampleConvergence((k / 64) * PHASE.dissolve, view, start);
+      // The shared rig's proportions, A's body exactly its world length, from the first frame on
+      assert.equal(f.whales[0].scale, whaleLength(0));
+      assert.ok(near(f.whales[1].scale / f.whales[0].scale, WHALE_RIG.scale[1] / WHALE_RIG.scale[0], 1e-12));
+      // The camera only ever draws back (or holds) while the whales come together
+      const r = vlen(f.camera.position) * Math.tan((f.camera.fov * Math.PI) / 360);
+      if (k / 64 <= 0.21) assert.ok(r >= reach * 0.9999 || reach === Infinity, `camera closed in at ${k / 64}`);
+      if (k / 64 <= 0.21) reach = r;
+    }
+  }
+});
+
+test('convergence entry: the whales swim from their places into the orbit without a snap', () => {
+  const view = VIEWS[0];
+  // Film time → progress, as JourneyGlobe plays it
+  const pAt = (s) => {
+    let lo = 0, hi = 1;
+    for (let k = 0; k < 40; k++) { const m = (lo + hi) / 2; if (filmSeconds(m) < s) lo = m; else hi = m; }
+    return lo;
+  };
+  for (const t of ENTRY_TIMES) {
+    const start = prepareConvergence(entryAt(t, view), view);
+    let prev = null;
+    for (let s = 0; s <= filmSeconds(PHASE.sphere); s += 1 / 60) {
+      const f = sampleConvergence(pAt(s), view, start);
+      if (prev) {
+        for (let i = 0; i < 2; i++) {
+          // Turning no faster than a quick roll (deg/s of film); the orbit itself turns them ~400
+          const rate = (qAngle(prev[i].quaternion, f.whales[i].quaternion) * 57.3) * 60;
+          assert.ok(rate < 1600, `t ${t} whale ${i} turned ${rate.toFixed(0)} deg/s at ${s.toFixed(2)} s`);
+          assert.ok(vlen(vsub(prev[i].position, f.whales[i].position)) < 0.35 * WHALE_LEN, 'no jump in place');
+        }
+      }
+      prev = f.whales;
+    }
+    // By the sphere they circle half a turn apart about the shared centre, on the orbit
+    const f = sampleConvergence(PHASE.sphere - 0.02, view, start);
+    const az = f.whales.map((w) => Math.atan2(w.position[2], w.position[0]));
+    assert.ok(Math.abs(Math.cos(az[1] - az[0]) + 1) < 0.02, `not half a turn apart: ${az}`);
+  }
+});
+
+test('convergence pacing: the scene keeps the film clock JourneyGlobe plays', () => {
+  assert.equal(FILM_STOPS[0], 0);
+  assert.equal(FILM_STOPS[FILM_STOPS.length - 1], PHASE.earth);
+  assert.ok(near(filmSeconds(PHASE.earth), FILM_SECONDS.reduce((a, b) => a + b, 0) / CINEMATIC_SPEED, 1e-9));
+  for (let k = 1; k <= 100; k++) assert.ok(filmSeconds(k / 100) > filmSeconds((k - 1) / 100));
 });

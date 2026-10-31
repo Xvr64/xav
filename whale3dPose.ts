@@ -215,6 +215,25 @@ export function articulate(input: SwimInput): Articulation {
   };
 }
 
+/** Blend two articulations (t = 0 → a, 1 → b); the stroke takes the short way round. */
+export function blendArticulation(a: Articulation, b: Articulation, t: number): Articulation {
+  const mix = (x: number, y: number) => x + (y - x) * t;
+  const fin = (x: FlipperPose, y: FlipperPose) => ({ sweep: mix(x.sweep, y.sweep), dihedral: mix(x.dihedral, y.dihedral), twist: mix(x.twist, y.twist) });
+  const strokeDelta = Math.atan2(Math.sin(b.stroke - a.stroke), Math.cos(b.stroke - a.stroke));
+  return {
+    stroke: a.stroke + strokeDelta * t,
+    amplitude: mix(a.amplitude, b.amplitude),
+    bendYaw: mix(a.bendYaw, b.bendYaw),
+    bendPitch: mix(a.bendPitch, b.bendPitch),
+    tailYaw: mix(a.tailYaw ?? a.bendYaw, b.tailYaw ?? b.bendYaw),
+    tailPitch: mix(a.tailPitch ?? a.bendPitch, b.tailPitch ?? b.bendPitch),
+    flipperL: fin(a.flipperL, b.flipperL),
+    flipperR: fin(a.flipperR, b.flipperR),
+    fluke: mix(a.fluke, b.fluke),
+    flukeFlex: mix(a.flukeFlex, b.flukeFlex)
+  };
+}
+
 const PIVOT_S = 0.38;
 /** Wave number of the stroke along the body (just under one wavelength per body length). */
 const WAVE_K = (2 * Math.PI) / 1.25;
@@ -372,6 +391,24 @@ export interface WhaleMotion {
   /** Bank gain: radians of roll per unit of lateral curvature (per body length). */
   bankGain?: number;
   maxBank?: number;
+  /**
+   * The shared rig (whaleRig.ts) and the film's clock (real seconds at u), when the path is played
+   * as a film: the body then bends within the rig's limits, the tail stock lags the bend by the
+   * rig's time, the flippers trim against the roll rate and the beat keeps the rig's tempo.
+   */
+  rig?: MotionRig;
+  seconds?: (u: number) => number;
+}
+
+export interface MotionRig {
+  powerStroke: number;
+  maxTurn: number;
+  maxClimb: number;
+  /** Seconds. */
+  tailLag: number;
+  /** Seconds of film the lean into a turn is taken over (each side). */
+  leanWindow: number;
+  maxBeatHz: number;
 }
 
 const DIST_STEPS = 64;
@@ -389,12 +426,29 @@ export function distanceAlong(m: WhaleMotion, u: number): number {
 }
 
 /**
- * The pure pose sampler: the whale's transform and articulation at progress u along its motion.
- * Heading follows the path tangent; the body flexes into the path's curvature; the whale banks
- * into turns; the stroke phase follows the distance swum.
+ * The stroke's measure of distance under a film clock: body lengths swum, but never faster than
+ * the rig's fastest beat allows (stride × beats per second of the film's real time).
  */
-export function sampleWhalePose(progress: number, m: WhaleMotion): WhalePose {
-  const u = progress;
+function strokeDistance(m: WhaleMotion, u: number): number {
+  if (!m.rig || !m.seconds) return distanceAlong(m, u);
+  const cap = m.rig.maxBeatHz * (m.stride ?? 0.95);
+  const steps = Math.max(1, Math.ceil(DIST_STEPS * Math.abs(u)));
+  let d = 0;
+  let prev = m.path(0);
+  let prevT = m.seconds(0);
+  for (let i = 1; i <= steps; i++) {
+    const v = (u * i) / steps;
+    const p = m.path(v);
+    const t = m.seconds(v);
+    d += Math.min(vLen(vSub(p, prev)) / m.length, cap * Math.abs(t - prevT));
+    prev = p;
+    prevT = t;
+  }
+  return Math.sign(u) * d;
+}
+
+/** Heading, curvature (per body length, in the whale's frame) and bank at u. */
+function pathFrame(m: WhaleMotion, u: number) {
   const h = 1e-3;
   const p0 = m.path(u - h);
   const p1 = m.path(u);
@@ -405,25 +459,69 @@ export function sampleWhalePose(progress: number, m: WhaleMotion): WhalePose {
   const fwd = vScale(vel, 1 / speed);
   const upHint = m.up ? m.up(u) : Y_AXIS;
   const level = orientWhale(fwd, upHint, 0);
-  const right = qRotate(level, X_AXIS);
-  const back = qRotate(level, Y_AXIS);
   // Curvature vector (per world unit) → per body length in the whale's own frame
   const aPerp = vSub(acc, vScale(fwd, vDot(acc, fwd)));
   const kappa = vScale(aPerp, 1 / (speed * speed));
-  const turn = vDot(kappa, right) * m.length;
-  const climb = vDot(kappa, back) * m.length;
+  let turn = vDot(kappa, qRotate(level, X_AXIS)) * m.length;
+  let climb = vDot(kappa, qRotate(level, Y_AXIS)) * m.length;
   const maxBank = m.maxBank ?? 0.55;
   // Bank into the turn: a right turn rolls the back toward the right
   const bank = Math.max(-maxBank, Math.min(maxBank, turn * (m.bankGain ?? 0.55)));
+  if (m.rig) {
+    turn = Math.max(-m.rig.maxTurn, Math.min(m.rig.maxTurn, turn));
+    climb = Math.max(-m.rig.maxClimb, Math.min(m.rig.maxClimb, climb));
+  }
+  return { position: p1, fwd, upHint, turn, climb, bank };
+}
+
+/**
+ * The lean into a turn, taken over a window of the film (±w in u, triangle-weighted): a heavy
+ * body rolls into a turn and out of it, never flipping its lean from one side to the other at
+ * the instant the path's curvature does.
+ */
+function leanAt(m: WhaleMotion, u: number, w: number): number {
+  const K = 4;
+  let sum = 0;
+  let weight = 0;
+  for (let k = -K; k <= K; k++) {
+    const c = K + 1 - Math.abs(k);
+    sum += c * pathFrame(m, u + (k / K) * w).bank;
+    weight += c;
+  }
+  return sum / weight;
+}
+
+/**
+ * The pure pose sampler: the whale's transform and articulation at progress u along its motion.
+ * Heading follows the path tangent; the body flexes into the path's curvature; the whale banks
+ * into turns; the stroke phase follows the distance swum.
+ */
+export function sampleWhalePose(progress: number, m: WhaleMotion): WhalePose {
+  const u = progress;
+  const frame = pathFrame(m, u);
+  const { position, fwd, upHint, turn, climb } = frame;
+  let bank = frame.bank;
+  let rig: Partial<SwimInput> = {};
+  if (m.rig && m.seconds) {
+    // Film seconds per unit of u here: turns the rig's times into path parameter and back
+    const h = 1e-3;
+    const rate = Math.max(1e-6, (m.seconds(u + h) - m.seconds(u - h)) / (2 * h));
+    const lean = (v: number) => leanAt(m, v, m.rig!.leanWindow / rate);
+    bank = lean(u);
+    const tail = pathFrame(m, u - m.rig.tailLag / rate);
+    const rollRate = (lean(u + h) - lean(u - h)) / (2 * h) / rate;
+    rig = { powerStroke: m.rig.powerStroke, tailTurn: tail.turn, tailClimb: tail.climb, rollRate };
+  }
   const quaternion = orientWhale(fwd, upHint, bank);
   const articulation = articulate({
-    distance: distanceAlong(m, u),
+    distance: strokeDistance(m, u),
     effort: m.effort ? m.effort(u) : 1,
     turn,
     climb,
     bank,
     phase: m.phase,
-    stride: m.stride
+    stride: m.stride,
+    ...rig
   });
-  return { position: p1, quaternion, scale: m.length, articulation, bank };
+  return { position, quaternion, scale: m.length, articulation, bank };
 }

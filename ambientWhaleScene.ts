@@ -21,7 +21,8 @@
  * and ease along the frame's edges instead of leaving it.
  */
 import { PART_BODY, PART_FIN, SPINE_NODES, buildWhaleGeometry, type V3 } from './whale3dAnatomy.ts';
-import { articulate, orientWhale, qAxisAngle, qMul, qNorm, qRotate, skinFrames, skinVertex, vAdd, vCross, vSub, vScale, vLen, vNorm, vDot, X_AXIS, Y_AXIS, Z_AXIS, type WhalePose } from './whale3dPose.ts';
+import { articulate, orientWhale, qRotate, skinFrames, skinVertex, vAdd, vCross, vSub, vScale, vLen, vNorm, vDot, X_AXIS, Y_AXIS, Z_AXIS, type WhalePose } from './whale3dPose.ts';
+import { WHALE_RIG, beatBody } from './whaleRig.ts';
 
 export interface AmbientComposition {
   width: number;
@@ -193,10 +194,8 @@ const rollRateAt = (i: number, clock: number) => {
 };
 export const rollAt = (i: number, clock: number) => TAU * smooth((mod(clock + i * 79, ROLL_PERIOD[i]) - ROLL_START[i]) / 20);
 
-/** Relative body sizes: A the larger, majestic animal, B a little smaller. */
-export const WHALE_SCALE = [1, 0.9];
-/** Body lengths per tail beat. */
-const STRIDE = [0.62, 0.55];
+/** Relative body sizes (the shared rig, whaleRig.ts). */
+export const WHALE_SCALE = WHALE_RIG.scale;
 /**
  * The swimming the wander alone does not show (body lengths/s, eased while gliding): the whales
  * hold their place against the water, so even a slow drift is carried by a living stroke, about
@@ -592,7 +591,8 @@ export function stepTravel(st: TravelState, target: number, dt: number, seconds:
     st.deepV[i] += (deep - st.deepV[i]) * (1 - Math.exp(-dt / 0.4));
     st.deep[i] += st.deepV[i] * dt;
     st.roll[i] += dt * (1 + 1.4 * Math.max(0, s) - 0.45 * Math.max(0, -s));
-    st.swim[i] += (dt * (CADENCE[i] * (1 - 0.65 * glideAt(i, t)) + st.speed[i])) / WHALE_SCALE[i];
+    // The stroke follows the water swum through, never quicker than the rig's fastest beat
+    st.swim[i] += Math.min((dt * (CADENCE[i] * (1 - 0.65 * glideAt(i, t)) + st.speed[i])) / WHALE_SCALE[i], WHALE_RIG.maxBeatHz * WHALE_RIG.stride[i] * dt);
 
     // Body flex follows the turning with a lag: a 30-tonne animal bends into a turn
     let [turn, climb] = curvature(i, t, c, st);
@@ -604,7 +604,7 @@ export function stepTravel(st: TravelState, target: number, dt: number, seconds:
     climb = clamp(climb + intentWeight * 1.1 * vDot(desired, qRotate(bodyFrame, Y_AXIS)), -1.05, 1.05);
     const lag = 1 - Math.exp(-dt / (intentWeight > 0 ? 0.09 : 0.28));
     st.bend[i] = [st.bend[i][0] + (turn - st.bend[i][0]) * lag, st.bend[i][1] + (climb - st.bend[i][1]) * lag];
-    const tailLag = 1 - Math.exp(-dt / (i === 0 ? 0.85 : 0.65));
+    const tailLag = 1 - Math.exp(-dt / WHALE_RIG.tailLag[i]);
     for (let axis = 0; axis < 2; axis++) st.tailBend[i][axis] += (st.bend[i][axis] - st.tailBend[i][axis]) * tailLag;
     // The lean is a spring a little under critical damping: the whale rolls into a turn, carries
     // the lean through it and settles back level with a breath of overshoot. Pitching adds a
@@ -640,8 +640,8 @@ function curvature(i: number, seconds: number, c: AmbientComposition, travel?: T
   const spin = travel?.spin[i];
   const bend: V3 = spin ? vScale(vCross(spin, forward), Math.sqrt(speed2)) : acceleration;
   return [
-    clamp((vDot(bend, qRotate(level, X_AXIS)) * scale) / speed2, -0.65, 0.65),
-    clamp((vDot(bend, qRotate(level, Y_AXIS)) * scale) / speed2, -0.42, 0.42)
+    clamp((vDot(bend, qRotate(level, X_AXIS)) * scale) / speed2, -WHALE_RIG.maxTurn, WHALE_RIG.maxTurn),
+    clamp((vDot(bend, qRotate(level, Y_AXIS)) * scale) / speed2, -WHALE_RIG.maxClimb, WHALE_RIG.maxClimb)
   ];
 }
 
@@ -667,18 +667,13 @@ export function sampleAmbientWhale(i: number, seconds: number, c: AmbientComposi
   const glide = glideAt(i, t);
   const surge = travel ? travel.surge : 0;
   const effort = (travel ? Math.min(0.35, Math.hypot(...travel.bend[i]) * 0.32) : 0) + ((0.45 + Math.min(0.45, (speed / scale) * 2.8)) * (1 - 0.92 * glide) + 0.4 * Math.abs(s)) * (1 + 0.45 * Math.min(0, surge)) + 0.55 * Math.max(0, surge);
-  const articulation = articulate({ distance: travel ? travel.swim[i] : seconds * (i === 0 ? 0.115 : 0.135), effort, powerStroke: 0.18 * (1 - glide), turn, climb, tailTurn: travel?.tailBend[i][0], tailClimb: travel?.tailBend[i][1], bank: lean, rollRate: rollRateAt(i, travel?.roll[i] ?? seconds), phase: i * 2.3, stride: STRIDE[i] });
-  // Each beat of the flukes heaves the whole body and rocks it about its centre of mass: the
-  // downstroke lifts the chest and dips the head, the upstroke lets it settle
-  const level = orientWhale(forward, back, bank);
-  const beat = articulation.stroke;
-  const heave = 0.013 * scale * articulation.amplitude * Math.sin(beat - 2.4);
-  const rock = 0.028 * articulation.amplitude * Math.sin(beat - 1.2);
-  const lift = qRotate(level, Y_AXIS);
-  const position: V3 = [p[0] + (travel?.side[i] ?? 0) + lift[0] * heave, p[1] + (travel?.drift[i] ?? 0) + lift[1] * heave, p[2] + (travel?.deep[i] ?? 0) + lift[2] * heave];
+  const articulation = articulate({ distance: travel ? travel.swim[i] : seconds * (i === 0 ? 0.115 : 0.135), effort, powerStroke: WHALE_RIG.powerStroke * (1 - glide), turn, climb, tailTurn: travel?.tailBend[i][0], tailClimb: travel?.tailBend[i][1], bank: lean, rollRate: rollRateAt(i, travel?.roll[i] ?? seconds), phase: WHALE_RIG.phase[i], stride: WHALE_RIG.stride[i] });
+  // Each beat of the flukes heaves the whole body and rocks it about its centre of mass
+  const beat = beatBody(orientWhale(forward, back, bank), articulation, scale);
+  const position: V3 = [p[0] + (travel?.side[i] ?? 0) + beat.offset[0], p[1] + (travel?.drift[i] ?? 0) + beat.offset[1], p[2] + (travel?.deep[i] ?? 0) + beat.offset[2]];
   return {
     position,
-    quaternion: qNorm(qMul(qAxisAngle(qRotate(level, X_AXIS), rock), level)),
+    quaternion: beat.quaternion,
     scale,
     bank,
     articulation

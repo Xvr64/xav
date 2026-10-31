@@ -4,6 +4,7 @@ import type { LocationItem } from './cvData';
 import { abyssFromProgress, globeScrollGeometry, globeScrollProgress, lerpN } from './abyssPalette';
 import { convergence, convergenceProgress, diveWake, globeRevealAt, setGlobeZone } from './oceanDirection';
 import { CINEMATIC_SPEED, mountCinematicScroll, type CinematicStops } from './cinematicScroll';
+import { FILM_SECONDS, FILM_STOPS } from './convergenceScene';
 
 const PlainText = ({ text }: { text: string }) => <>{text}</>;
 
@@ -647,9 +648,9 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
 
     // Two complete films. These knots only pace playback; they never require input.
     // Base pacing (city journey already 25% shorter); CINEMATIC_SPEED then scales whales and cities alike.
-    const WHALE_STOPS = [0, 0.15, 0.3, 0.45, 0.84];
-    const WHALE_SPEED = 2; // whales-to-globe film plays 2x faster, on top of CINEMATIC_SPEED
-    const WHALE_SEC = [2.0, 2.6, 2.6, 3.8].map(seconds => seconds / WHALE_SPEED);
+    // The whales-to-globe film's pacing lives with its scene (its stroke and tail keep that clock)
+    const WHALE_STOPS = FILM_STOPS;
+    const WHALE_SEC = FILM_SECONDS;
     const EARTH_SEC = 2.6;
     const cinematicStops = (): CinematicStops | null => {
       if (prefersReduced || !runway || !pinned || runwayTravel <= 1 || !Number.isFinite(convergence.start)) return null;

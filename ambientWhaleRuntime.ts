@@ -1,22 +1,18 @@
 import * as THREE from 'three';
 import { WHALE_LOOK, WhaleAsciiRenderer, type WhaleState } from './whale3dRenderer';
 import { createConvergenceLayer, type ConvergenceLayer } from './convergenceLayer';
-import { sampleConvergence } from './convergenceScene';
+import type { ConvergenceEntry } from './convergenceScene';
 import { globeFrame } from './JourneyGlobe';
 import { ambientWhalesLive, convergence, convergenceProgress, globeZone, readingZones, smoothStepRange, whaleDirection, whaleStage } from './oceanDirection';
 import { ambientCamera, newTravel, noteScrollIntent, projectedBounds, sampleAmbientWhale, stepTravel, type AmbientComposition } from './ambientWhaleScene';
-import { qConj, qMul, qRotate, qSlerp, vLerp, skinFrames, type Articulation, type Quat } from './whale3dPose';
+import { qRotate, skinFrames, type Quat } from './whale3dPose';
+import type { V3 } from './whale3dAnatomy';
 import { globeScrollGeometry, inkMixFromAbyss } from './abyssPalette';
 import { waterShade } from './terminalMotion';
 
 const mix = (a: number, b: number, t: number) => a + (b - a) * t;
 /** A finite number, or the fallback: one bad frame (a zero-height viewport) must never poison eased state. */
 const finite = (x: number, fallback: number) => (Number.isFinite(x) ? x : fallback);
-function blendArticulation(a: Articulation, b: Articulation, t: number): Articulation {
-  const fin = (x: Articulation['flipperL'], y: Articulation['flipperL']) => ({ sweep: mix(x.sweep, y.sweep, t), dihedral: mix(x.dihedral, y.dihedral, t), twist: mix(x.twist, y.twist, t) });
-  const strokeDelta = Math.atan2(Math.sin(b.stroke - a.stroke), Math.cos(b.stroke - a.stroke));
-  return { stroke: a.stroke + strokeDelta * t, amplitude: mix(a.amplitude, b.amplitude, t), bendYaw: mix(a.bendYaw, b.bendYaw, t), bendPitch: mix(a.bendPitch, b.bendPitch, t), flipperL: fin(a.flipperL, b.flipperL), flipperR: fin(a.flipperR, b.flipperR), fluke: mix(a.fluke, b.fluke, t), flukeFlex: mix(a.flukeFlex, b.flukeFlex, t) };
-}
 
 /** One context, geometry and atlas; two skinned meshes; independent ambient/cinematic conductors. */
 export function mountAmbientWhales(host: HTMLElement): () => void {
@@ -40,8 +36,9 @@ export function mountAmbientWhales(host: HTMLElement): () => void {
   let quality = innerWidth < 768 ? 0.5 : 0.65;
   let viewKey = '';
   let inCinema = false;
-  let anchor: WhaleState[] | null = null;
   let current: WhaleState[] = [];
+  /** The ambient camera as last drawn: with `current`, where the convergence film begins. */
+  let lastCamera: ConvergenceEntry['camera'] | null = null;
   let handoff = 0;
   let debugTime: number | null = null;
   let debugAngles: { whale: number; yaw: number; pitch: number; roll: number } | null = null;
@@ -103,10 +100,24 @@ export function mountAmbientWhales(host: HTMLElement): () => void {
     const ready = !!cinematic && !!whaleStage.host && !ascii.lost && !reduced();
     if (convergence.ready !== ready) { convergence.ready = ready; notify(); }
   };
+  /**
+   * The cinematic view in viewport px: the film draws over the whole viewport (as the ambient
+   * whales did), so a whale reaching past the Globe stage's sides is never cut at the hand-over;
+   * the Globe sits where its stage places it.
+   */
   const stageView = () => {
     const r = whaleStage.host!.getBoundingClientRect();
     const { cx, cy, baseR } = globeFrame(r.width, r.height);
-    return { r, view: { width: r.width, height: r.height, globeX: cx, globeY: cy, globeR: baseR * 1.08 } };
+    return { width: vw(), height: vh(), globeX: r.left + cx, globeY: r.top + cy, globeR: baseR * 1.08 };
+  };
+  /** Where the film begins: the whales and camera exactly as the page last drew them. */
+  const captureEntry = (): ConvergenceEntry => {
+    const whales = current.length === 2 ? current : [0, 1].map(i => sampleAmbientWhale(i, seconds, composition));
+    const z = ambientCamera(vw(), vh());
+    return {
+      whales: whales.map(w => ({ position: w.position, quaternion: w.quaternion, scale: w.scale, articulation: w.articulation })),
+      camera: lastCamera ?? { position: [0, 0, z.z], target: [0, 0, 0], fov: z.fov }
+    };
   };
   const prepareCinema = () => {
     const city = whaleStage.firstCity;
@@ -156,7 +167,7 @@ export function mountAmbientWhales(host: HTMLElement): () => void {
     stepTravel(travel, Math.tanh(scrollVel / (vh() * 0.6)), dt, seconds, composition);
   };
   const drawAmbient = (dt: number, h: number) => {
-    if (canvas.parentElement !== host) host.appendChild(canvas);
+    if (canvas.parentElement !== host) { host.appendChild(canvas); canvas.style.position = ''; }
     resize(vw(), vh(), false);
     const ease = reduced() ? 1 : 1 - Math.exp(-dt * 1.3);
     composition.width = vw(); composition.height = vh();
@@ -168,34 +179,21 @@ export function mountAmbientWhales(host: HTMLElement): () => void {
     composition.surfaceY = whaleDirection.surfaceY;
     // Debug seeks sample the pure paths; otherwise the whales hold their integrated heading
     const live = debugTime === null && !reduced() ? travel : undefined;
-    const sampled = [0, 1].map(i => ({ ...sampleAmbientWhale(i, debugTime ?? seconds, composition, live), dissolve: 0, visible: true }));
-    if (h <= 0 || !anchor) anchor = sampled;
-    current = h > 0 ? anchor.map(w => ({ ...w })) : sampled;
+    // Approaching the convergence the whales simply swim on, as they are: the film begins from
+    // whatever this frame shows (captureEntry), so nothing about them is morphed beforehand
+    current = [0, 1].map(i => ({ ...sampleAmbientWhale(i, debugTime ?? seconds, composition, live), dissolve: 0, visible: true }));
     const frame = ambientCamera(vw(), vh());
     const cam = ascii.camera;
-    // Slow lateral tracking and a breath of elevation, faded out into the cinematic handoff
+    // Slow lateral tracking and a breath of elevation, settling as the convergence nears
     const sway = reduced() ? 0 : 1 - h;
     const tx = 0.05 * Math.sin((seconds * Math.PI * 2) / 97) * sway;
     const ty = 0.035 * Math.sin((seconds * Math.PI * 2) / 131 + 1) * sway;
-    cam.position.set(tx, ty, frame.z); cam.up.set(0, 1, 0); cam.lookAt(tx * 0.35, ty * 0.35, 0);
+    const position: V3 = [tx, ty, frame.z];
+    const target: V3 = [tx * 0.35, ty * 0.35, 0];
+    cam.position.set(...position); cam.up.set(0, 1, 0); cam.lookAt(...target);
     cam.fov = frame.fov; cam.clearViewOffset();
-    if (h > 0 && whaleStage.host) {
-      const { r, view } = stageView();
-      const f = sampleConvergence(0, view);
-      const sourceCam = new THREE.PerspectiveCamera(f.camera.fov, view.width / view.height);
-      sourceCam.position.set(...f.camera.position); sourceCam.up.set(...f.camera.up); sourceCam.lookAt(0, 0, 0);
-      const inv = qConj(sourceCam.quaternion.toArray() as Quat);
-      const k = frame.z / sourceCam.position.length();
-      current = current.map((a, i) => {
-        const b = f.whales[i];
-        const p = qRotate(inv, [b.position[0] - f.camera.position[0], b.position[1] - f.camera.position[1], b.position[2] - f.camera.position[2]]);
-        return { ...a, position: vLerp(a.position, [p[0] * k, p[1] * k, p[2] * k + frame.z], h), quaternion: qSlerp(a.quaternion, qMul(inv, b.quaternion), h), scale: mix(a.scale, b.scale * k, h), articulation: blendArticulation(a.articulation, b.articulation, h) };
-      });
-      const targetFov = Math.atan(Math.tan(f.camera.fov * Math.PI / 360) * vh() / view.height) * 360 / Math.PI;
-      cam.fov = mix(frame.fov, targetFov, h);
-      cam.setViewOffset(vw(), vh(), (vw() / 2 - r.left - f.camera.centerX) * h, (vh() / 2 - r.top - f.camera.centerY) * h, vw(), vh());
-    }
     cam.updateProjectionMatrix();
+    lastCamera = { position, target, fov: frame.fov };
     ascii.setOccluder([0, 0, 0], 0, 0);
     const abyss = 1 - waterShade(scrollY, globeScrollGeometry.start, globeScrollGeometry.travel, innerHeight) / 255;
     const ink = inkMixFromAbyss(abyss);
@@ -226,13 +224,16 @@ export function mountAmbientWhales(host: HTMLElement): () => void {
     const cinemaNow = hasStage && scrollY >= convergence.start && p < 1;
     const approaching = hasStage && scrollY < convergence.start && handoff > 0;
     const hiddenByJourney = hasStage && p >= 1 && whaleDirection.presence < 0.002;
-    const running = !reduced() && !cinemaNow && !approaching && !hiddenByJourney && debugTime === null;
+    // The whales swim on right up to the film's first frame, which begins from where they are
+    const running = !reduced() && !cinemaNow && !hiddenByJourney && debugTime === null;
     if (running) { seconds += dt; advanceTravel(dt); } else lastScroll = scrollY;
     if ((dirty || running) && (dirty || now - lastDraw >= 1000 / 30)) {
       const start = performance.now();
       if (cinemaNow) {
-        if (canvas.parentElement !== whaleStage.host) whaleStage.host!.appendChild(canvas);
-        const { view } = stageView();
+        if (!inCinema) cinematic!.setEntry(captureEntry());
+        // In the Globe's stage (its layering), but over the whole viewport like the ambient layer
+        if (canvas.parentElement !== whaleStage.host) { whaleStage.host!.appendChild(canvas); canvas.style.position = 'fixed'; }
+        const view = stageView();
         if (resize(view.width, view.height, true)) cinematic!.setView(view, Math.min(devicePixelRatio || 1, view.width < 768 ? 1 : 1.25));
         cinematic!.render(p);
         ambientWhalesLive.presence = 0;
@@ -249,7 +250,7 @@ export function mountAmbientWhales(host: HTMLElement): () => void {
   };
   const schedule = () => { dirty = true; if (!raf && !document.hidden && !disposed) { last = performance.now(); raf = requestAnimationFrame(frame); } };
   const visibility = () => { cancelAnimationFrame(raf); raf = 0; last = performance.now(); if (!document.hidden) schedule(); };
-  const onMotion = () => { anchor = null; setReady(); schedule(); };
+  const onMotion = () => { setReady(); schedule(); };
   ascii.onContextLost = () => { canvas.style.visibility = 'hidden'; setReady(); cancelAnimationFrame(raf); raf = 0; ambientWhalesLive.presence = 0; };
   const restored = () => { canvas.style.visibility = ''; setReady(); viewKey = ''; schedule(); };
   canvas.addEventListener('webglcontextrestored', restored);
@@ -261,14 +262,14 @@ export function mountAmbientWhales(host: HTMLElement): () => void {
   if ((import.meta as unknown as { env?: { DEV?: boolean } }).env?.DEV) {
     const win = window as unknown as Record<string, unknown>;
     const api = {
-      seek: (t: number | null) => { debugTime = t; debugAngles = null; anchor = null; schedule(); },
+      seek: (t: number | null) => { debugTime = t; debugAngles = null; schedule(); },
       orient: (whale: number, yaw: number, pitch = 0, roll = 0) => { debugAngles = { whale: Math.max(0, Math.min(1, whale)), yaw, pitch, roll }; schedule(); },
       release: () => { debugAngles = null; debugTime = null; schedule(); },
       reduced: (value: boolean) => { forceReduced = value; onMotion(); },
       cinematic: (p: number) => { debugAngles = null; window.scrollTo(0, convergence.start + p * convergence.length); },
       /** Advance the live whales by `sec` at 30 Hz under a fixed scroll signal (−1 up … 1 down). */
       simulate: (sec: number, signal: number) => {
-        debugTime = null; debugAngles = null; anchor = null;
+        debugTime = null; debugAngles = null;
         for (let k = 0; k < Math.round(sec * 30); k++) {
           seconds += 1 / 30; composeAround(1 / 30); stepTravel(travel, signal, 1 / 30, seconds, composition);
           // Keep the projected spines current, so the composition sees where each whale now is
