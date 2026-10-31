@@ -1,0 +1,12 @@
+// Cloudflare Workers: the portfolio is fully static, so the Worker has no script and serves the
+// Vite production build (`npm run build` → ./dist). `previews` is required by Workers Builds'
+// preview command (`npx wrangler preview`) for pull-request builds; empty, previews use the same
+// settings as production.
+{
+  "name": "xav",
+  "compatibility_date": "2026-10-31",
+  "assets": {
+    "directory": "./dist"
+  },
+  "previews": {}
+}
