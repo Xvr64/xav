@@ -132,6 +132,26 @@ test('swimming: the flukes beat up and down, not side to side', () => {
   assert.ok(headMove < (maxY - minY) / 3, 'the head stays steadier than the flukes');
 });
 
+test('swimming: the whole body rides one wave, head to flukes', () => {
+  const at = [0, 0.51, 0.68, 0.81, 1].map((s) => Math.round(s * (SPINE_NODES - 1)));
+  const lo = at.map(() => Infinity);
+  const hi = at.map(() => -Infinity);
+  for (let k = 0; k < 64; k++) {
+    const f = skinFrames(articulate({ distance: (k / 64) * 0.95, effort: 1 }));
+    at.forEach((n, j) => {
+      lo[j] = Math.min(lo[j], f.p[n * 4 + 1]);
+      hi[j] = Math.max(hi[j], f.p[n * 4 + 1]);
+    });
+  }
+  const [head, back, stock, peduncle, flukes] = at.map((_, j) => hi[j] - lo[j]);
+  // The head nods, the back and the tail stock bend visibly, and the excursion grows to the flukes
+  assert.ok(head > 0.01 && head < flukes / 5, `head ${head}`);
+  assert.ok(back > 0.012, `back ${back}`);
+  assert.ok(stock > 0.045, `tail stock ${stock}`);
+  assert.ok(back < stock && stock < peduncle && peduncle < flukes, 'grows toward the tail');
+  assert.ok(flukes > 0.16, `flukes ${flukes}`);
+});
+
 test('pose sampler is deterministic and pure', () => {
   const m = { path: (u) => [Math.sin(u * 6), 0.2 * u, -3 * u], length: 1.3, effort: (u) => 0.5 + u, phase: 1.1 };
   for (const u of [0, 0.13, 0.5, 0.999]) assert.deepEqual(sampleWhalePose(u, m), sampleWhalePose(u, m));

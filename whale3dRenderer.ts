@@ -37,10 +37,16 @@ export interface AsciiStyle {
   ink: [number, number, number];
   inkFar: [number, number, number];
   opacity: number;
+  /** Glyph strength: >1 lifts the pale engraving tones toward full ink (the silhouette is already full). */
+  contrast: number;
+  /** How much the farther whale's glyphs fade with depth (0 none … 1 to nothing). */
+  farFade: number;
   /** Dark water: light glyphs read as light, so density follows light instead of pigment. */
   invert: boolean;
   /** Ink response: >1 keeps more of the body sparse. */
   gamma: number;
+  /** Lift of the body's engraving tone scale (0 … 1): more line work, the modelling kept. */
+  tone: number;
   /** Optional ocean displacement under the true silhouette, never under rectangular tiles. */
   water: [number, number, number];
   waterOpacity: number;
@@ -57,16 +63,33 @@ export interface WhaleState {
   dissolve: number;
 }
 
+/**
+ * The whales' look on light water, shared by the ambient and cinematic scenes so the handoff
+ * never shifts: a deep ocean blue that reads at a glance, the farther animal a lighter blue that
+ * recedes without washing out, and engraving tones lifted toward full ink.
+ */
+export const WHALE_LOOK = {
+  ink: [9, 34, 82] as [number, number, number],
+  inkFar: [40, 78, 130] as [number, number, number],
+  contrast: 1.3,
+  farFade: 0.25,
+  gamma: 1.3,
+  tone: 0.14
+};
+
 export const DEFAULT_STYLE: AsciiStyle = {
   mode: 'shape',
   split: 0,
   cellW: 7,
   cellH: 12,
-  ink: [31, 59, 87],
-  inkFar: [118, 140, 156],
+  ink: WHALE_LOOK.ink,
+  inkFar: WHALE_LOOK.inkFar,
   opacity: 1,
+  contrast: WHALE_LOOK.contrast,
+  farFade: WHALE_LOOK.farFade,
   invert: false,
-  gamma: 1.45,
+  gamma: WHALE_LOOK.gamma,
+  tone: WHALE_LOOK.tone,
   water: [255, 255, 255],
   waterOpacity: 0
 };
@@ -282,7 +305,8 @@ uniform float uShape;   // 1 shape-aware, 0 luminance
 uniform float uRamp[12];
 uniform float uRampN;
 uniform float uGamma;
-uniform vec4 uEdgeA;    // indices: '-', '_', '/', '\'
+uniform float uTone;
+uniform vec4 uEdgeA;   // indices: '-', '_', '/', '\'
 uniform vec4 uEdgeB;    // indices: '|', '(', ')', 'o'
 uniform vec4 uMarkG;    // indices: '=', '°', '•', ':'
 uniform vec4 uToneG;    // indices: '·', '+', 'x', '#'
@@ -445,7 +469,7 @@ void main() {
       // The body's mass as an engraver's tone scale: stipple in the light, hatching that runs
       // along the body through the mid tones, crosshatch in the shadow. No cell inside the body
       // is left empty except in the brightest light, so the form keeps its weight.
-      float t = clamp(v * (app > 0.5 ? 0.8 : 1.0), 0.0, 1.0);
+      float t = clamp(v * (app > 0.5 ? 0.8 : 1.0) + uTone * (app > 0.5 ? 0.5 : 1.0), 0.0, 1.0);
       float q = clamp(t * 6.0 + (d - 0.5) * 0.9, 0.0, 6.0);
       int L = int(floor(q + 0.5));
       // Engraved lines are spaced across the stroke direction: every other line in the light
@@ -499,6 +523,8 @@ uniform float uCanvasH;
 uniform vec3 uInk;
 uniform vec3 uInkFar;
 uniform float uOpacity;
+uniform float uContrast;
+uniform float uFarFade;
 uniform sampler2D uReadingMask;
 uniform vec2 uMaskCanvas;
 uniform float uMaskStrength;
@@ -517,9 +543,9 @@ void main() {
   if ((c.g <= 0.0 || gi < 0.5) && waterAlpha <= 0.003) discard;
   vec2 local = floor(fc - vec2(cell) * uCell);
   vec2 tile = vec2(mod(gi, uAtlasCols), floor(gi / uAtlasCols));
-  float a = texelFetch(uAtlas, ivec2(tile * uTile + min(local, uTile - 1.0)), 0).a * c.g * uOpacity;
+  float a = texelFetch(uAtlas, ivec2(tile * uTile + min(local, uTile - 1.0)), 0).a * min(1.0, c.g * uContrast) * uOpacity;
   if (gi < 0.5) a = 0.0;
-  a *= 1.0 - 0.45 * c.b;
+  a *= 1.0 - uFarFade * c.b;
   a *= protection;
   vec3 col = mix(uInk, uInkFar, c.b);
   outColor = vec4(col * a + uWater * waterAlpha * (1.0 - a), a + waterAlpha * (1.0 - a));
@@ -687,6 +713,7 @@ export class WhaleAsciiRenderer {
         uRamp: { value: new Array(12).fill(0) },
         uRampN: { value: 1 },
         uGamma: { value: 1 },
+        uTone: { value: 0 },
         uEdgeA: { value: new THREE.Vector4(glyphIndex('-'), glyphIndex('_'), glyphIndex('/'), glyphIndex('\\')) },
         uEdgeB: { value: new THREE.Vector4(glyphIndex('|'), glyphIndex('('), glyphIndex(')'), glyphIndex('o')) },
         uMarkG: { value: new THREE.Vector4(glyphIndex('='), glyphIndex('°'), glyphIndex('•'), glyphIndex(':')) },
@@ -715,6 +742,8 @@ export class WhaleAsciiRenderer {
         uInk: { value: new THREE.Vector3() },
         uInkFar: { value: new THREE.Vector3() },
         uOpacity: { value: 1 },
+        uContrast: { value: WHALE_LOOK.contrast },
+        uFarFade: { value: WHALE_LOOK.farFade },
         uReadingMask: { value: this.readingTexture },
         uMaskCanvas: { value: new THREE.Vector2(1, 1) },
         uMaskStrength: { value: 0 },
@@ -916,6 +945,7 @@ export class WhaleAsciiRenderer {
       cu.uShape.value = this.style.mode === 'shape' ? 1 : 0;
       cu.uSplit.value = this.style.split;
       cu.uGamma.value = this.style.gamma;
+      cu.uTone.value = this.style.tone;
       this.quad.material = this.cellMaterial;
       r.setRenderTarget(this.cells);
       r.clear(true, false, false);
@@ -935,6 +965,8 @@ export class WhaleAsciiRenderer {
       setRgb(pu.uInk.value, this.style.ink);
       setRgb(pu.uInkFar.value, this.style.inkFar);
       pu.uOpacity.value = this.style.opacity;
+      pu.uContrast.value = this.style.contrast;
+      pu.uFarFade.value = this.style.farFade;
       this.quad.material = this.compositeMaterial;
       r.render(this.quadScene, this.quadCamera);
     }

@@ -72,6 +72,14 @@ export const rollAt = (i: number, clock: number) => TAU * smooth((mod(clock + i 
 export const WHALE_SCALE = [1, 0.9];
 /** Body lengths per tail beat. */
 const STRIDE = [0.62, 0.55];
+/**
+ * The swimming the wander alone does not show (body lengths/s, eased while gliding): the whales
+ * hold their place against the water, so even a slow drift is carried by a living stroke, about
+ * one beat every 5.5 s for A and 4.5 s for B at rest, never a body sliding with its tail still.
+ */
+const CADENCE = [0.065, 0.028];
+/** Stretches where each whale stops beating and coasts on its momentum. */
+const glideAt = (i: number, t: number) => (i === 0 ? windowAt(mod(t, 71), 28, 52, 8) : windowAt(mod(t + 23, 53), 30, 41, 6));
 /** tan(dive angle) and tan(climb angle): B dives more steeply, both rise a little more gently. */
 const K_DOWN = [1.05, 1.3];
 const K_UP = [1, 1.15];
@@ -324,7 +332,7 @@ export function stepTravel(st: TravelState, target: number, dt: number, seconds:
     if (y < -vis) st.drift[i] += span;
     else if (y > vis) st.drift[i] -= span;
     st.roll[i] += dt * (1 + 1.4 * Math.max(0, s) - 0.45 * Math.max(0, -s));
-    st.swim[i] += (dt * Math.hypot(vh, vy + st.dv[i])) / WHALE_SCALE[i];
+    st.swim[i] += (dt * (CADENCE[i] * (1 - 0.65 * glideAt(i, t)) + Math.hypot(vh, vy + st.dv[i]))) / WHALE_SCALE[i];
     steer(st, i, vNorm(pathVelocity(i, t, c, st.dv[i], s)), dt);
     // Body flex follows the turning with a lag: a 30-tonne animal bends into a turn
     const [turn, climb] = curvature(i, t, c, st);
@@ -384,16 +392,17 @@ export function sampleAmbientWhale(i: number, seconds: number, c: AmbientComposi
   const bank = lean + rollAt(i, travel?.roll[i] ?? seconds);
   // A glides longer and more often; effort rises while the visitor drives the descent or climb.
   // Gathering speed takes power strokes; easing off is a glide.
-  const glide = i === 0 ? windowAt(mod(t, 71), 28, 52, 8) : windowAt(mod(t + 23, 53), 30, 41, 6);
+  const glide = glideAt(i, t);
   // d|s|/dt, faded through s = 0 so that a reversal never jumps the stroke
   const surge = travel ? clamp(Math.tanh(s / 0.15) * travel.sv, -1, 1) : 0;
   const effort = ((0.45 + Math.min(0.45, (speed / scale) * 2.8)) * (1 - 0.92 * glide) + 0.4 * Math.abs(s)) * (1 + 0.45 * Math.min(0, surge)) + 0.55 * Math.max(0, surge);
-  const articulation = articulate({ distance: travel ? travel.swim[i] : seconds * (i === 0 ? 0.09 : 0.12), effort, turn, climb, bank: lean, phase: i * 2.3, stride: STRIDE[i] });
-  // Each beat of the flukes heaves the whole body a little and rocks it about its centre of mass
+  const articulation = articulate({ distance: travel ? travel.swim[i] : seconds * (i === 0 ? 0.115 : 0.135), effort, turn, climb, bank: lean, phase: i * 2.3, stride: STRIDE[i] });
+  // Each beat of the flukes heaves the whole body and rocks it about its centre of mass: the
+  // downstroke lifts the chest and dips the head, the upstroke lets it settle
   const level = orientWhale(forward, back, bank);
   const beat = articulation.stroke;
-  const heave = 0.009 * scale * articulation.amplitude * Math.sin(beat - 2.4);
-  const rock = 0.02 * articulation.amplitude * Math.sin(beat - 1.2);
+  const heave = 0.013 * scale * articulation.amplitude * Math.sin(beat - 2.4);
+  const rock = 0.028 * articulation.amplitude * Math.sin(beat - 1.2);
   const lift = qRotate(level, Y_AXIS);
   const position: V3 = [p[0] + lift[0] * heave, p[1] + (travel?.drift[i] ?? 0) + lift[1] * heave, p[2] + lift[2] * heave];
   return {

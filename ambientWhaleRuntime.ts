@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { WhaleAsciiRenderer, type WhaleState } from './whale3dRenderer';
+import { WHALE_LOOK, WhaleAsciiRenderer, type WhaleState } from './whale3dRenderer';
 import { createConvergenceLayer, type ConvergenceLayer } from './convergenceLayer';
 import { sampleConvergence } from './convergenceScene';
 import { globeFrame } from './JourneyGlobe';
@@ -159,8 +159,11 @@ export function mountAmbientWhales(host: HTMLElement): () => void {
     const ink = inkMixFromAbyss(abyss);
     const water = (1 - abyss) * 255;
     const presence = reduced() ? (globeZone.rects.length ? 0.35 : 0.8) : h > 0 ? 1 : whaleDirection.presence;
-    ascii.setStyle({ opacity: presence * mix(0.94 - 0.16 * composition.weight, 1, h), gamma: mix(1.6, 1.45, h), invert: ink > 0.5, water: [water, water, water], waterOpacity: 0.7 * (1 - h),
-      ink: [mix(31, 178, ink), mix(59, 204, ink), mix(87, 214, ink)], inkFar: [mix(mix(82, 118, h), 112, ink), mix(mix(111, 140, h), 151, ink), mix(mix(135, 156, h), 165, ink)] });
+    // Deep blue on light water (the cinematic scene's own look, so the handoff never shifts), pale
+    // on the abyss; the silhouette clears the water behind it so the form reads over the ocean field
+    const near = WHALE_LOOK.ink, far = WHALE_LOOK.inkFar;
+    ascii.setStyle({ opacity: presence * mix(1 - 0.06 * composition.weight, 1, h), gamma: WHALE_LOOK.gamma, tone: WHALE_LOOK.tone, contrast: WHALE_LOOK.contrast, farFade: WHALE_LOOK.farFade, invert: ink > 0.5, water: [water, water, water], waterOpacity: 0.82 * (1 - h),
+      ink: [mix(near[0], 178, ink), mix(near[1], 204, ink), mix(near[2], 214, ink)], inkFar: [mix(far[0], 112, ink), mix(far[1], 151, ink), mix(far[2], 165, ink)] });
     const zones = readingZones.read();
     if (maskDirty || h > 0 || zones !== lastZones || lastHeroVersion !== heroZone.version || lastGlobeVersion !== globeZone.version) {
       ascii.setReadingZones([...zones, ...heroZone.rects, ...(h > 0 ? [] : globeZone.rects)], 1 - h);

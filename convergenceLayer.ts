@@ -12,7 +12,7 @@
  * stage can hand over without a seam. All of it is a function of the progress uniform.
  */
 import * as THREE from 'three';
-import { SKIN_GLSL, WhaleAsciiRenderer, glyphIndex } from './whale3dRenderer.ts';
+import { SKIN_GLSL, WHALE_LOOK, WhaleAsciiRenderer, glyphIndex } from './whale3dRenderer.ts';
 import { PART_FLUKE, mulberry32, sampleWhaleSurface } from './whale3dAnatomy.ts';
 import { SKIN_ROWS } from './whale3dPose.ts';
 import { PHASE, earthSpin, orbitNormal, orbitPosition, sampleConvergence, type ConvergenceView } from './convergenceScene.ts';
@@ -401,7 +401,7 @@ export function createConvergenceLayer(canvas: HTMLCanvasElement, firstCity: { l
     },
     render(p) {
       ascii.setReadingZones([], 0);
-      ascii.setStyle({ ink: [31, 59, 87], inkFar: [118, 140, 156], invert: false, gamma: 1.45, waterOpacity: 0 });
+      ascii.setStyle({ ...WHALE_LOOK, invert: false, waterOpacity: 0 });
       const f = sampleConvergence(p, view);
       f.whales.forEach((w, i) =>
         ascii.setWhale(i, { visible: w.visible, position: w.position, quaternion: w.quaternion, scale: w.scale, articulation: w.articulation, dissolve: w.dissolve })

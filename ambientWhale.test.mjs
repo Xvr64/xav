@@ -141,6 +141,10 @@ test('personalities: A larger and calmer, B quicker, their strokes never in unis
   assert.ok(frames[0].poses[0].scale > frames[0].poses[1].scale);
   const last = frames.at(-1).poses;
   assert.notEqual(last[0].articulation.stroke, last[1].articulation.stroke);
+  // Alive at rest: even drifting slowly, each beats its flukes every few seconds, A the slower
+  const period = [0, 1].map((i) => (300 * 2 * Math.PI) / (last[i].articulation.stroke - frames[0].poses[i].articulation.stroke));
+  assert.ok(period[0] > 4.5 && period[0] < 8, `A beats every ${period[0].toFixed(1)} s`);
+  assert.ok(period[1] > 3.5 && period[1] < period[0], `B beats every ${period[1].toFixed(1)} s`);
 });
 
 test('ambient sampling is repeatable; rolls are occasional; social motion is bounded', () => {

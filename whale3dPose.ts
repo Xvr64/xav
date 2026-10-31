@@ -3,12 +3,13 @@
  * scroll position, seek or resize reconstructs exactly the same pose.
  *
  * A humpback swims by beating its horizontal flukes up and down. The stroke is a travelling wave
- * of vertical bending that grows toward the tail, the flukes pitching a quarter cycle behind the
- * peduncle; the head barely moves. Turns flex the body laterally into the arc it swims along,
+ * of vertical heave that runs the whole body: the head nods gently, the back rolls over the
+ * still point by the flippers, the tail stock drives and the flukes whip a quarter cycle behind
+ * it; the flippers ride the wave. Turns flex the body laterally into the arc it swims along,
  * dives flex it vertically, the flippers trim against both, and the whole animal banks into a
  * turn. The spine is sampled at SPINE_NODES frames (position + quaternion) that the shader and
- * skinVertex() below interpolate per vertex; the stroke phase follows the distance swum, so the
- * tail stops when the scroll stops and reverses with it.
+ * skinVertex() below interpolate per vertex; the stroke phase follows the distance swum (for the
+ * ambient whales, the water swum through as well), so it quickens and eases with the swim.
  *
  * Orientation always lives in quaternions (x, y, z, w), built from a basis or composed from axis
  * rotations, so yaw, pitch and roll combine freely through full turns without gimbal lock.
@@ -179,20 +180,27 @@ export function articulate(input: SwimInput): Articulation {
   const climb = input.climb ?? 0;
   const bank = input.bank ?? 0;
   const beat = Math.sin(stroke + 0.9);
+  const sway = Math.cos(stroke + 0.9);
   // Flippers: spread for gliding, trimmed against a turn (the inside one lowered and swept back),
-  // a slow sympathetic beat with the stroke
+  // and carried by the stroke: they lift and fall as the body wave passes under them, sweep back
+  // on the downstroke and feather their leading edge, so the long wings ride the swim
   const trim = Math.max(-0.5, Math.min(0.5, turn * 0.35 + bank * 0.25));
   const glide = 1 - Math.min(1, effort);
   const base = { sweep: 0.05 - 0.12 * glide, dihedral: 0.1 * glide - 0.04 * climb, twist: -0.06 * climb };
+  const lift = 0.13 * amplitude * beat;
+  const fold = 0.06 * amplitude * sway;
+  const feather = 0.09 * amplitude * sway;
+  // The flukes follow the tail stock a quarter beat behind (the whip of the stroke) and flex
+  // across their span, the tips trailing the centre
   return {
     stroke,
     amplitude,
     bendYaw: turn,
     bendPitch: climb,
-    flipperL: { sweep: base.sweep - trim * 0.4, dihedral: base.dihedral + trim + 0.07 * amplitude * beat, twist: base.twist + 0.05 * beat },
-    flipperR: { sweep: base.sweep + trim * 0.4, dihedral: base.dihedral - trim + 0.07 * amplitude * beat, twist: base.twist + 0.05 * beat },
-    fluke: 0.42 * amplitude * Math.cos(stroke - 2 * Math.PI * 0.9),
-    flukeFlex: 0.06 * amplitude * Math.sin(stroke - 2 * Math.PI * 0.95)
+    flipperL: { sweep: base.sweep - trim * 0.4 + fold, dihedral: base.dihedral + trim + lift, twist: base.twist + feather },
+    flipperR: { sweep: base.sweep + trim * 0.4 + fold, dihedral: base.dihedral - trim + lift, twist: base.twist + feather },
+    fluke: 0.5 * amplitude * Math.cos(stroke - 2 * Math.PI * 0.9 - 0.98),
+    flukeFlex: 0.09 * amplitude * Math.sin(stroke - 2 * Math.PI * 0.95 - 0.98)
   };
 }
 
@@ -200,15 +208,23 @@ const PIVOT_S = 0.38;
 /** Wave number of the stroke along the body (just under one wavelength per body length). */
 const WAVE_K = (2 * Math.PI) / 1.25;
 
-const smooth = (a: number, b: number, x: number) => {
-  const t = Math.max(0, Math.min(1, (x - a) / (b - a)));
-  return t * t * (3 - 2 * t);
-};
+/**
+ * Heave envelope of the body wave (body lengths at cruise): the head nods a little, the motion
+ * all but vanishes over the flippers (the centre of mass), then swells through the back and the
+ * tail stock to the flukes, which sweep about a fifth of a body length peak to peak.
+ */
+const heaveEnv = (s: number) => 0.8 * (0.012 - 0.06 * s + 0.09 * s * s + 0.075 * s * s * s);
+const heaveEnvSlope = (s: number) => 0.8 * (-0.06 + 0.18 * s + 0.225 * s * s);
 
-/** Vertical bend angle of the spine at s from the stroke (the head counter-moves slightly). */
+/**
+ * Vertical bend angle of the spine at s from the stroke: the slope of a travelling wave of
+ * heave h(s, t) = A(s) sin(stroke - k s). Every station bends as part of one wave running from
+ * the head to the flukes, so the nod of the head, the roll of the back over the flippers and the
+ * drive of the tail stock are one continuous motion rather than a hinged tail.
+ */
 export function strokeAngle(a: Articulation, s: number): number {
-  const env = 0.03 + 0.4 * smooth(0.4, 1, s) ** 1.5;
-  return a.amplitude * env * Math.sin(a.stroke - WAVE_K * s);
+  const phase = a.stroke - WAVE_K * s;
+  return a.amplitude * Math.atan(heaveEnvSlope(s) * Math.sin(phase) - WAVE_K * heaveEnv(s) * Math.cos(phase));
 }
 
 /**
