@@ -1,4 +1,4 @@
-var Lc=Object.defineProperty;var Ic=(n,e,t)=>e in n?Lc(n,e,{enumerable:!0,configurable:!0,writable:!0,value:t}):n[e]=t;var Ve=(n,e,t)=>Ic(n,typeof e!="symbol"?e+"":e,t);import{l as Uc,c as Nc,a as Rl,w as wn,b as Ft,g as ys,r as Fc,h as Mr,i as Oc,d as Wn,e as Bc,f as Xt,j as _o,k as zc,m as kc,s as Gc}from"./index-B5x4zr8I.js";/**
+var Lc=Object.defineProperty;var Ic=(n,e,t)=>e in n?Lc(n,e,{enumerable:!0,configurable:!0,writable:!0,value:t}):n[e]=t;var Ve=(n,e,t)=>Ic(n,typeof e!="symbol"?e+"":e,t);import{l as Uc,c as Nc,a as Rl,w as wn,b as Ft,g as ys,r as Fc,h as Mr,i as Oc,d as Wn,e as Bc,f as Xt,j as _o,k as zc,m as kc,s as Gc}from"./index-B9rH_jQJ.js";/**
  * @license
  * Copyright 2010-2024 Three.js Authors
  * SPDX-License-Identifier: MIT
@@ -4217,7 +4217,7 @@ void main() {
   vec4 c = texelFetch(uCells, cell, 0);
   float gi = floor(c.r * 255.0 + 0.5);
   // The whale is the subject: the water it displaces is cleared of the current under the body
-  // and, feathered, a little beyond it, so the fluid never frays or dissolves the outline
+  // and, feathered, a little beyond it, so nothing beneath frays or dissolves the outline
   vec2 guv = gl_FragCoord.xy / uMaskCanvas;
   float silhouette = texture(uGeometryMask, guv).a;
   float halo = texture(uGeometryMask, guv + uHalo).a + texture(uGeometryMask, guv - uHalo).a
