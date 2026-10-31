@@ -3,7 +3,7 @@ import React, { useEffect, useRef } from 'react';
 /**
  * The hadal floor: where the descent comes to rest. A seabed drawn in characters along the foot of
  * the Contact section — abyssal plain on the left under the footer, falling into a trench beneath
- * the CV column, with the sounding of its floor. Still (no motion), behind the copy, decorative.
+ * the CV column. Still (no motion), behind the copy, decorative.
  */
 
 const CELL_W = 9;
@@ -55,12 +55,10 @@ export const HadalFloor: React.FC = React.memo(() => {
       const narrow = W < 768;
       const cols = Math.ceil(W / CELL_W);
       const rows = Math.floor(H / CELL_H);
-      let deepest = { c: 0, r: 0 };
       for (let c = 0; c < cols; c++) {
         const x = (c + 0.5) / cols;
         const d = floorDepth(x, narrow);
         const r0 = Math.min(rows - 1, Math.floor(d * rows));
-        if (r0 > deepest.r) deepest = { c, r: r0 };
         // The floor line: its glyph follows the slope to the neighbouring columns
         const slope = (floorDepth(x + 1 / cols, narrow) - floorDepth(x - 1 / cols, narrow)) * rows;
         const glyph = slope > 0.55 ? '\\' : slope < -0.55 ? '/' : '_';
@@ -75,18 +73,6 @@ export const HadalFloor: React.FC = React.memo(() => {
           ctx.fillText(SEDIMENT[Math.min(SEDIMENT.length - 1, k)], cx, r * CELL_H + CELL_H / 2);
         }
       }
-      // The sounding of the trench floor, set just outside its far wall at the floor's depth
-      const labelRow = Math.max(0, deepest.r - 1);
-      let wallC = deepest.c;
-      while (wallC < cols - 1 && Math.floor(floorDepth((wallC + 0.5) / cols, narrow) * rows) >= labelRow) wallC++;
-      const label = '10 994 m';
-      const labelW = ctx.measureText(label).width;
-      const lx = Math.min(W - labelW - CELL_W, wallC * CELL_W + CELL_W * 1.5);
-      const ly = labelRow * CELL_H + CELL_H / 2;
-      ctx.clearRect(lx - 4, ly - CELL_H / 2, labelW + 8, CELL_H);
-      ctx.textAlign = 'left';
-      ctx.fillStyle = `rgba(${INK}, 0.55)`;
-      ctx.fillText(label, lx, ly);
     };
 
     const observer = new ResizeObserver(draw);

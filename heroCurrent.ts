@@ -10,12 +10,13 @@
 // changes. Nothing animates on its own — the canvas is redrawn only when scroll or layout
 // changes, so this adds no loop of its own next to the whales and the fluid.
 //
-// The same progress also conducts the horizon: the waterline under the first line rises out
-// of view as the visitor descends, and each letter breaks up the moment the water reaches it.
+// The same progress times the break-up against an invisible waterline under the first line:
+// it rises out of view as the visitor descends, and each letter breaks up the moment the water
+// reaches it. The line itself is never drawn; the ocean fills the screen from the first frame.
 //
 // Choreography (refined in the browser):
-//   0.00–0.05  the surface: headline on the horizon, "horizons" already below it
-//   0.05–0.42  the horizon rises out of view; letters break up as the water passes them
+//   0.00–0.05  arrival: the headline still, "horizons" already in the water
+//   0.05–0.42  the waterline rises out of view; letters break up as the water passes them
 //   0.42–0.78  the current carries the fragments and gathers Xavier, then Hery
 //   0.76–0.88  the ASCII name resolves into the type of the lock-up
 //   0.88–1.00  the name holds, complete and still
@@ -39,10 +40,8 @@ export interface HeroCurrentOptions {
   nameEl: HTMLElement;
   /** Its lines, each set in its own face and position by CSS. */
   nameLines: HTMLElement[];
-  /** The hairline horizon under the first line, translated as the visitor descends. */
+  /** The invisible datum under the first line: where the waterline rests on arrival. */
   horizon?: HTMLElement | null;
-  /** Readout of the visitor's depth on the cover. */
-  depthEl?: HTMLElement | null;
   /** Viewport rects of the typography currently on stage, for the calm zones around it. */
   onZones?: (rects: HeroRect[]) => void;
   /** Called on every drawn scroll position with the cover's state (viewport px). */
@@ -52,8 +51,6 @@ export interface HeroCurrentOptions {
 export interface HeroFrame {
   /** Progress through the runway, 0–1. */
   t: number;
-  /** Viewport y of the horizon (negative once it has left the top). */
-  horizonY: number;
   /** Viewport y of the stage: 0 while pinned, negative once the runway has passed. */
   stageTop: number;
   stageHeight: number;
@@ -73,7 +70,7 @@ const CHARS = Array.from(new Set(Array.from(FLIGHT + DENSE + MID + EDGE)));
 const CHAR_INDEX = new Map(CHARS.map((c, i) => [c, i]));
 // Fresh fragment · fragment in the current · formed name
 const INKS = ['#2F4858', '#647887', '#171717'];
-// The horizon rises from under the first line to just above the top of the stage
+// The waterline rises from under the first line to just above the top of the stage
 const RISE: [number, number] = [0.05, 0.42];
 /** "horizons" starts below the surface, so it is the first word to go. */
 const SUBMERGED_RELEASE = 0.075;
@@ -86,8 +83,6 @@ const TYPE_IN: [number, number] = [0.76, 0.85];
 const GLYPHS_OUT: [number, number] = [0.79, 0.88];
 /** From here the glyphs are gone: the image is final and is never redrawn. */
 const HOLD = 0.88;
-/** Depth shown on the cover's readout at the end of the runway (the introduction starts there). */
-const COVER_DEPTH_M = 10;
 
 const clamp01 = (v: number) => (v < 0 ? 0 : v > 1 ? 1 : v);
 const smooth = (a: number, b: number, v: number) => {
@@ -102,7 +97,7 @@ const hash = (i: number, k: number) => {
 };
 
 export function createHeroCurrent(opts: HeroCurrentOptions): HeroCurrentHandle {
-  const { canvas, section, stage, letters, nameEl, nameLines, horizon, depthEl, onZones, onFrame } = opts;
+  const { canvas, section, stage, letters, nameEl, nameLines, horizon, onZones, onFrame } = opts;
   const ctx = canvas.getContext('2d');
   if (!ctx) return { destroy() {} };
 
@@ -140,11 +135,9 @@ export function createHeroCurrent(opts: HeroCurrentOptions): HeroCurrentHandle {
   let headlineRects: HeroRect[] = [];
   let nameRects: HeroRect[] = [];
   let releaseEnd = RISE[1];
-  // Horizon: rest position (stage px) and where it leaves the stage
+  // Waterline: rest position (stage px) and where it leaves the stage
   let horizonRest = 0;
   let horizonEnd = -40;
-  let lastHorizonShift = NaN;
-  let lastDepth = -1;
   let lastTypeOpacity = -1;
 
   // Glyph atlas: one column per character, one row per ink
@@ -209,8 +202,6 @@ export function createHeroCurrent(opts: HeroCurrentOptions): HeroCurrentHandle {
     runway = Math.max(1, section.offsetHeight - stageH);
 
     // ---- Target layout: the name lock-up, exactly where CSS set its type ------------------
-    if (horizon) horizon.style.transform = '';
-    lastHorizonShift = NaN;
     const lineBoxes = nameLines.map((el) => {
       const r = el.getBoundingClientRect();
       return { el, x: r.left, y: r.top - sr.top, w: r.width, h: r.height, cs: getComputedStyle(el) };
@@ -305,7 +296,7 @@ export function createHeroCurrent(opts: HeroCurrentOptions): HeroCurrentHandle {
       } else headlineRects.push({ left: b.x, top: b.y, width: b.w, height: b.h });
     });
 
-    // Horizon rest position: just under the first line's baseline (set by CSS)
+    // Waterline rest position: just under the first line's baseline (set by CSS)
     horizonRest = horizon ? horizon.getBoundingClientRect().top - sr.top : stageH * 0.55;
     horizonEnd = -Math.max(40, stageH * 0.06);
 
@@ -416,29 +407,13 @@ export function createHeroCurrent(opts: HeroCurrentOptions): HeroCurrentHandle {
     const W = viewW;
     const H = stageH;
 
-    // The horizon and the depth readout follow the same progress
-    const hy = horizonAt(t);
-    if (horizon) {
-      const shift = Math.round((hy - horizonRest) * 2) / 2;
-      if (shift !== lastHorizonShift) {
-        lastHorizonShift = shift;
-        horizon.style.transform = shift === 0 ? '' : `translate3d(0, ${shift}px, 0)`;
-      }
-    }
-    if (depthEl) {
-      const d = Math.round(COVER_DEPTH_M * clamp01((t - RISE[0]) / (0.9 - RISE[0])));
-      if (d !== lastDepth) {
-        lastDepth = d;
-        depthEl.textContent = `${d} m`;
-      }
-    }
     // The type of the name comes up under the glyphs, then the glyphs let go
     const typeOpacity = Math.round(smooth(TYPE_IN[0], TYPE_IN[1], t) * 100) / 100;
     if (typeOpacity !== lastTypeOpacity) {
       lastTypeOpacity = typeOpacity;
       nameEl.style.opacity = String(typeOpacity);
     }
-    onFrame?.({ t, horizonY: hy + top, stageTop: top, stageHeight: H });
+    onFrame?.({ t, stageTop: top, stageHeight: H });
 
     // Real headline letters break up exactly as their fragments are released
     for (let i = 0; i < letters.length; i++) {
@@ -584,7 +559,6 @@ export function createHeroCurrent(opts: HeroCurrentOptions): HeroCurrentHandle {
       for (const el of letters) el.style.opacity = '';
       canvas.style.transform = '';
       nameEl.style.opacity = '';
-      if (horizon) horizon.style.transform = '';
       onZones?.([]);
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.clearRect(0, 0, canvas.width, canvas.height);

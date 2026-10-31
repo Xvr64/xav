@@ -44,10 +44,8 @@ interface FloatingSectionHeaderProps {
   sectionId?: string;
   title: string;
   description?: string;
-  /** Oceanographic depth reference for this stretch of the descent, e.g. "200 m — twilight zone". */
-  depth?: string;
   /** How the header sits on the 12-column grid; each section picks its own. "sounding" is The
-      Sounding's header: a depth annotation with a leader line running to a Newsreader title. */
+      Sounding's header: a Newsreader title set in from the margin columns. */
   layout?: 'left' | 'drift' | 'counter' | 'stacked' | 'sounding';
   /** A single Newsreader statement set beneath the header. */
   asideAccent?: string;
@@ -56,16 +54,10 @@ interface FloatingSectionHeaderProps {
 const FloatingSectionHeader: React.FC<FloatingSectionHeaderProps> = ({
   title,
   description,
-  depth,
   layout = 'left',
   asideAccent
 }) => (
   <header className={`section-head section-head--${layout} ed-grid relative z-10`}>
-    {depth && (
-      <p className="depth-mark" aria-hidden="true">
-        <AsciiText text={depth} />
-      </p>
-    )}
     <h2 className="ocean-h2 text-[#171717]">
       <BioWords text={title} />
     </h2>
@@ -207,7 +199,6 @@ export default function App() {
               <FloatingSectionHeader
                 sectionId="experience"
                 layout="sounding"
-                depth="120 m — sunlit zone"
                 title="Operational & commercial internships"
                 description="Practical experience across business development, commercial quotation workflows, and international air and sea freight coordination."
                 asideAccent="Translating cross-cultural adaptability into rigorous B2B execution and freight logistics."
@@ -256,7 +247,6 @@ export default function App() {
               <FloatingSectionHeader
                 sectionId="global"
                 layout="drift"
-                depth="200 – 1 000 m — twilight zone"
                 title="Seven cities across Europe, the Middle East & Asia"
                 description="An international chronology shaped by living across Doha, Paris, Jakarta, Moscow, Singapore, Pau, and Shanghai."
               />
@@ -286,7 +276,6 @@ export default function App() {
               <FloatingSectionHeader
                 sectionId="skills"
                 layout="counter"
-                depth="1 000 m — midnight zone"
                 title="Technical & creative toolset"
                 description="Organized across automated workflows, media production, and enterprise productivity suites."
               />
@@ -328,7 +317,6 @@ export default function App() {
               <FloatingSectionHeader
                 sectionId="education"
                 layout="stacked"
-                depth="2 500 m — midnight zone"
                 title="Academic chronology"
                 description="A global educational trajectory across international schools in Europe and Asia, culminating in the ESSCA Bachelor curriculum."
               />
@@ -375,7 +363,6 @@ export default function App() {
               <FloatingSectionHeader
                 sectionId="languages"
                 layout="left"
-                depth="4 000 m — abyssal zone"
                 title="Across languages"
                 description="Multilingual fluency forged through living and studying in six distinct linguistic regions."
               />
@@ -407,7 +394,6 @@ export default function App() {
               <FloatingSectionHeader
                 sectionId="interests"
                 layout="drift"
-                depth="5 200 m — abyssal plain"
                 title="Disciplines & cultural monitoring"
                 description="Athletic conditioning, music production, macroeconomic research, and luxury retail observation."
               />
@@ -439,7 +425,6 @@ export default function App() {
               <FloatingSectionHeader
                 sectionId="contact"
                 layout="stacked"
-                depth="6 000 m — hadal zone"
                 title="Direct correspondence"
                 description="Open for B2B development, international logistics coordination, and strategic business inquiries."
               />

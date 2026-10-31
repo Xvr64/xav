@@ -122,7 +122,6 @@ body {
 }
 
 /* Metadata voice: JetBrains Mono, small, lower-case, quiet */
-.depth-mark,
 .meta {
   font-family: var(--font-mono);
   font-size: var(--text-meta);
@@ -131,9 +130,8 @@ body {
   letter-spacing: var(--tracking-mono);
   font-variant-numeric: tabular-nums;
   color: var(--ink-52595E, #52595E);
+  opacity: 0.9;
 }
-.depth-mark { opacity: 0.78; }
-.meta { opacity: 0.9; }
 
 /* Display voice: Newsreader at opsz 72 */
 .display {
@@ -203,8 +201,7 @@ body {
   padding-bottom: var(--space-xl);
   align-items: end;
 }
-.section-head > .depth-mark { grid-row: 1; }
-.section-head > .ocean-h2 { grid-row: 2; }
+.section-head > .ocean-h2 { grid-row: 1; }
 .section-head .section-dek {
   font-size: var(--text-body);
   line-height: var(--leading-body);
@@ -224,28 +221,25 @@ body {
   color: var(--ink-171717, #171717);
 }
 /* surface-left: title broad on the left, dek tucked to its right on the title baseline */
-.section-head--left > .depth-mark { grid-column: 1 / span 4; }
 .section-head--left > .ocean-h2 { grid-column: 1 / span 7; }
-.section-head--left > .section-dek { grid-column: 9 / span 4; grid-row: 2; }
-.section-head--left > .section-aside { grid-column: 2 / span 6; grid-row: 3; margin-top: var(--space-l); }
+.section-head--left > .section-dek { grid-column: 9 / span 4; grid-row: 1; }
+.section-head--left > .section-aside { grid-column: 2 / span 6; grid-row: 2; margin-top: var(--space-l); }
 /* drift: title enters from the third column, dek steps further right beneath it */
-.section-head--drift > .depth-mark { grid-column: 3 / span 4; }
 .section-head--drift > .ocean-h2 { grid-column: 3 / span 8; }
-.section-head--drift > .section-dek { grid-column: 7 / span 5; grid-row: 3; }
+.section-head--drift > .section-dek { grid-column: 7 / span 5; grid-row: 2; }
 /* counter: title sits on the right half, dek hangs below on the same left edge */
-.section-head--counter > .depth-mark { grid-column: 6 / span 4; }
 .section-head--counter > .ocean-h2 { grid-column: 6 / span 7; }
-.section-head--counter > .section-dek { grid-column: 6 / span 5; grid-row: 3; }
+.section-head--counter > .section-dek { grid-column: 6 / span 5; grid-row: 2; }
 /* stacked: title left, dek indented one column */
-.section-head--stacked > .depth-mark { grid-column: 1 / span 4; }
 .section-head--stacked > .ocean-h2 { grid-column: 1 / span 8; }
-.section-head--stacked > .section-dek { grid-column: 2 / span 5; grid-row: 3; }
+.section-head--stacked > .section-dek { grid-column: 2 / span 5; grid-row: 2; }
 
 /* ---------------------------------------------------------------------------
    01 · Cover — "A journey without horizons"
-   One scroll value (heroCurrent.ts) conducts the whole cover: the horizon rises out of
-   view, each letter breaks into the current as the water reaches it, the fragments
-   gather into the name, and the ASCII name resolves into type.
+   The ocean fills the screen from the first frame: no surface line, no labels. One scroll
+   value (heroCurrent.ts) conducts the whole cover: each letter breaks into the current as an
+   invisible waterline reaches it, the fragments gather into the name, and the ASCII name
+   resolves into type.
    --------------------------------------------------------------------------- */
 .hero-runway { position: relative; }
 .hero-stage { position: sticky; top: 0; height: 100svh; }
@@ -296,7 +290,7 @@ body {
 .minimal-hero .cover-line { grid-column: 1 / span 12; display: block; position: relative; }
 /* Optical margin: the A's apex hangs on the column edge like the colophon's first letter */
 .minimal-hero .cover-line:first-child { margin-left: -0.045em; }
-/* "horizons" starts below the surface: italic, in the water's own ink, on the drift column */
+/* "horizons": italic, in the water's own ink, on the drift column */
 .minimal-hero .cover-line--drift {
   grid-column: 5 / span 8;
   font-style: italic;
@@ -305,55 +299,15 @@ body {
   color: #2F4858;
 }
 
-/* The horizon: one hairline, full bleed, just under the first line's baseline so the
-   descenders of "journey" hang into the water. JS translates it upward as you descend. */
+/* The waterline's datum: an invisible zero-height mark just under the first line's baseline.
+   heroCurrent.ts measures it to time the break-up; nothing is drawn. */
 .hero-horizon {
   position: absolute;
   top: calc(100% - 0.19em);
-  left: 50%;
-  width: 100vw;
-  margin-left: -50vw;
+  left: 0;
+  width: 100%;
   height: 0;
   pointer-events: none;
-  user-select: none;
-  will-change: transform;
-}
-.hero-horizon::before {
-  content: '';
-  position: absolute;
-  inset: 0 0 auto 0;
-  height: 1px;
-  background: rgba(23, 23, 23, 0.46);
-}
-/* The living horizon (horizonRipple.ts) draws the same hairline as a wave once it is mounted */
-.hero-horizon--live::before { visibility: hidden; }
-.hero-horizon-wave {
-  position: absolute;
-  left: 0;
-  top: -3.5px;
-  width: 100%;
-  height: 8px;
-  overflow: visible;
-  pointer-events: none;
-}
-.hero-horizon-wave path {
-  fill: none;
-  stroke: rgba(23, 23, 23, 0.46);
-  stroke-width: 1px;
-}
-.hero-horizon-label {
-  position: absolute;
-  top: 12px;
-  right: var(--page-margin);
-  font-family: var(--font-mono);
-  font-style: normal;
-  font-weight: 400;
-  font-size: var(--text-meta);
-  line-height: var(--leading-meta);
-  letter-spacing: var(--tracking-mono);
-  font-variation-settings: normal;
-  color: #2F4858;
-  white-space: nowrap;
 }
 
 /* The name the current resolves into: a lock-up that rhymes with the cover — first line
@@ -416,23 +370,6 @@ body {
 }
 .terminal-overview .intro-name-first { grid-column: 1 / span 12; }
 .terminal-overview .intro-name-last { grid-column: 5 / span 8; font-style: italic; }
-/* The depth reading is an annotation on the chart: a leader line runs from it to the statement */
-.terminal-overview .depth-mark {
-  grid-column: 1 / span 4;
-  grid-row: 2;
-  align-self: start;
-  display: flex;
-  align-items: center;
-  gap: var(--space-s);
-  margin: calc(0.5 * var(--text-statement)) 0 0;
-  opacity: 1;
-}
-.terminal-overview .depth-mark::after {
-  content: '';
-  flex: 1;
-  height: 1px;
-  background: var(--rule-20, rgba(23, 23, 23, 0.2));
-}
 .terminal-overview .lead {
   grid-column: 5 / span 8;
   grid-row: 2;
@@ -458,32 +395,12 @@ body {
 .entry-list--wide > * + * { margin-top: var(--space-2xl); }
 
 /* ---------------------------------------------------------------------------
-   The Sounding's section header: the introduction's annotation grammar. The depth reading
-   sits in the margin columns and a leader line runs from it to a Newsreader title; the dek
+   The Sounding's section header: a Newsreader title set in from the margin columns; the dek
    reads beneath the title, the aside answers it in italic on the right.
    --------------------------------------------------------------------------- */
 .section-head--sounding {
-  --text-sounding: var(--text-h2);
   row-gap: var(--space-l);
   align-items: start;
-}
-.section-head--sounding > .depth-mark {
-  grid-column: 1 / span 2;
-  grid-row: 1;
-  display: flex;
-  align-items: center;
-  gap: var(--space-s);
-  /* centred on the title's first line */
-  margin-top: calc(0.56 * var(--text-sounding) - 0.75em);
-  margin-right: calc(-1 * var(--gutter));
-  opacity: 1;
-}
-.section-head--sounding > .depth-mark::after {
-  content: '';
-  flex: 1;
-  min-width: var(--space-m);
-  height: 1px;
-  background: var(--rule-20, rgba(23, 23, 23, 0.2));
 }
 /* Face, size and tracking come from the shared .ocean-h2; the sounding only places it */
 .terminal-portfolio .section-head--sounding > .ocean-h2 {
@@ -500,8 +417,7 @@ body {
 
 /* ---------------------------------------------------------------------------
    03 · Experience — a sounding log. Each station's name sits on a datum line that runs the
-   full measure, the way the cover's headline sits on the horizon, and its date reads at the
-   far end of the line. The record hangs below it, leaving the margin columns open water.
+   full measure, and its date reads at the far end of the line. The record hangs below it, leaving the margin columns open water.
    --------------------------------------------------------------------------- */
 .station-list { padding-top: var(--space-l); }
 .exp-entry {
@@ -758,10 +674,8 @@ body {
   .minimal-hero .cover-line--drift { grid-column: 3 / span 10; }
   .hero-colophon .colophon-role { grid-column: 4 / span 6; }
   .hero-name-last, .terminal-overview .intro-name-last { grid-column: 3 / span 10; }
-  .terminal-overview .depth-mark { grid-column: 1 / span 3; }
   .terminal-overview .lead { grid-column: 4 / span 9; }
   .terminal-overview .intro-support { grid-column: 7 / span 6; }
-  .section-head--sounding > .depth-mark { grid-column: 1 / span 3; }
   .terminal-portfolio .section-head--sounding > .ocean-h2 { grid-column: 4 / span 9; }
   .section-head--sounding > .section-dek { grid-column: 4 / span 5; }
   .section-head--sounding > .section-aside { grid-column: 4 / span 7; grid-row: 3; }
@@ -770,11 +684,11 @@ body {
   .exp-entry .exp-what { grid-column: 6 / span 7; }
   .skill-band .skill-head { grid-column: 3 / span 4; }
   .skill-band .skill-list { grid-column: 7 / span 6; }
-  .section-head--counter > :is(.depth-mark, .ocean-h2, .section-dek) { grid-column-start: 4; grid-column-end: span 9; }
-  .section-head--drift > :is(.depth-mark, .ocean-h2) { grid-column: 2 / span 10; }
+  .section-head--counter > :is(.ocean-h2, .section-dek) { grid-column-start: 4; grid-column-end: span 9; }
+  .section-head--drift > .ocean-h2 { grid-column: 2 / span 10; }
   .section-head--left > .ocean-h2 { grid-column: 1 / span 8; }
-  .section-head--left > .section-dek { grid-column: 1 / span 7; grid-row: 3; }
-  .section-head--left > .section-aside { grid-row: 4; }
+  .section-head--left > .section-dek { grid-column: 1 / span 7; grid-row: 2; }
+  .section-head--left > .section-aside { grid-row: 3; }
   .interest-flow .interest:nth-child(n) { grid-column: auto / span 6; }
   .interest-flow .interest:nth-child(2) { grid-column: 7 / span 6; }
   .interest-flow .interest:nth-child(3) { grid-column: 4 / span 7; }
@@ -796,20 +710,16 @@ body {
   .hero-colophon .colophon-depth { grid-column: 2 !important; grid-row: 1 !important; }
   .minimal-hero { padding-top: calc(50svh - 1.88 * var(--text-cover)); }
   .minimal-hero .cover-line--drift { padding-left: 1.1em; }
-  /* "horizons" fills the line below the surface, so the datum is read above it */
-  .hero-horizon-label { top: auto; bottom: 8px; }
   .hero-name { padding-top: 17svh; }
   .hero-name, .terminal-overview .intro-name { grid-template-columns: minmax(0, 1fr); }
   .hero-name > *, .terminal-overview .intro-name > * { grid-column: 1 / -1 !important; }
   .hero-name-last, .terminal-overview .intro-name-last { padding-left: 1.05em; }
   .terminal-overview { padding-top: 6vh; }
-  .terminal-overview .depth-mark { margin: 0 0 var(--space-m); }
   .terminal-overview .intro-support { margin-top: var(--space-l); padding-left: var(--space-xl); }
   .section-head { row-gap: var(--space-s); padding-bottom: var(--space-l); }
   .section-head .section-dek { padding-left: 0; }
   .section-head .section-aside { margin-top: var(--space-s) !important; }
   .entry-list--wide > * + * { margin-top: var(--space-xl); }
-  .section-head--sounding > .depth-mark { margin-top: 0; margin-right: 0; }
   .exp-entry { row-gap: var(--space-s); }
   .exp-entry .exp-when { justify-self: start; margin: 0; padding-top: var(--space-2xs); }
   .exp-entry .exp-what { margin-top: var(--space-s); }

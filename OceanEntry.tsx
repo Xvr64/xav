@@ -1,7 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { AsciiText } from './TerminalEditorial';
 import { createHeroCurrent } from './heroCurrent';
-import { createHorizonRipple } from './horizonRipple';
 import { CV_DATA } from './cvData';
 import {
   convergence,
@@ -44,19 +43,13 @@ export const heroLetters = (text: string) =>
 /** "XAVIER HERY" → "Xavier Hery", for the colophon's quiet voice. */
 export const toTitleCase = (text: string) => text.toLowerCase().replace(/(^|[\s/·-])(\p{L})/gu, (_, sep, ch) => sep + ch.toUpperCase());
 
-/**
- * The hero current's canvas: fixed between the fluid (below) and the whales (above), so the
- * whales keep priority over the fragments. It redraws only when the scroll position changes.
- */
-/** Px over which the water fades in under the horizon: light falling off with depth. */
-export const SURFACE_FADE = 170;
-
 // Whale lanes (main, companion) for each moment of the cover and introduction, chosen against
-// the type: under the horizon at the surface, at the edges while the fragments own the middle,
+// the type: on arrival they frame the headline from above and below, so the scene fills the
+// screen from the first frame; at the edges while the fragments own the middle,
 // beside the name, then in the introduction's open left field while the statement reads on the
 // right. While the finished name holds, the main whale glides beneath it through the empty
 // lower band — the one movement between two still compositions — so it never crosses the type.
-export const LANES_SURFACE: Lane[] = [{ x: 0.79, y: 0.8 }, { x: 0.15, y: 0.9 }];
+export const LANES_SURFACE: Lane[] = [{ x: 0.74, y: 0.82 }, { x: 0.26, y: 0.2 }];
 export const LANES_DESCENT: Lane[] = [{ x: 0.83, y: 0.8 }, { x: 0.13, y: 0.86 }];
 export const LANES_NAME: Lane[] = [{ x: 0.85, y: 0.68 }, { x: 0.12, y: 0.9 }];
 export const LANES_HOLD: Lane[] = [{ x: 0.36, y: 0.86 }, { x: 0.1, y: 0.92 }];
@@ -67,8 +60,8 @@ export const LANES_INTRO_NARROW: Lane[] = [{ x: 0.86, y: 0.95 }, { x: 0.12, y: 0
 /**
  * The hero current's canvas: fixed between the fluid (below) and the whales (above), so the
  * whales keep priority over the fragments. It redraws only when the scroll position changes.
- * Its frames also conduct the ocean around the cover: the surface mask on the fluid and whale
- * layers, and where the whales swim.
+ * Its frames also conduct where the whales swim. The ocean fills the whole screen from the first
+ * frame: there is no surface line, no sky above it, and nothing measures the descent.
  */
 export const HeroCurrentLayer: React.FC = React.memo(() => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -82,22 +75,6 @@ export const HeroCurrentLayer: React.FC = React.memo(() => {
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     const nameEl = stage.querySelector<HTMLElement>('[data-hero-name]');
     if (!nameEl) return;
-
-    const oceanLayers = Array.from(document.querySelectorAll<HTMLElement>('[data-ocean-layer]'));
-    let maskY = NaN;
-    const maskSurface = (horizonY: number) => {
-      const y = Math.round(horizonY);
-      if (y === maskY) return;
-      maskY = y;
-      const mask =
-        y <= -SURFACE_FADE
-          ? ''
-          : `linear-gradient(to bottom, transparent ${y}px, rgba(0, 0, 0, 0.35) ${y + 1}px, #000 ${y + SURFACE_FADE}px)`;
-      for (const el of oceanLayers) {
-        el.style.maskImage = mask;
-        el.style.setProperty('-webkit-mask-image', mask);
-      }
-    };
 
     // The introduction's document position, for handing the whales back once it has passed
     let introTop = 0;
@@ -113,10 +90,6 @@ export const HeroCurrentLayer: React.FC = React.memo(() => {
     if (intro) introObserver.observe(intro);
     window.addEventListener('resize', measureIntro);
 
-    const horizonEl = stage.querySelector<HTMLElement>('[data-hero-horizon]');
-    // The hairline answers the pointer and the first swell of the descent (see horizonRipple.ts)
-    const ripple = horizonEl ? createHorizonRipple(horizonEl) : null;
-
     const handle = createHeroCurrent({
       canvas,
       section,
@@ -124,17 +97,14 @@ export const HeroCurrentLayer: React.FC = React.memo(() => {
       letters: Array.from(stage.querySelectorAll<HTMLElement>('[data-hero-letter]')),
       nameEl,
       nameLines: Array.from(nameEl.querySelectorAll<HTMLElement>('[data-hero-name-line]')),
-      horizon: horizonEl,
-      depthEl: stage.querySelector<HTMLElement>('[data-hero-depth]'),
+      horizon: stage.querySelector<HTMLElement>('[data-hero-horizon]'),
       onZones: (rects) => {
         if (rects.length === 0 && heroZone.rects.length === 0) return;
         heroZone.rects = rects;
         heroZone.version++;
       },
-      onFrame: ({ t, horizonY, stageTop, stageHeight }) => {
-        maskSurface(horizonY);
-        ripple?.setY(horizonY, t);
-        // Surface → descent → name, then the stage scrolls away and the introduction takes over
+      onFrame: ({ t, stageTop, stageHeight }) => {
+        // Arrival → descent → name, then the stage scrolls away and the introduction takes over
         const toDescent = smoothStepRange(t, 0.04, 0.36);
         const toName = smoothStepRange(t, 0.4, 0.72);
         const toHold = smoothStepRange(t, 0.86, 1);
@@ -145,7 +115,6 @@ export const HeroCurrentLayer: React.FC = React.memo(() => {
           lane = mixLane(lane, LANES_HOLD[i], toHold);
           return mixLane(lane, (window.innerWidth < 768 ? LANES_INTRO_NARROW : LANES_INTRO)[i], away);
         });
-        whaleDirection.surfaceY = horizonY;
         // Fully composed until the introduction's last line rises past mid-screen
         const vh = window.innerHeight;
         const introLeft = intro ? introBottom - window.scrollY : -1;
@@ -153,13 +122,10 @@ export const HeroCurrentLayer: React.FC = React.memo(() => {
       }
     });
     return () => {
-      ripple?.destroy();
       handle.destroy();
       introObserver.disconnect();
       window.removeEventListener('resize', measureIntro);
-      maskSurface(-Infinity);
       directWhales('cover', 0, LANES_SURFACE);
-      whaleDirection.surfaceY = -Infinity;
     };
   }, []);
 
@@ -331,9 +297,8 @@ export const ProgressiveOceanEntry: React.FC<ProgressiveOceanEntryProps> = React
             <span className="sr-only">A journey without horizons</span>
             <span className="cover-line" aria-hidden="true">
               {heroLetters('A journey without')}
-              <span className="hero-horizon" data-hero-horizon>
-                <span className="hero-horizon-label">0 m · sea level</span>
-              </span>
+              {/* An invisible datum under the first line: it times the letters' break-up, never drawn */}
+              <span className="hero-horizon" data-hero-horizon />
             </span>
             <span className="cover-line cover-line--drift" aria-hidden="true">{heroLetters('horizons')}</span>
           </p>
@@ -353,7 +318,6 @@ export const ProgressiveOceanEntry: React.FC<ProgressiveOceanEntryProps> = React
         <span className="intro-name-first"><AsciiText text="Xavier" /></span>{' '}
         <span className="intro-name-last"><AsciiText text="Hery" /></span>
       </h1>
-      <p className="depth-mark" aria-hidden="true"><AsciiText text="10 m — sunlit zone" /></p>
       <p className="lead" data-text-rank="2"><AsciiText text={CV_DATA.heroIntroConcise} /></p>
       <p className="intro-support" data-text-rank="3"><AsciiText text={CV_DATA.heroIntroSecondary} /></p>
     </section>

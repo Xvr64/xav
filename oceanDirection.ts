@@ -26,9 +26,10 @@ export const whaleDirection = {
   /** Drawn size of the whales (1 = their own): below 1 while they dive into the Globe. */
   size: 1,
   surfaceY: -Infinity,
+  // The cover's arrival lanes (LANES_SURFACE), so the very first frame is already composed
   lanes: [
-    { x: 0.79, y: 0.8 },
-    { x: 0.15, y: 0.9 }
+    { x: 0.74, y: 0.82 },
+    { x: 0.26, y: 0.2 }
   ]
 };
 
