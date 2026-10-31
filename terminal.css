@@ -245,8 +245,8 @@ body {
 .hero-stage { position: sticky; top: 0; height: 100svh; }
 @media (prefers-reduced-motion: no-preference) {
   .hero-runway { height: 300svh; }
-  /* The name resolved on the cover carries the introduction's heading visually */
-  .terminal-overview .intro-name--carried {
+  /* The name resolved on the cover carries the page's heading visually */
+  .intro-name--carried {
     position: absolute;
     width: 1px;
     height: 1px;
@@ -347,14 +347,14 @@ body {
 }
 
 /* ---------------------------------------------------------------------------
-   02 · Introduction — a statement spread under the name
+   02 · Introduction — a statement spread in the deep water, after the journey
    --------------------------------------------------------------------------- */
 .terminal-overview {
   padding-block: 9vh 0;
   row-gap: 0;
 }
 /* Shown as type only without motion; with motion the cover's lock-up carries it */
-.terminal-overview .intro-name {
+.intro-name {
   grid-column: 1 / span 12;
   display: grid;
   grid-template-columns: repeat(12, minmax(0, 1fr));
@@ -368,11 +368,11 @@ body {
   letter-spacing: -0.034em;
   color: var(--ink-171717, #171717);
 }
-.terminal-overview .intro-name-first { grid-column: 1 / span 12; }
-.terminal-overview .intro-name-last { grid-column: 5 / span 8; font-style: italic; }
+.intro-name-first { grid-column: 1 / span 12; }
+.intro-name-last { grid-column: 5 / span 8; font-style: italic; }
 .terminal-overview .lead {
   grid-column: 5 / span 8;
-  grid-row: 2;
+  grid-row: 1;
   margin: 0;
   max-width: 21.5em;
   font-size: var(--text-statement);
@@ -382,7 +382,7 @@ body {
 }
 .terminal-overview .intro-support {
   grid-column: 9 / span 4;
-  grid-row: 3;
+  grid-row: 2;
   margin: var(--space-xl) 0 0;
   max-width: 40ch;
   font-size: var(--text-body);
@@ -673,7 +673,7 @@ body {
 @media (max-width: 1100px) {
   .minimal-hero .cover-line--drift { grid-column: 3 / span 10; }
   .hero-colophon .colophon-role { grid-column: 4 / span 6; }
-  .hero-name-last, .terminal-overview .intro-name-last { grid-column: 3 / span 10; }
+  .hero-name-last, .intro-name-last { grid-column: 3 / span 10; }
   .terminal-overview .lead { grid-column: 4 / span 9; }
   .terminal-overview .intro-support { grid-column: 7 / span 6; }
   .terminal-portfolio .section-head--sounding > .ocean-h2 { grid-column: 4 / span 9; }
@@ -711,9 +711,9 @@ body {
   .minimal-hero { padding-top: calc(50svh - 1.88 * var(--text-cover)); }
   .minimal-hero .cover-line--drift { padding-left: 1.1em; }
   .hero-name { padding-top: 17svh; }
-  .hero-name, .terminal-overview .intro-name { grid-template-columns: minmax(0, 1fr); }
-  .hero-name > *, .terminal-overview .intro-name > * { grid-column: 1 / -1 !important; }
-  .hero-name-last, .terminal-overview .intro-name-last { padding-left: 1.05em; }
+  .hero-name, .intro-name { grid-template-columns: minmax(0, 1fr); }
+  .hero-name > *, .intro-name > * { grid-column: 1 / -1 !important; }
+  .hero-name-last, .intro-name-last { padding-left: 1.05em; }
   .terminal-overview { padding-top: 6vh; }
   .terminal-overview .intro-support { margin-top: var(--space-l); padding-left: var(--space-xl); }
   .section-head { row-gap: var(--space-s); padding-bottom: var(--space-l); }

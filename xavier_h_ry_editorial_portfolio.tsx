@@ -13,6 +13,9 @@ import {
   HeroCurrentLayer,
   LANES_EXPERIENCE,
   LANES_EXPERIENCE_NARROW,
+  LANES_INTRO,
+  LANES_INTRO_NARROW,
+  OceanIntroduction,
   ProgressiveOceanEntry,
   WhaleStretch,
   toTitleCase
@@ -167,6 +170,7 @@ export default function App() {
 
       <ReadingZoneTracker />
       <HeroCurrentLayer />
+      <WhaleStretch sectionId="introduction" lanes={LANES_INTRO} narrowLanes={LANES_INTRO_NARROW} />
       <WhaleStretch sectionId="experience" lanes={LANES_EXPERIENCE} narrowLanes={LANES_EXPERIENCE_NARROW} />
       <GlobeDive />
       <AsciiWhaleBackground mode="ambient" />
@@ -184,14 +188,48 @@ export default function App() {
       </p>
 
       <main className="relative z-10 w-full max-w-[1440px] mx-auto px-4 sm:px-8 ocean-legible overflow-x-hidden">
-        {/* SECTION 01: PROGRESSIVE OCEAN ENTRY & INTRODUCTION (Hero Preserved) */}
+        {/* SECTION 01: PROGRESSIVE OCEAN ENTRY (Hero Preserved) */}
         <ProgressiveOceanEntry
           onExploreDossier={handleExploreDossier}
           onDownloadPdf={handleDownloadOriginalCv}
         />
 
+        {/* THE DESCENT: straight from the cover into the Globe's pinned runway. Its first stretch
+            (the lead) is the convergence: the two whales circle each other and become the Earth;
+            the city journey takes the rest, and the water darkens with it, reaching the deep
+            ocean as the last city's dwell ends. The scroll position IS the timeline. */}
+        <section id="journey" aria-label="Seven cities" className="relative">
+          <div
+            data-journey-runway
+            data-ascii-preserve
+            className="journey-runway relative w-full max-w-full overflow-hidden"
+          >
+            <div className="sticky top-0 h-[100svh] w-full max-w-full overflow-hidden">
+              <WhaleConvergence firstCity={CV_DATA.locations[0]} />
+              <JourneyGlobe locations={CV_DATA.locations} />
+            </div>
+            {/* The convergence's length; after the stage, which JourneyGlobe finds as the first child */}
+            <div data-journey-lead aria-hidden="true" className="journey-lead absolute top-0 left-0 w-px pointer-events-none" />
+          </div>
+        </section>
+
+        {/* SECTION 02: INTRODUCTION — in the deep water, once the journey has ended */}
+        <OceanIntroduction />
+
         <div className="cv-arch mt-16 sm:mt-24 lg:mt-32 space-y-28 sm:space-y-36">
-          {/* SECTION 02: EXPERIENCE (De-boxed, Floating Editorial Timeline) */}
+          {/* INTERNATIONAL BACKGROUND: the journey's chapter title, set after the statement */}
+          <section id="global" data-editorial-section className="relative">
+            <RevealBlock variant="section">
+              <FloatingSectionHeader
+                sectionId="global"
+                layout="drift"
+                title="Seven cities across Europe, the Middle East & Asia"
+                description="An international chronology shaped by living across Doha, Paris, Jakarta, Moscow, Singapore, Pau, and Shanghai."
+              />
+            </RevealBlock>
+          </section>
+
+          {/* SECTION 03: EXPERIENCE (De-boxed, Floating Editorial Timeline) */}
           {/* A sounding log: each internship is a station sitting on its own datum line, like the
               cover's headline on the horizon, with its record hanging below in the water. */}
           <section id="experience" data-editorial-section className="relative">
@@ -238,35 +276,6 @@ export default function App() {
                   </article>
                 </RevealBlock>
               ))}
-            </div>
-          </section>
-
-          {/* SECTION 03: INTERNATIONAL BACKGROUND (Pinned 3D Runway) */}
-          <section id="global" data-editorial-section className="relative">
-            <RevealBlock variant="section">
-              <FloatingSectionHeader
-                sectionId="global"
-                layout="drift"
-                title="Seven cities across Europe, the Middle East & Asia"
-                description="An international chronology shaped by living across Doha, Paris, Jakarta, Moscow, Singapore, Pau, and Shanghai."
-              />
-            </RevealBlock>
-
-            {/* Journey runway: full-width stage stays pinned while the visitor
-                scrolls through this distance — the scroll position IS the timeline. Its first
-                stretch (the lead) is the convergence: two whales circle each other and become this
-                Earth; the city journey takes the rest. */}
-            <div
-              data-journey-runway
-              data-ascii-preserve
-              className="journey-runway relative mt-8 sm:mt-12 w-full max-w-full overflow-hidden"
-            >
-              <div className="sticky top-0 h-[100svh] w-full max-w-full overflow-hidden">
-                <WhaleConvergence firstCity={CV_DATA.locations[0]} />
-                <JourneyGlobe locations={CV_DATA.locations} />
-              </div>
-              {/* The convergence's length; after the stage, which JourneyGlobe finds as the first child */}
-              <div data-journey-lead aria-hidden="true" className="journey-lead absolute top-0 left-0 w-px pointer-events-none" />
             </div>
           </section>
 

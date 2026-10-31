@@ -28,7 +28,7 @@ import './terminal.css';
  *    dates and metadata) is written through `AsciiText`, so nothing opts in element by element.
  *  - `[data-ascii-preserve]` opts a subtree out. It is used only where another system already
  *    owns the motion: the cover stage (its own letter-to-current headline animation), the
- *    visually clipped semantic name in the introduction, and the Globe runway (city captions are
+ *    visually clipped semantic name under the cover, and the Globe runway (city captions are
  *    part of the Globe's own sequence).
  *  - Canvas art (whales, boat, jellyfish, ocean, particles, Globe) is not DOM text and is never
  *    touched. Overlays outside the sections (CV preview modal, download toast) are not scroll copy.

@@ -15,7 +15,7 @@ import {
 } from './oceanDirection';
 
 // ============================================================================
-// PROGRESSIVE OCEAN ENTRY & SCROLL-DRIVEN INTRODUCTION (PHASES 1 -> 4)
+// PROGRESSIVE OCEAN ENTRY (THE COVER) & THE INTRODUCTION AFTER THE JOURNEY
 // ============================================================================
 
 export interface ProgressiveOceanEntryProps {
@@ -45,8 +45,8 @@ export const toTitleCase = (text: string) => text.toLowerCase().replace(/(^|[\s/
 
 // Whale lanes (main, companion) for each moment of the cover and introduction, chosen against
 // the type: on arrival they frame the headline from above and below, so the scene fills the
-// screen from the first frame; at the edges while the fragments own the middle,
-// beside the name, then in the introduction's open left field while the statement reads on the
+// screen from the first frame; at the edges while the fragments own the middle, beside the name,
+// and, after the journey, in the introduction's open left field while the statement reads on the
 // right. While the finished name holds, the main whale glides beneath it through the empty
 // lower band — the one movement between two still compositions — so it never crosses the type.
 export const LANES_SURFACE: Lane[] = [{ x: 0.74, y: 0.82 }, { x: 0.26, y: 0.2 }];
@@ -70,25 +70,10 @@ export const HeroCurrentLayer: React.FC = React.memo(() => {
     const canvas = canvasRef.current;
     const section = document.getElementById('home');
     const stage = section?.querySelector<HTMLElement>('[data-hero-stage]');
-    const intro = document.getElementById('introduction');
     if (!canvas || !section || !stage) return;
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     const nameEl = stage.querySelector<HTMLElement>('[data-hero-name]');
     if (!nameEl) return;
-
-    // The introduction's document position, for handing the whales back once it has passed
-    let introTop = 0;
-    let introBottom = 0;
-    const measureIntro = () => {
-      if (!intro) return;
-      const r = intro.getBoundingClientRect();
-      introTop = r.top + window.scrollY;
-      introBottom = r.bottom + window.scrollY;
-    };
-    measureIntro();
-    const introObserver = new ResizeObserver(measureIntro);
-    if (intro) introObserver.observe(intro);
-    window.addEventListener('resize', measureIntro);
 
     const handle = createHeroCurrent({
       canvas,
@@ -104,7 +89,8 @@ export const HeroCurrentLayer: React.FC = React.memo(() => {
         heroZone.version++;
       },
       onFrame: ({ t, stageTop, stageHeight }) => {
-        // Arrival → descent → name, then the stage scrolls away and the introduction takes over
+        // Arrival → descent → name, then the stage scrolls away as the convergence's runway rises:
+        // the whales are let go to swim on into the film, which begins from wherever they are
         const toDescent = smoothStepRange(t, 0.04, 0.36);
         const toName = smoothStepRange(t, 0.4, 0.72);
         const toHold = smoothStepRange(t, 0.86, 1);
@@ -112,19 +98,13 @@ export const HeroCurrentLayer: React.FC = React.memo(() => {
         const lanes = [0, 1].map((i) => {
           let lane = mixLane(LANES_SURFACE[i], LANES_DESCENT[i], toDescent);
           lane = mixLane(lane, LANES_NAME[i], toName);
-          lane = mixLane(lane, LANES_HOLD[i], toHold);
-          return mixLane(lane, (window.innerWidth < 768 ? LANES_INTRO_NARROW : LANES_INTRO)[i], away);
+          return mixLane(lane, LANES_HOLD[i], toHold);
         });
-        // Fully composed until the introduction's last line rises past mid-screen
-        const vh = window.innerHeight;
-        const introLeft = intro ? introBottom - window.scrollY : -1;
-        directWhales('cover', introTop > 0 ? smoothStepRange(introLeft, vh * 0.05, vh * 0.55) : 1 - away, lanes);
+        directWhales('cover', 1 - away, lanes);
       }
     });
     return () => {
       handle.destroy();
-      introObserver.disconnect();
-      window.removeEventListener('resize', measureIntro);
       directWhales('cover', 0, LANES_SURFACE);
     };
   }, []);
@@ -303,23 +283,30 @@ export const ProgressiveOceanEntry: React.FC<ProgressiveOceanEntryProps> = React
             <span className="cover-line cover-line--drift" aria-hidden="true">{heroLetters('horizons')}</span>
           </p>
         </div>
-        {/* The type the ASCII name resolves into; the semantic heading stays in the introduction */}
+        {/* The type the ASCII name resolves into; the semantic heading follows the stage */}
         <p className="hero-name ed-grid" data-hero-name aria-hidden="true">
           <span className="hero-name-first" data-hero-name-line>Xavier</span>
           <span className="hero-name-last" data-hero-name-line>Hery</span>
         </p>
       </div>
-    </section>
-    {/* Introduction: the name resolved above carries the heading visually; the semantic name stays
-        here (visually clipped, so it is excluded from the word system). The rest of the spread
-        uses the shared ASCII word reveal like every other section. */}
-    <section id="introduction" data-editorial-section className="terminal-overview ed-grid relative">
+      {/* The page's one h1. With motion the name resolved on the stage carries it visually, so it
+          is clipped (and kept out of the word system); without motion it is set as type here. */}
       <h1 className="intro-name intro-name--carried" data-ascii-preserve>
         <span className="intro-name-first"><AsciiText text="Xavier" /></span>{' '}
         <span className="intro-name-last"><AsciiText text="Hery" /></span>
       </h1>
-      <p className="lead" data-text-rank="2"><AsciiText text={CV_DATA.heroIntroConcise} /></p>
-      <p className="intro-support" data-text-rank="3"><AsciiText text={CV_DATA.heroIntroSecondary} /></p>
     </section>
   </>
+));
+
+/**
+ * The introduction: the personal statement, met in the deep water once the whales have become the
+ * Earth and the city journey has ended. It uses the shared ASCII word reveal like every other
+ * section; the whales keep to its open left field while it reads.
+ */
+export const OceanIntroduction: React.FC = React.memo(() => (
+  <section id="introduction" data-editorial-section className="terminal-overview ed-grid relative">
+    <p className="lead" data-text-rank="2"><AsciiText text={CV_DATA.heroIntroConcise} /></p>
+    <p className="intro-support" data-text-rank="3"><AsciiText text={CV_DATA.heroIntroSecondary} /></p>
+  </section>
 ));
