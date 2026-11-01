@@ -439,7 +439,6 @@ export default function App() {
                 sectionId="contact"
                 layout="monument"
                 title="Direct correspondence"
-                description="Open for B2B development, international logistics coordination, and strategic business inquiries."
               />
             </RevealBlock>
 
