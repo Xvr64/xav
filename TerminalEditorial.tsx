@@ -2,16 +2,13 @@ import React, { useEffect, useState } from 'react';
 import { Volume2, VolumeX } from 'lucide-react';
 import {
   RESOLVED,
-  charGlyph,
-  charOpacity,
-  charProgress,
-  charState,
   entryEndFor,
   exitStartFor,
-  isDecodable,
   lineProgress,
   VIEWPORT_ZONES
 } from './terminalMotion';
+import { advanceEncryptedLine, encryptedCharacterState, ENCRYPTED_CHARSET, FLIP_DELAY_MS } from './encryptedMotion';
+import { EncryptedText } from './components/ui/encrypted-text';
 import {
   disableDecodeSound,
   disposeDecodeSound,
@@ -39,27 +36,7 @@ const EXCLUDED = '[data-ascii-preserve]';
 
 /** Original text reserves every word's exact geometry and remains accessible.
  * Only the absolutely positioned, aria-hidden duplicate is ever mutated. */
-export function AsciiText({ text, className = '' }: { text: string; className?: string }) {
-  useEffect(() => {
-    window.dispatchEvent(new Event('terminal-content-change'));
-  }, [text]);
-  return (
-    <span className={`ascii-text ${className}`} data-ascii-text>
-      {text.split(/(\s+)/).map((word, index) =>
-        /^\s+$/.test(word) ? (
-          <React.Fragment key={index}>{word}</React.Fragment>
-        ) : (
-          <span className="ascii-word" key={index}>
-            <span className="ascii-source">{word}</span>
-            <span className="ascii-visual" aria-hidden="true" data-word={word}>
-              {word}
-            </span>
-          </span>
-        )
-      )}
-    </span>
-  );
-}
+export const AsciiText = EncryptedText;
 
 type Word = {
   el: HTMLElement;
@@ -75,16 +52,14 @@ type Word = {
   top: number;
   entryEnd: number;
   exitStart: number;
-  /** Viewport X and width of the text block the decoding wave crosses. */
-  blockLeft: number;
-  blockWidth: number;
   seed: number;
+  charOffset: number;
+  lineChars: number;
   /** Last rendered quantized progress (NaN forces a write). */
   key: number;
   /** What the overlay currently holds ('stale': cells placed for an older layout). */
   shown: 'text' | 'cells' | 'stale';
-  /** Per character: 0..1 position across the block, and the cell's offset/width in the word. */
-  ts: Float32Array | null;
+  /** Each cell keeps the original character's offset and width. */
   cellX: Float32Array | null;
   cellW: Float32Array | null;
   cells: HTMLSpanElement[] | null;
@@ -94,17 +69,17 @@ type Word = {
 
   // Reveal lifecycle tracking
   revealState: 'hidden' | 'revealing' | 'revealed' | 'exiting';
-  revealStartTime: number;
   currentP: number;
 };
 
 type Line = {
+  block: HTMLElement;
+  characterCount: number;
   top: number;
   entryEnd: number;
   exitStart: number;
   words: Word[];
   revealState: 'hidden' | 'revealing' | 'revealed' | 'exiting';
-  revealStartTime: number;
   currentP: number;
 };
 
@@ -130,8 +105,6 @@ function auditCoverage() {
   if (missed.length) console.warn('[ascii-decode] section text outside the decode system:', missed);
 }
 
-const DURATION_MS = 380;
-
 export function useEditorialScroll() {
   useEffect(() => {
     const media = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -143,6 +116,7 @@ export function useEditorialScroll() {
     let disposed = false;
     let viewport = window.innerHeight;
     let lastY = NaN;
+    let lastTime = 0;
     let audited = false;
 
     /** Geometry only (reads). Per-word animation state survives re-measuring via the cache. */
@@ -151,12 +125,12 @@ export function useEditorialScroll() {
       const scrollY = window.scrollY;
       const maxScroll = Math.max(0, document.documentElement.scrollHeight - viewport);
       const nextWords: Word[] = [];
-      const lineMap = new Map<number, Line>();
+      const measuredLines: Line[] = [];
       let counter = 0;
 
       document.querySelectorAll<HTMLElement>(ELIGIBLE).forEach((text) => {
         if (text.closest(EXCLUDED)) return;
-        const block = blockOf(text).getBoundingClientRect();
+        const blockElement = blockOf(text);
         text.querySelectorAll<HTMLElement>('.ascii-word').forEach((el) => {
           const visual = el.querySelector<HTMLElement>('.ascii-visual');
           const source = el.querySelector<HTMLElement>('.ascii-source');
@@ -175,44 +149,40 @@ export function useEditorialScroll() {
               visual,
               original,
               chars,
-              decodable: chars.map(isDecodable),
+              decodable: chars.map((char) => !/\s/u.test(char)),
               control: null,
               top: 0,
               entryEnd: 0,
               exitStart: 0,
-              blockLeft: 0,
-              blockWidth: 1,
               seed: 0,
+              charOffset: 0,
+              lineChars: chars.length,
               key: NaN,
               shown: 'text',
-              ts: null,
               cellX: null,
               cellW: null,
               cells: null,
               states: new Int8Array(chars.length).fill(RESOLVED),
               opacities: new Float32Array(chars.length).fill(1),
               revealState: wasRevealed ? 'revealed' : 'hidden',
-              revealStartTime: 0,
               currentP: wasRevealed ? 1 : 0
             };
             if (visual.textContent !== original) visual.textContent = original;
             cache.set(el, word);
           }
           word.control = el.closest('a,button');
-          word.blockLeft = block.left;
-          word.blockWidth = Math.max(1, block.width);
           word.seed = (++counter * 131) >>> 0;
           word.key = NaN;
           // Layout changed: character cells are re-measured lazily the next time they are needed
-          word.ts = word.cellX = word.cellW = null;
+          word.cellX = word.cellW = null;
           word.cells = null;
           if (word.shown === 'cells') word.shown = 'stale';
 
           const top = rect.top + scrollY;
           let matchedLine: Line | undefined;
-          for (const key of lineMap.keys()) {
-            if (Math.abs(key - top) <= 6) {
-              matchedLine = lineMap.get(key);
+          for (const candidate of measuredLines) {
+            if (candidate.block === blockElement && Math.abs(candidate.top - top) <= 6) {
+              matchedLine = candidate;
               break;
             }
           }
@@ -220,22 +190,22 @@ export function useEditorialScroll() {
             const entryEnd = entryEndFor(top - maxScroll, viewport);
             const exitStart = exitStartFor(top - maxScroll, viewport);
             matchedLine = {
+              block: blockElement,
+              characterCount: 0,
               top,
               entryEnd,
               exitStart,
               words: [],
               revealState: word.revealState,
-              revealStartTime: word.revealStartTime,
               currentP: word.currentP
             };
-            lineMap.set(top, matchedLine);
+            measuredLines.push(matchedLine);
           }
           if (word.revealState === 'revealed') {
             matchedLine.revealState = 'revealed';
             matchedLine.currentP = 1;
           } else if (word.revealState === 'revealing' && matchedLine.revealState !== 'revealed') {
             matchedLine.revealState = 'revealing';
-            matchedLine.revealStartTime = word.revealStartTime;
             matchedLine.currentP = word.currentP;
           }
           matchedLine.words.push(word);
@@ -246,10 +216,17 @@ export function useEditorialScroll() {
         });
       });
 
-      docLines = Array.from(lineMap.values());
+      docLines = measuredLines;
       docLines.sort((a, b) => a.top - b.top);
       for (const line of docLines) {
         line.words.sort((a, b) => a.el.getBoundingClientRect().left - b.el.getBoundingClientRect().left);
+        line.characterCount = line.words.reduce((count, word) => count + word.chars.length, 0);
+        let offset = 0;
+        for (const word of line.words) {
+          word.charOffset = offset;
+          word.lineChars = line.characterCount;
+          offset += word.chars.length;
+        }
       }
       words = nextWords;
       dirty = false;
@@ -263,7 +240,6 @@ export function useEditorialScroll() {
     const measureChars = (w: Word) => {
       const node = w.source.firstChild;
       const n = w.chars.length;
-      w.ts = new Float32Array(n);
       w.cellX = new Float32Array(n);
       w.cellW = new Float32Array(n);
       const box = w.el.getBoundingClientRect();
@@ -278,12 +254,12 @@ export function useEditorialScroll() {
         const r = range.getBoundingClientRect();
         w.cellX[i] = r.left - box.left;
         w.cellW[i] = r.width;
-        w.ts[i] = (r.left + r.width / 2 - w.blockLeft) / w.blockWidth;
       }
     };
 
     /** One absolutely placed cell per character, each exactly over its real letter. */
     const buildCells = (w: Word) => {
+      w.states.fill(-2);
       w.cells = w.chars.map((char, i) => {
         const cell = document.createElement('span');
         cell.className = 'ascii-cell';
@@ -299,79 +275,34 @@ export function useEditorialScroll() {
       if (dirty) measure();
       const y = window.scrollY;
       const now = performance.now();
+      const scrollDelta = Number.isFinite(lastY) ? y - lastY : 0;
+      const elapsedMs = lastTime ? Math.min(64, now - lastTime) : 0;
       lastY = y;
+      lastTime = now;
       const isReduced = media.matches;
       const focused = document.activeElement;
 
-      const entryThreshold = viewport * VIEWPORT_ZONES.ENTRY_START;
-      const exitThreshold = viewport * VIEWPORT_ZONES.EXIT_END;
-
       let needsAnotherRaf = false;
 
-      // Count newly entering lines to apply a gentle cascading stagger when multiple lines enter at once
-      let newlyEnteredCount = 0;
+      // One time-driven decode per rendered line; scrolling back reverses its entrance.
       for (const line of docLines) {
         const relTop = line.top - y;
-        const inViewport = relTop <= entryThreshold && relTop >= viewport * line.exitStart;
-        if (inViewport && line.revealState === 'hidden' && !isReduced) {
-          newlyEnteredCount++;
-        }
-      }
-
-      let newlyEnteredIndex = 0;
-
-      // Pass 1: Update reveal state and progress per line
-      for (const line of docLines) {
-        const relTop = line.top - y;
-        const exitStartThreshold = viewport * line.exitStart;
-
-        if (isReduced) {
-          line.revealState = 'revealed';
-          line.currentP = 1;
-        } else if (relTop > entryThreshold) {
-          // Below the viewport
-          line.revealState = 'hidden';
-          line.currentP = 0;
-        } else if (relTop < exitThreshold) {
-          // Scrolled completely above the viewport
-          line.revealState = 'hidden';
-          line.currentP = 0;
-        } else if (relTop < exitStartThreshold) {
-          // Exiting out the top scramble zone (between 0.04 and 0.14)
-          line.revealState = 'exiting';
-          line.currentP = lineProgress(relTop, viewport, line.entryEnd, line.exitStart);
-        } else {
-          // Inside the visible / reading zone
-          if (line.revealState === 'revealed') {
-            line.currentP = 1;
-          } else if (line.revealState === 'exiting') {
-            // Re-entered the reading zone from above: fully resolved!
-            line.revealState = 'revealed';
-            line.currentP = 1;
-          } else if (line.revealState === 'hidden') {
-            // Newly entered!
-            const stagger = newlyEnteredCount > 1 ? Math.min(newlyEnteredIndex++ * 35, 140) : 0;
-            line.revealState = 'revealing';
-            line.revealStartTime = now + stagger;
-            line.currentP = 0;
-            needsAnotherRaf = true;
-          } else if (line.revealState === 'revealing') {
-            if (now < line.revealStartTime) {
-              line.currentP = 0;
-              needsAnotherRaf = true;
-            } else {
-              const elapsed = now - line.revealStartTime;
-              const timeP = Math.min(1, elapsed / DURATION_MS);
-              line.currentP = timeP;
-              if (timeP < 1) {
-                needsAnotherRaf = true;
-              } else {
-                line.currentP = 1;
-                line.revealState = 'revealed';
-              }
-            }
-          }
-        }
+        const entryLength = VIEWPORT_ZONES.ENTRY_START - VIEWPORT_ZONES.ENTRY_END;
+        const exitLength = VIEWPORT_ZONES.EXIT_START - VIEWPORT_ZONES.EXIT_END;
+        const next = advanceEncryptedLine(
+          line,
+          lineProgress(relTop, viewport, line.entryEnd, line.exitStart),
+          relTop >= viewport * (line.entryEnd + entryLength),
+          relTop <= viewport * (line.exitStart - exitLength),
+          relTop < viewport * line.exitStart,
+          scrollDelta,
+          elapsedMs,
+          line.characterCount,
+          isReduced
+        );
+        line.revealState = next.revealState;
+        line.currentP = next.currentP;
+        if (line.revealState === 'revealing') needsAnotherRaf = true;
 
         // Sync state back to each word in this line
         for (const w of line.words) {
@@ -383,16 +314,16 @@ export function useEditorialScroll() {
       // Pass 2: Determine which words need updating in DOM this frame
       const pending: { w: Word; p: number; entering: boolean }[] = [];
       for (const w of words) {
-        const relTop = w.top - y;
         const forced = isReduced || (w.control !== null && w.control === focused);
         const lineP = forced ? 1 : w.currentP;
-        const entering = relTop > viewport * 0.5;
-        // Quantized to prevent micro-renders on subpixel jitter
-        const p = Math.round(lineP * 240) / 240;
-        const key = entering ? p : -p - 1;
+        const entering = w.revealState !== 'exiting';
+        // Flip only encrypted letters, leaving the resolved prefix stable.
+        const p = lineP;
+        const flip = p > 0 && p < 1 ? Math.floor(now / FLIP_DELAY_MS) : 0;
+        const key = (entering ? p : -p - 1) + flip * 4;
         if (w.key === key) continue;
         w.key = key;
-        if (p > 0 && p < 1 && !w.ts) measureChars(w);
+        if (p > 0 && p < 1 && !w.cellX) measureChars(w);
         pending.push({ w, p, entering });
       }
 
@@ -431,25 +362,26 @@ export function useEditorialScroll() {
         } else {
           if (!w.cells) buildCells(w);
           if (w.shown !== 'cells') {
+            w.states.fill(-2);
             w.visual.replaceChildren(...w.cells!);
             w.shown = 'cells';
             w.opacities.fill(-1);
           }
           w.el.style.opacity = '1';
           for (let i = 0; i < w.chars.length; i++) {
-            const c = charProgress(p, w.ts![i], entering);
             const cell = w.cells![i];
             if (w.decodable[i]) {
-              const state = charState(c);
+              const state = encryptedCharacterState(p, w.charOffset + i, w.lineChars, now, w.seed);
               const before = w.states[i];
               if (state !== before) {
                 changes++;
                 if ((state === RESOLVED) !== (before === RESOLVED)) locks++;
-                cell.textContent = state === RESOLVED ? w.chars[i] : charGlyph(state, w.seed + i);
+                cell.textContent = state === RESOLVED ? w.chars[i] : ENCRYPTED_CHARSET[state];
                 w.states[i] = state;
               }
             }
-            const opacity = Math.round(charOpacity(p, c) * 20) / 20;
+            // The reference keeps its scrambled suffix at full ink; fade only at disappearance.
+            const opacity = Math.min(1, p / 0.08);
             if (opacity !== w.opacities[i]) {
               w.opacities[i] = opacity;
               cell.style.opacity = String(opacity);
