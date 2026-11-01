@@ -292,23 +292,6 @@ body {
   }
 }
 
-/* Colophon: top right CV link */
-.hero-colophon {
-  position: absolute;
-  inset: 0 0 auto 0;
-  padding-top: clamp(22px, 3.6vh, 40px);
-  align-items: baseline;
-  z-index: 2;
-  pointer-events: none;
-}
-.hero-colophon p { margin: 0; }
-.hero-colophon .colophon-cv {
-  grid-column: c / span 4;
-  justify-self: end;
-  text-align: right;
-}
-.hero-colophon a { pointer-events: auto; color: var(--ink-171717, #171717); }
-
 .minimal-hero {
   position: absolute;
   inset: 0;
@@ -720,13 +703,6 @@ body {
   .minimal-hero .cover-title > * { grid-column: 1 / -1 !important; grid-row: auto !important; }
   .minimal-hero .cover-title { grid-template-columns: minmax(0, 1fr); }
   :root { --text-name: 27vw; --text-statement: 25px; }
-  .hero-colophon { display: flex; justify-content: flex-end; }
-  .hero-colophon .colophon-cv {
-    margin-left: auto;
-    grid-column: auto !important;
-    grid-row: auto !important;
-    text-align: right;
-  }
   .minimal-hero { padding-top: calc(50svh - 1.88 * var(--text-cover)); }
   .minimal-hero .cover-line--drift { padding-left: 1.1em; }
   .hero-name { padding-top: 17svh; }
@@ -792,12 +768,20 @@ body {
    colophon's row and in the page's own ink. Text at the very top of the viewport is in the
    invisible band of the decode, so the control never sits over readable copy. */
 .terminal-portfolio { --sound-toggle-space: 112px; }
-.decode-sound-toggle {
+/* Persistent top-right site controls: sound on/off + CV link across the entirety of the site */
+.fixed-top-controls {
   position: fixed;
   top: calc(clamp(22px, 3.6vh, 40px) - 7px);
-  /* Placed to the left of the top-right CV button with clear editorial spacing */
-  right: calc(max(var(--page-margin), calc((100vw - 1440px) / 2 + var(--page-margin))) + 72px);
-  z-index: 40;
+  right: max(var(--page-margin), calc((100vw - 1440px) / 2 + var(--page-margin)));
+  z-index: 50;
+  display: inline-flex;
+  align-items: center;
+  gap: clamp(24px, 2.5vw, 36px);
+  pointer-events: auto;
+  text-shadow: 0 0 2px var(--abyss-halo), 0 0 9px var(--abyss-halo);
+}
+
+.decode-sound-toggle {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -820,93 +804,31 @@ body {
 .decode-sound-toggle[aria-pressed='true'] { opacity: 1; }
 .decode-sound-toggle:focus-visible { outline: 1px solid currentColor; outline-offset: 3px; opacity: 1; }
 
-.terminal-portfolio [data-journey-runway] { overflow: visible; }
+.fixed-cv-link {
+  display: inline-flex;
+  align-items: center;
+  height: 32px;
+  font-family: var(--font-mono);
+  font-size: var(--text-meta);
+  line-height: var(--leading-meta);
+  letter-spacing: var(--tracking-mono);
+  color: var(--ink-171717, #171717);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 4px;
+  text-decoration-color: var(--rule-20, rgba(23, 23, 23, 0.3));
+  transition: text-decoration-color 160ms, color 160ms;
+}
+.fixed-cv-link:hover {
+  text-decoration-color: currentColor;
+}
+.fixed-cv-link:focus-visible {
+  outline: 1px solid currentColor;
+  outline-offset: 3px;
+}
 
-/* ---------------------------------------------------------------------------
-   Section index (SectionIndex.tsx): the cover's colophon returns once the journey is over —
-   name on line a, the index on line b, the CV on line c, the sound control at the margin. It
-   tucks away while reading down and returns on any scroll up, on focus and at the page's end.
-   --------------------------------------------------------------------------- */
-.section-index {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  z-index: 40;
-  max-width: 1440px;
-  margin-inline: auto;
-  padding: clamp(22px, 3.6vh, 40px) var(--page-margin) 0;
-  align-items: baseline;
-  pointer-events: none;
-  text-shadow: 0 0 2px var(--abyss-halo), 0 0 9px var(--abyss-halo);
-  transition: opacity 0.35s ease, transform 0.35s ease, visibility 0s;
-}
-.section-index > * { margin: 0; pointer-events: auto; }
-.section-index[data-arrived='false'] { opacity: 0; visibility: hidden; transition: opacity 0.35s ease, visibility 0s 0.35s; }
-.section-index[data-tucked='true'] { opacity: 0; transform: translateY(-8px); }
-.section-index[data-tucked='true'] > * { pointer-events: none; }
-.section-index[data-tucked='true']:focus-within { opacity: 1; transform: none; }
-.section-index[data-tucked='true']:focus-within > * { pointer-events: auto; }
-.section-index-name { grid-column: a / span 2; color: var(--ink-171717, #171717); }
-.section-index-links { grid-column: b / span 6; display: flex; flex-wrap: wrap; column-gap: var(--space-m); }
-.section-index-cv {
-  grid-column: c / span 4;
-  justify-self: end;
-  text-align: right;
-}
-.terminal-portfolio .section-index a { color: var(--ink-52595E, #52595E); text-decoration-color: transparent; }
-.terminal-portfolio .section-index a:hover,
-.terminal-portfolio .section-index a[aria-current] { color: var(--ink-171717, #171717); }
-.terminal-portfolio .section-index a[aria-current] { text-decoration-color: currentColor; }
-.terminal-portfolio .section-index-cv a { color: var(--ink-171717, #171717); }
-.section-index-menu {
-  display: none;
-  min-height: 32px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--ink-171717, #171717);
-  cursor: pointer;
-}
-/* The phone menu: the index as a full-screen list in the display voice, on the water's colour */
-.section-menu {
-  position: fixed;
-  inset: 0;
-  z-index: 60;
-  display: flex;
-  flex-direction: column;
-  overflow-y: auto;
-  padding: clamp(22px, 3.6vh, 40px) var(--page-margin) var(--space-xl);
-  background: var(--ocean-background, #ffffff);
-  color: var(--ink-171717, #171717);
-}
-.section-menu-head { display: flex; justify-content: space-between; align-items: baseline; }
-.section-menu-head p { margin: 0; color: var(--ink-171717, #171717); }
-.section-menu-head button { min-height: 32px; padding: 0; border: 0; background: transparent; color: var(--ink-171717, #171717); cursor: pointer; }
-.section-menu-links { margin-top: var(--space-2xl); display: grid; row-gap: var(--space-xs); }
-.terminal-portfolio .section-menu-links a {
-  font-family: var(--font-display);
-  font-variation-settings: 'opsz' 72;
-  font-weight: var(--display-weight, 300);
-  font-size: var(--text-h2);
-  line-height: 1.12;
-  letter-spacing: var(--tracking-h2);
-  color: var(--ink-171717, #171717);
-  text-decoration: none;
-}
-.terminal-portfolio .section-menu-links a[aria-current] { font-style: italic; }
-.section-menu-cv { margin-top: auto; padding-top: var(--space-xl); }
-@media (max-width: 1100px) {
-  /* Six entries on one line: the index tightens before it would wrap */
-  .section-index-links { column-gap: var(--space-s); }
-}
-/* Below the width that holds the six entries on one line, the row folds into "Menu" */
-@media (max-width: 1023px) {
-  .section-index :is(.section-index-name, .section-index-links, .section-index-cv) { display: none; }
-  .section-index-menu { display: inline-block; grid-column: a / span 4; justify-self: start; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .section-index { transition: none; }
+@media print {
+  .fixed-top-controls { display: none !important; }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Eye, Download, X, Check } from 'lucide-react';
-import { AsciiText, DecodeSoundToggle, useEditorialScroll } from './TerminalEditorial';
+import { AsciiText, useEditorialScroll } from './TerminalEditorial';
 import { mountLanternCursor } from './lanternCursor';
 import { CV_DATA } from './cvData';
 import { ReadingZoneTracker } from './ReadingZoneTracker';
@@ -189,7 +189,6 @@ export default function App() {
       <WhaleStretch sectionId="contact" lanes={LANES_CONTACT} narrowLanes={LANES_DEEP_NARROW} />
       <GlobeDive />
       <AsciiWhaleBackground mode="ambient" />
-      <DecodeSoundToggle />
       <SectionIndex cvUrl={ORIGINAL_CV_PDF_URL} />
 
       {downloadToast && (

@@ -309,15 +309,6 @@ export const ProgressiveOceanEntry: React.FC<ProgressiveOceanEntryProps> = React
             <span className="hero-name-first" data-hero-name-line>Xavier</span>
             <span className="hero-name-last" data-hero-name-line>Hery</span>
           </p>
-          {/* Colophon: who, what and the CV, readable from the first frame while the cover plays */}
-          <div className="hero-colophon ed-grid">
-            <p className="colophon-cv meta">
-              <a href={cvUrl} target="_blank" rel="noopener noreferrer">
-                CV <span aria-hidden="true">↗</span>
-                <span className="sr-only"> (PDF, opens in a new tab)</span>
-              </a>
-            </p>
-          </div>
         </div>
         {/* The page's one h1. With motion the name resolved on the stage carries it visually, so it
             is clipped (and kept out of the word system); without motion it is set as type here. */}
