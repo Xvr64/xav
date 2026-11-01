@@ -795,8 +795,8 @@ body {
 .decode-sound-toggle {
   position: fixed;
   top: calc(clamp(22px, 3.6vh, 40px) - 7px);
-  /* The right edge of the page grid (main is centred at 1440px with --page-margin padding) */
-  right: max(var(--page-margin), calc((100vw - 1440px) / 2 + var(--page-margin)));
+  /* Placed to the left of the top-right CV button with clear editorial spacing */
+  right: calc(max(var(--page-margin), calc((100vw - 1440px) / 2 + var(--page-margin))) + 72px);
   z-index: 40;
   display: inline-flex;
   align-items: center;
@@ -849,7 +849,11 @@ body {
 .section-index[data-tucked='true']:focus-within > * { pointer-events: auto; }
 .section-index-name { grid-column: a / span 2; color: var(--ink-171717, #171717); }
 .section-index-links { grid-column: b / span 6; display: flex; flex-wrap: wrap; column-gap: var(--space-m); }
-.section-index-cv { grid-column: c / span 2; }
+.section-index-cv {
+  grid-column: c / span 4;
+  justify-self: end;
+  text-align: right;
+}
 .terminal-portfolio .section-index a { color: var(--ink-52595E, #52595E); text-decoration-color: transparent; }
 .terminal-portfolio .section-index a:hover,
 .terminal-portfolio .section-index a[aria-current] { color: var(--ink-171717, #171717); }
