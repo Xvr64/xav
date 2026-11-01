@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { AsciiText } from './TerminalEditorial';
 import { createHeroCurrent } from './heroCurrent';
 import { CV_DATA } from './cvData';
@@ -264,40 +264,83 @@ export const MigrationRunway: React.FC = React.memo(() => {
   return <div ref={ref} className="migration-runway" aria-hidden="true" />;
 });
 
-export const ProgressiveOceanEntry: React.FC<ProgressiveOceanEntryProps> = React.memo(() => (
-  <>
-    {/* Cover: a scroll runway with a pinned stage. The headline's real letters break into the
-        current drawn by HeroCurrentLayer, which gathers them into the name; the stage is kept
-        out of the word-reveal system because it does not move while pinned. */}
-    <section id="home" data-editorial-section className="hero-runway relative">
-      <div className="hero-stage" data-hero-stage data-ascii-preserve>
-        <div className="minimal-hero ed-grid">
-          {/* The cover's line is the page's epigraph; the name below is its one h1 */}
-          <p className="display cover-title">
-            <span className="sr-only">A journey without horizons</span>
-            <span className="cover-line" aria-hidden="true">
-              {heroLetters('A journey without')}
-              {/* An invisible datum under the first line: it times the letters' break-up, never drawn */}
-              <span className="hero-horizon" data-hero-horizon />
-            </span>
-            <span className="cover-line cover-line--drift" aria-hidden="true">{heroLetters('horizons')}</span>
+export const HEADLINE_TRANSLATIONS = [
+  { line1: 'A journey without', line2: 'horizons', full: 'A journey without horizons', lang: 'en' },
+  { line1: 'Un voyage sans', line2: 'horizons', full: 'Un voyage sans horizons', lang: 'fr' },
+  { line1: 'Un viaje sin', line2: 'horizontes', full: 'Un viaje sin horizontes', lang: 'es' },
+  { line1: '一段没有', line2: '地平线的旅程', full: '一段没有地平线的旅程', lang: 'zh' },
+  { line1: 'رحلة بلا', line2: 'آفاق', full: 'رحلة بلا آفاق', lang: 'ar', dir: 'rtl' },
+  { line1: 'Путешествие без', line2: 'горизонтов', full: 'Путешествие без горизонтов', lang: 'ru' }
+] as const;
+
+export const ProgressiveOceanEntry: React.FC<ProgressiveOceanEntryProps> = React.memo(() => {
+  const [transIdx, setTransIdx] = useState(0);
+  const [fade, setFade] = useState(true);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+    const timer = setInterval(() => {
+      // Pause cycling while visitor is actively scrolling through the descent
+      if (window.scrollY > 40) return;
+      setFade(false);
+      setTimeout(() => {
+        setTransIdx((prev) => (prev + 1) % HEADLINE_TRANSLATIONS.length);
+        setFade(true);
+        window.dispatchEvent(new Event('resize'));
+      }, 400);
+    }, 3000);
+
+    return () => clearInterval(timer);
+  }, []);
+
+  const current = HEADLINE_TRANSLATIONS[transIdx];
+
+  return (
+    <>
+      {/* Cover: a scroll runway with a pinned stage. The headline's real letters break into the
+          current drawn by HeroCurrentLayer, which gathers them into the name; the stage is kept
+          out of the word-reveal system because it does not move while pinned. */}
+      <section id="home" data-editorial-section className="hero-runway relative">
+        <div className="hero-stage" data-hero-stage data-ascii-preserve>
+          <div className="minimal-hero ed-grid">
+            {/* The cover's line is the page's epigraph; the name below is its one h1 */}
+            <p
+              className="display cover-title"
+              style={{
+                opacity: fade ? 1 : 0,
+                transition: 'opacity 0.4s ease-in-out',
+                direction: (current as { dir?: string }).dir === 'rtl' ? 'rtl' : 'ltr'
+              }}
+            >
+              <span className="sr-only">{current.full}</span>
+              <span className="cover-line" aria-hidden="true">
+                {heroLetters(current.line1)}
+                {/* An invisible datum under the first line: it times the letters' break-up, never drawn */}
+                <span className="hero-horizon" data-hero-horizon />
+              </span>
+              <span className="cover-line cover-line--drift" aria-hidden="true">
+                {heroLetters(current.line2)}
+              </span>
+            </p>
+          </div>
+          {/* The type the ASCII name resolves into; the semantic heading follows the stage */}
+          <p className="hero-name ed-grid" data-hero-name aria-hidden="true">
+            <span className="hero-name-first" data-hero-name-line>Xavier</span>
+            <span className="hero-name-last" data-hero-name-line>Hery</span>
           </p>
         </div>
-        {/* The type the ASCII name resolves into; the semantic heading follows the stage */}
-        <p className="hero-name ed-grid" data-hero-name aria-hidden="true">
-          <span className="hero-name-first" data-hero-name-line>Xavier</span>
-          <span className="hero-name-last" data-hero-name-line>Hery</span>
-        </p>
-      </div>
-      {/* The page's one h1. With motion the name resolved on the stage carries it visually, so it
-          is clipped (and kept out of the word system); without motion it is set as type here. */}
-      <h1 className="intro-name intro-name--carried" data-ascii-preserve>
-        <span className="intro-name-first"><AsciiText text="Xavier" /></span>{' '}
-        <span className="intro-name-last"><AsciiText text="Hery" /></span>
-      </h1>
-    </section>
-  </>
-));
+        {/* The page's one h1. With motion the name resolved on the stage carries it visually, so it
+            is clipped (and kept out of the word system); without motion it is set as type here. */}
+        <h1 className="intro-name intro-name--carried" data-ascii-preserve>
+          <span className="intro-name-first"><AsciiText text="Xavier" /></span>{' '}
+          <span className="intro-name-last"><AsciiText text="Hery" /></span>
+        </h1>
+      </section>
+    </>
+  );
+});
 
 /**
  * The introduction: the personal statement, met in the deep water once the whales have become the

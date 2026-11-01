@@ -97,7 +97,8 @@ const hash = (i: number, k: number) => {
 };
 
 export function createHeroCurrent(opts: HeroCurrentOptions): HeroCurrentHandle {
-  const { canvas, section, stage, letters, nameEl, nameLines, horizon, onZones, onFrame } = opts;
+  const { canvas, section, stage, letters: initialLetters, nameEl, nameLines, horizon, onZones, onFrame } = opts;
+  let letters = initialLetters;
   const ctx = canvas.getContext('2d');
   if (!ctx) return { destroy() {} };
 
@@ -251,6 +252,8 @@ export function createHeroCurrent(opts: HeroCurrentOptions): HeroCurrentHandle {
 
     // ---- Source layout: the real headline letters, where the browser set them -------------
     mctx.clearRect(0, 0, W, H);
+    const currentLetters = Array.from(stage.querySelectorAll<HTMLElement>('[data-hero-letter]'));
+    if (currentLetters.length > 0) letters = currentLetters;
     const sources: { x: number; y: number; letter: number; local: number }[] = [];
     let minX = Infinity;
     let maxX = -Infinity;

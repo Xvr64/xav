@@ -237,8 +237,7 @@ export default function App() {
                 sectionId="experience"
                 layout="sounding"
                 title="Operational & commercial internships"
-                description="Practical experience across business development, commercial quotation workflows, and international air and sea freight coordination."
-                asideAccent="Translating cross-cultural adaptability into rigorous B2B execution and freight logistics."
+                asideAccent="Translating cross-cultural adaptability into rigorous business execution and freight logistics."
               />
             </RevealBlock>
 
@@ -265,13 +264,15 @@ export default function App() {
                         ))}
                       </ul>
                     </div>
-                    <ul className="exp-what">
-                      {exp.concisePoints.map((pt, i) => (
-                        <li key={i} className="body-copy">
-                          <BioWords text={pt} />
-                        </li>
-                      ))}
-                    </ul>
+                    {exp.concisePoints && exp.concisePoints.length > 0 && (
+                      <ul className="exp-what">
+                        {exp.concisePoints.map((pt, i) => (
+                          <li key={i} className="body-copy">
+                            <BioWords text={pt} />
+                          </li>
+                        ))}
+                      </ul>
+                    )}
                   </article>
                 </RevealBlock>
               ))}
@@ -307,9 +308,11 @@ export default function App() {
                           <span className="text-[#171717]">
                             <BioWords text={skill.name} />
                           </span>
-                          <span className="meta">
-                            <BioWords text={skill.classification} />
-                          </span>
+                          {skill.classification ? (
+                            <span className="meta">
+                              <BioWords text={skill.classification} />
+                            </span>
+                          ) : null}
                         </div>
                       ))}
                     </div>
@@ -326,7 +329,6 @@ export default function App() {
                 sectionId="education"
                 layout="stacked"
                 title="Academic chronology"
-                description="A global educational trajectory across international schools in Europe and Asia, culminating in the ESSCA Bachelor curriculum."
               />
             </RevealBlock>
 
@@ -346,7 +348,7 @@ export default function App() {
                           <BioWords text={edu.degree} />
                         </p>
                       )}
-                      {edu.highlights && (
+                      {edu.highlights && edu.highlights.length > 0 && (
                         <div className="edu-highlights">
                           {edu.highlights.map((h, hIdx) => (
                             <p key={hIdx} className="body-copy text-[#2B353B]">

@@ -84,11 +84,11 @@ export const CV_DATA = {
   linkedin: 'https://www.linkedin.com/in/xavierhry/',
   linkedinDisplay: 'linkedin.com/in/xavierhry',
   heroIntroConcise:
-    'Like the whale migrating across oceans without borders, my journey has been shaped by constant movement, living across Doha, Paris, Jakarta, Moscow, Singapore, Pau, and Shanghai.',
+    'Like the whale migrating across oceans without borders, my journey has been shaped by constant movement, living across Doha, Paris, Jakarta, Moscow, Singapore, Pau, Bordeaux, and Shanghai.',
   heroIntroSecondary:
-    'Navigating shifting currents from one culture to the next forged natural adaptability and cross-cultural communication. Today, as a third-year International Business student at ESSCA, I bring that perspective to B2B development, international sea and air logistics, and project coordination.',
+    'Navigating shifting currents from one culture to the next forged natural adaptability and cross-cultural communication. Today, in a third-year International Business student at ESSCA.',
   verbatimProfile:
-    'Third-year Bachelor student at ESSCA with an international background shaped by living across Doha, Paris, Jakarta, Moscow, Singapore, Pau, and Shanghai. Proven adaptability, strong cross-cultural communication, and practical experience in project coordination.',
+    'Third-year Bachelor student at ESSCA with an international background shaped by living across Doha, Paris, Jakarta, Moscow, Singapore, Pau, Bordeaux, and Shanghai. Proven adaptability, strong cross-cultural communication, and practical experience in project coordination.',
   experiences: [
     {
       id: 'freshpepper',
@@ -97,17 +97,8 @@ export const CV_DATA = {
       role: 'Business Development & Operations Intern',
       date: 'April 2025',
       domainTag: 'B2B Negotiations / Commercial Quotations / Cross-Team Workflow',
-      concisePoints: [
-        'Client meetings and B2B negotiation follow-ups.',
-        'Deal pipeline tracking and client requests.',
-        'RFP documentation review, cost estimates, and commercial quotations.',
-        'Coordination between sales and 3D design teams.'
-      ],
-      verbatimPoints: [
-        'Attended client meetings and handled B2B negotiation follow-ups, tracking deal pipelines and client requests.',
-        'Reviewed RFP documentation to draft accurate cost estimates and formal commercial quotations.',
-        'Coordinated daily workflow between sales and 3D design teams to keep client deliverables on schedule.'
-      ]
+      concisePoints: [],
+      verbatimPoints: []
     },
     {
       id: 'bollore-logistics',
@@ -116,16 +107,8 @@ export const CV_DATA = {
       role: 'Logistics Operations Intern',
       date: 'July 2022',
       domainTag: 'International Air & Sea Freight / Carrier Coordination / Customs Documentation',
-      concisePoints: [
-        'International air and sea freight tracking.',
-        'Communication between shipping agents, carriers, and warehouse staff.',
-        'Documentation reviews, transport orders, and basic customs paperwork.'
-      ],
-      verbatimPoints: [
-        'Supported operational teams on international air and sea freight files, tracking shipments from departure to destination.',
-        'Monitored communication flows between shipping agents, carriers, and warehouse staff.',
-        'Assisted with daily documentation reviews, verifying transport orders and basic customs paperwork.'
-      ]
+      concisePoints: [],
+      verbatimPoints: []
     }
   ] as ExperienceItem[],
   locations: [
@@ -250,9 +233,9 @@ export const CV_DATA = {
       verbatimSummary: 'Video editing (DaVinci Resolve, CapCut), visual content design.',
       items: [
         { name: 'Video editing', classification: 'Media Production' },
-        { name: 'DaVinci Resolve', classification: 'Post-Production Software' },
-        { name: 'CapCut', classification: 'Video Editing Tool' },
-        { name: 'Visual content design', classification: 'Creative Direction & Media' }
+        { name: 'DaVinci Resolve', classification: '' },
+        { name: 'CapCut', classification: '' },
+        { name: 'Visual content design', classification: '' }
       ]
     },
     {
@@ -261,9 +244,9 @@ export const CV_DATA = {
       title: 'Office Suite',
       verbatimSummary: 'MS Office (Advanced Excel, PowerPoint).',
       items: [
-        { name: 'MS Office', classification: 'Business Productivity Suite' },
-        { name: 'Advanced Excel', classification: 'Data & Spreadsheet Modeling' },
-        { name: 'PowerPoint', classification: 'Executive Presentations' }
+        { name: 'MS Office', classification: '' },
+        { name: 'Advanced Excel', classification: '' },
+        { name: 'PowerPoint', classification: '' }
       ]
     }
   ] as SkillCategory[],
@@ -276,11 +259,7 @@ export const CV_DATA = {
       degree: 'Bachelor in International Business',
       date: '2024–2027',
       locationLabel: 'Higher Education · Shanghai (2026)',
-      highlights: [
-        'Core focus on international business, management, and corporate strategy.',
-        'International academic mobility scheduled in Shanghai (2026).',
-        'Executed multicultural business projects and case studies.'
-      ]
+      highlights: []
     },
     {
       id: 'saint-cricq',
@@ -403,7 +382,7 @@ export const CV_DATA = {
       bullets: [
         'Luxury retail positioning.',
         'Flagship concepts and brand activations across Europe and Asia.',
-        'The luxury brands named in the CV: Celine, Louis Vuitton, and Hermes.'
+        'Celine, Louis Vuitton, and Hermes'
       ],
       verbatimNote:
         'Monitoring luxury retail positioning, flagship concepts, and brand activations across Europe and Asia (Celine, Louis Vuitton, Hermes).',
