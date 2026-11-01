@@ -751,7 +751,11 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
         className="pointer-events-none absolute inset-0 hidden md:block"
         style={{
           background:
-            'radial-gradient(ellipse 34% 42% at 18% 50%, rgba(var(--abyss-wash), 0.42) 0%, rgba(var(--abyss-wash), 0.18) 62%, rgba(var(--abyss-wash), 0) 100%)'
+            'radial-gradient(ellipse 34% 42% at 18% 50%, rgba(var(--abyss-wash), 0.42) 0%, rgba(var(--abyss-wash), 0.18) 62%, rgba(var(--abyss-wash), 0) 100%)',
+          // The ellipse runs past the stage's left edge; on water that deepens down the screen
+          // that cut would show, so the edge is feathered away
+          maskImage: 'linear-gradient(90deg, transparent, #000 12%)',
+          WebkitMaskImage: 'linear-gradient(90deg, transparent, #000 12%)'
         }}
       />
       <div
@@ -760,7 +764,11 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
         className="pointer-events-none absolute inset-x-0 bottom-0 h-[54%] md:hidden"
         style={{
           background:
-            'linear-gradient(0deg, rgba(var(--abyss-wash), 0.52) 0%, rgba(var(--abyss-wash), 0.28) 65%, rgba(var(--abyss-wash), 0) 100%)'
+            'linear-gradient(0deg, rgba(var(--abyss-wash-low, var(--abyss-wash)), 0.52) 0%, rgba(var(--abyss-wash-low, var(--abyss-wash)), 0.28) 65%, rgba(var(--abyss-wash-low, var(--abyss-wash)), 0) 100%)',
+          // The water deepens down the screen, so no single wash colour matches it everywhere:
+          // feathered sides keep the veil from reading as a panel
+          maskImage: 'linear-gradient(90deg, transparent, #000 22%, #000 78%, transparent)',
+          WebkitMaskImage: 'linear-gradient(90deg, transparent, #000 22%, #000 78%, transparent)'
         }}
       />
 

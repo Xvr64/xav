@@ -315,7 +315,7 @@ void main() {
 }`;
 
 type RGB = [number, number, number];
-interface Program {
+export interface Program {
   program: WebGLProgram;
   uniforms: Record<string, WebGLUniformLocation | null>;
 }
@@ -325,7 +325,7 @@ interface Target {
   width: number;
   height: number;
 }
-interface Atlas {
+export interface Atlas {
   texture: WebGLTexture;
   count: number;
   grid: [number, number];
@@ -359,7 +359,7 @@ const compile = (gl: WebGL2RenderingContext, type: number, source: string) => {
   return null;
 };
 
-const link = (gl: WebGL2RenderingContext, fragmentSource: string): Program | null => {
+export const link = (gl: WebGL2RenderingContext, fragmentSource: string): Program | null => {
   const vertex = compile(gl, gl.VERTEX_SHADER, VERTEX);
   const fragment = compile(gl, gl.FRAGMENT_SHADER, fragmentSource);
   const program = gl.createProgram();
@@ -410,7 +410,7 @@ const sizeTarget = (gl: WebGL2RenderingContext, target: Target, width: number, h
   gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 };
 
-const buildAtlas = (gl: WebGL2RenderingContext, characters: string, fontFamily: string): Atlas => {
+export const buildAtlas = (gl: WebGL2RenderingContext, characters: string, fontFamily: string): Atlas => {
   const list = [...new Set([...characters].filter(char => char !== '\n' && char !== '\r'))];
   if (!list.length) list.push(' ');
   const font = `300 ${Math.round(ATLAS_CELL_H * FONT_SCALE)}px ${fontFamily}`;

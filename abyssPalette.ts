@@ -94,32 +94,15 @@ export function applyAbyssPalette(t: number) {
   );
 }
 
-// Other layers that follow the water (the ASCII ocean field) listen here instead of polling
-let lastAbyss = 0;
-const abyssListeners = new Set<(abyssLevel: number) => void>();
-/** Calls `listener` with the current water level now and on every change; returns the unsubscribe. */
-export function onAbyssWash(listener: (abyssLevel: number) => void) {
-  abyssListeners.add(listener);
-  listener(lastAbyss);
-  return () => {
-    abyssListeners.delete(listener);
-  };
-}
-
 /**
- * Text washes & halos track the WATER colour continuously (no light panel cut out of dark
- * water): a touch lighter than the water while text is dark, a touch darker once it is pale.
+ * The water's own colour (--ocean-background, and the --abyss-wash / --abyss-halo that text
+ * washes, halos and caption veils take from it) now comes from the ASCII ocean's palette,
+ * which follows the scroll through the whole document: see applyWaterColor in oceanWorld.ts.
+ * The abyss level still sets the cursor.
  */
 export function applyAbyssWash(abyssLevel: number) {
-  const shade = Math.round(255 * (1 - abyssLevel));
-  const root = document.documentElement.style;
-  root.setProperty('--ocean-background', `rgb(${shade}, ${shade}, ${shade})`);
-  root.setProperty('--abyss-wash', `${shade}, ${shade}, ${shade}`);
-  root.setProperty('--abyss-halo', `rgba(${shade}, ${shade}, ${shade}, 0.82)`);
   // The cursor descends with the water: quiet slate at the surface, a lantern in the deep
   setLanternDepth(abyssLevel);
-  lastAbyss = abyssLevel;
-  abyssListeners.forEach((listener) => listener(abyssLevel));
 }
 
 export function buildAbyssCss(): string {
@@ -130,9 +113,10 @@ export function buildAbyssCss(): string {
     ${ABYSS_TEXT.map((c) => `--ink-${c.hex}: rgb(${c.light.join(', ')});`).join('\n    ')}
     ${ABYSS_RULE_ALPHAS.map((a) => `--rule-${a}: rgba(23, 23, 23, ${a / 100});`).join('\n    ')}
     ${ABYSS_FILLS.map((f) => `--fill-${f.name}: rgba(${f.light.join(', ')});`).join('\n    ')}
-    --ocean-background: #FFFFFF;
-    --abyss-halo: rgba(255, 255, 255, 0.85);
-    --abyss-wash: 255, 255, 255;
+    --ocean-background: #F7F2E8;
+    --abyss-halo: rgba(247, 242, 232, 0.85);
+    --abyss-wash: 247, 242, 232;
+    --abyss-wash-low: 247, 242, 232;
     --glass-bg: rgba(255, 255, 255, 0.28);
     --glass-chip-bg: rgba(255, 255, 255, 0.20);
     --glass-border: rgba(0, 0, 0, 0.10);
