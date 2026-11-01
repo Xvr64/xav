@@ -255,6 +255,15 @@ export default function App() {
                       <p className="exp-role">
                         <BioWords text={exp.role} />
                       </p>
+                      {exp.domainTag && (
+                        <ul className="exp-tags meta">
+                          {exp.domainTag.split(/\s*\/\s*/).map((tag) => (
+                            <li key={tag}>
+                              <BioWords text={tag} />
+                            </li>
+                          ))}
+                        </ul>
+                      )}
                     </div>
                     {exp.concisePoints && exp.concisePoints.length > 0 && (
                       <ul className="exp-what">
