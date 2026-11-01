@@ -961,10 +961,16 @@ body {
 
 /* The Globe's pinned runway: its lead is the convergence (two whales circle each other and become
    the Earth, WhaleConvergence.tsx), then the city journey keeps its own 600vh. Reduced motion
-   collapses both to a single still screen. */
-.journey-runway { height: 800vh; }
+   collapses both to a single still screen.
+   NOTE: runway MUST remain overflow: visible so its sticky stage can pin to the viewport. */
+.journey-runway,
+.terminal-portfolio [data-journey-runway] {
+  height: 800vh;
+  overflow: visible !important;
+}
 .journey-lead { height: 200vh; }
 @media (prefers-reduced-motion: reduce) {
-  .journey-runway { height: 100svh; }
+  .journey-runway,
+  .terminal-portfolio [data-journey-runway] { height: 100svh; }
   .journey-lead { height: 0; }
 }

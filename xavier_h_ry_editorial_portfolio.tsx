@@ -218,7 +218,7 @@ export default function App() {
           <div
             data-journey-runway
             data-ascii-preserve
-            className="journey-runway relative w-full max-w-full overflow-hidden"
+            className="journey-runway relative w-full max-w-full"
           >
             <div className="sticky top-0 h-[100svh] w-full max-w-full overflow-hidden">
               <WhaleConvergence firstCity={CV_DATA.locations[0]} />
