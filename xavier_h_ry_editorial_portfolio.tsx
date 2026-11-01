@@ -5,14 +5,21 @@ import { AsciiText, DecodeSoundToggle, useEditorialScroll } from './TerminalEdit
 import { mountLanternCursor } from './lanternCursor';
 import { CV_DATA } from './cvData';
 import { ReadingZoneTracker } from './ReadingZoneTracker';
+import { SectionIndex } from './SectionIndex';
 import { JourneyGlobe } from './JourneyGlobe';
 import { AsciiWhaleBackground } from './AsciiWhaleBackground';
 import { WhaleConvergence } from './WhaleConvergence';
 import {
   GlobeDive,
   HeroCurrentLayer,
+  LANES_CONTACT,
+  LANES_DEEP_NARROW,
+  LANES_EDUCATION,
   LANES_EXPERIENCE,
   LANES_EXPERIENCE_NARROW,
+  LANES_INTERESTS,
+  LANES_LANGUAGES,
+  LANES_SKILLS,
   LANES_INTRO,
   LANES_INTRO_NARROW,
   OceanIntroduction,
@@ -46,9 +53,10 @@ interface FloatingSectionHeaderProps {
   sectionId?: string;
   title: string;
   description?: string;
-  /** How the header sits on the 12-column grid; each section picks its own. "sounding" is The
-      Sounding's header: a Newsreader title set in from the margin columns. */
-  layout?: 'left' | 'drift' | 'counter' | 'stacked' | 'sounding';
+  /** One of the three header forms on the grid's named lines (terminal.css): "benchmark" sets the
+      title from the margin with its annotation on line c, "indented" sets it in on line b,
+      "monument" spans the measure for the last word. */
+  layout?: 'benchmark' | 'indented' | 'monument';
   /** A single Newsreader statement set beneath the header. */
   asideAccent?: string;
 }
@@ -56,7 +64,7 @@ interface FloatingSectionHeaderProps {
 const FloatingSectionHeader: React.FC<FloatingSectionHeaderProps> = ({
   title,
   description,
-  layout = 'left',
+  layout = 'benchmark',
   asideAccent
 }) => (
   <header className={`section-head section-head--${layout} ed-grid relative z-10`}>
@@ -171,9 +179,15 @@ export default function App() {
       <HeroCurrentLayer />
       <WhaleStretch sectionId="introduction" lanes={LANES_INTRO} narrowLanes={LANES_INTRO_NARROW} />
       <WhaleStretch sectionId="experience" lanes={LANES_EXPERIENCE} narrowLanes={LANES_EXPERIENCE_NARROW} />
+      <WhaleStretch sectionId="skills" lanes={LANES_SKILLS} narrowLanes={LANES_DEEP_NARROW} />
+      <WhaleStretch sectionId="education" lanes={LANES_EDUCATION} narrowLanes={LANES_DEEP_NARROW} />
+      <WhaleStretch sectionId="languages" lanes={LANES_LANGUAGES} narrowLanes={LANES_DEEP_NARROW} />
+      <WhaleStretch sectionId="interests" lanes={LANES_INTERESTS} narrowLanes={LANES_DEEP_NARROW} />
+      <WhaleStretch sectionId="contact" lanes={LANES_CONTACT} narrowLanes={LANES_DEEP_NARROW} />
       <GlobeDive />
       <AsciiWhaleBackground mode="ambient" />
       <DecodeSoundToggle />
+      <SectionIndex cvUrl={ORIGINAL_CV_PDF_URL} />
 
       {downloadToast && (
         <div aria-hidden="true" className="fixed top-20 right-6 z-50 bg-[#171717]/90 backdrop-blur-md text-[#F5F3EE] border border-[#B6C5B0] px-4 py-3 shadow-lg flex items-center gap-3 font-mono text-xs">
@@ -191,6 +205,7 @@ export default function App() {
         <ProgressiveOceanEntry
           onExploreDossier={handleExploreDossier}
           onDownloadPdf={handleDownloadOriginalCv}
+          cvUrl={ORIGINAL_CV_PDF_URL}
         />
 
         {/* THE DESCENT: straight from the cover into the Globe's pinned runway. Its first stretch
@@ -215,19 +230,7 @@ export default function App() {
         {/* SECTION 02: INTRODUCTION — in the deep water, once the journey has ended */}
         <OceanIntroduction />
 
-        <div className="cv-arch mt-16 sm:mt-24 lg:mt-32 space-y-28 sm:space-y-36">
-          {/* INTERNATIONAL BACKGROUND: the journey's chapter title, set after the statement */}
-          <section id="global" data-editorial-section className="relative">
-            <RevealBlock variant="section">
-              <FloatingSectionHeader
-                sectionId="global"
-                layout="drift"
-                title="Seven cities across Europe, the Middle East & Asia"
-                description="An international chronology shaped by living across Doha, Paris, Jakarta, Moscow, Singapore, Pau, and Shanghai."
-              />
-            </RevealBlock>
-          </section>
-
+        <div className="cv-arch">
           {/* SECTION 03: EXPERIENCE (De-boxed, Floating Editorial Timeline) */}
           {/* A sounding log: each internship is a station sitting on its own datum line, like the
               cover's headline on the horizon, with its record hanging below in the water. */}
@@ -235,7 +238,7 @@ export default function App() {
             <RevealBlock variant="section">
               <FloatingSectionHeader
                 sectionId="experience"
-                layout="sounding"
+                layout="benchmark"
                 title="Operational & commercial internships"
                 asideAccent="Translating cross-cultural adaptability into rigorous business execution and freight logistics."
               />
@@ -245,26 +248,31 @@ export default function App() {
               {CV_DATA.experiences.map((exp, idx) => (
                 <RevealBlock key={exp.id} delayMs={idx * 100}>
                   <article className="exp-entry station ed-grid relative">
-                    <h3 className="exp-company">
-                      <BioWords text={toTitleCase(exp.company)} />
-                    </h3>
                     <p className="exp-when meta">
                       <BioWords text={exp.date} />
                     </p>
                     <div className="exp-who">
+                      <h3 className="exp-company entry-title">
+                        <BioWords text={toTitleCase(exp.company)} />
+                      </h3>
                       <p className="exp-role">
                         <BioWords text={exp.role} />
                       </p>
-                      {exp.domainTag && (
-                        <ul className="exp-tags meta">
+                    </div>
+                    {exp.domainTag && (
+                      <div className="exp-scope">
+                        <p className="meta">
+                          <BioWords text="Scope" />
+                        </p>
+                        <ul>
                           {exp.domainTag.split(/\s*\/\s*/).map((tag) => (
-                            <li key={tag}>
+                            <li key={tag} className="item">
                               <BioWords text={tag} />
                             </li>
                           ))}
                         </ul>
-                      )}
-                    </div>
+                      </div>
+                    )}
                     {exp.concisePoints && exp.concisePoints.length > 0 && (
                       <ul className="exp-what">
                         {exp.concisePoints.map((pt, i) => (
@@ -285,39 +293,27 @@ export default function App() {
             <RevealBlock variant="section">
               <FloatingSectionHeader
                 sectionId="skills"
-                layout="counter"
+                layout="benchmark"
                 title="Technical & creative toolset"
                 description="Organized across automated workflows, media production, and enterprise productivity suites."
               />
             </RevealBlock>
 
-            <div className="entry-list entry-list--wide">
+            {/* An index: each discipline's tools on one ruled row. The CV's summaries and
+                classifications stay in cvData; on the page the tools speak for themselves. */}
+            <div className="skill-index">
               {CV_DATA.skills.map((category, idx) => (
-                <RevealBlock key={category.id} delayMs={idx * 110}>
-                  <div className="skill-band ed-grid">
-                    <div className="skill-head">
-                      <h3 className="ocean-h3 text-[#171717]">
-                        <BioWords text={category.title} />
-                      </h3>
-                      <p>
-                        <BioWords text={category.verbatimSummary} />
-                      </p>
-                    </div>
-                    <div className="skill-list">
-                      {category.items.map((skill) => (
-                        <div key={skill.name} className="ocean-skill-item">
-                          <span className="text-[#171717]">
-                            <BioWords text={skill.name} />
-                          </span>
-                          {skill.classification ? (
-                            <span className="meta">
-                              <BioWords text={skill.classification} />
-                            </span>
-                          ) : null}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
+                <RevealBlock key={category.id} delayMs={idx * 110} className="skill-row ed-grid">
+                  <h3 className="skill-label meta">
+                    <BioWords text={category.title} />
+                  </h3>
+                  <ul className="skill-items">
+                    {category.items.map((skill) => (
+                      <li key={skill.name} className="item">
+                        <BioWords text={skill.name} />
+                      </li>
+                    ))}
+                  </ul>
                 </RevealBlock>
               ))}
             </div>
@@ -328,24 +324,31 @@ export default function App() {
             <RevealBlock variant="section">
               <FloatingSectionHeader
                 sectionId="education"
-                layout="stacked"
+                layout="indented"
                 title="Academic chronology"
               />
             </RevealBlock>
 
-            <div className="entry-list">
+            {/* Two tiers: the degree reads first as an entry; the schools before it follow as a
+                ruled list. Every row keeps the same lines: date on a, name on b, place on c. */}
+            <div className="edu-list">
               {CV_DATA.education.map((edu, idx) => (
                 <RevealBlock key={edu.id} delayMs={idx * 80}>
-                  <article className="edu-entry ed-grid relative">
+                  {idx === 1 && (
+                    <p className="edu-tier-label meta">
+                      <BioWords text="Schools" />
+                    </p>
+                  )}
+                  <article className={`edu-entry ed-grid relative ${edu.degree ? 'edu-entry--degree' : 'edu-entry--school'}`}>
                     <p className="edu-when meta">
                       <BioWords text={edu.date} />
                     </p>
                     <div className="edu-body">
-                      <h3 className="ocean-h3 text-[#171717]">
+                      <h3 className={edu.degree ? 'entry-title' : 'item'}>
                         <BioWords text={edu.institution} />
                       </h3>
                       {edu.degree && (
-                        <p className="edu-degree body-copy">
+                        <p className="edu-degree">
                           <BioWords text={edu.degree} />
                         </p>
                       )}
@@ -373,7 +376,7 @@ export default function App() {
             <RevealBlock variant="section">
               <FloatingSectionHeader
                 sectionId="languages"
-                layout="left"
+                layout="benchmark"
                 title="Across languages"
                 description="Multilingual fluency forged through living and studying in six distinct linguistic regions."
               />
@@ -404,21 +407,21 @@ export default function App() {
             <RevealBlock variant="section">
               <FloatingSectionHeader
                 sectionId="interests"
-                layout="drift"
+                layout="benchmark"
                 title="Disciplines & cultural monitoring"
                 description="Athletic conditioning, music production, macroeconomic research, and luxury retail observation."
               />
             </RevealBlock>
 
-            <div className="interest-flow ed-grid">
+            <div className="interest-list">
               {CV_DATA.interests.map((interest, idx) => (
-                <RevealBlock key={interest.id} delayMs={idx * 80} className="interest">
-                  <h3 className="ocean-h3 text-[#171717]">
+                <RevealBlock key={interest.id} delayMs={idx * 80} className="interest ed-grid">
+                  <h3 className="interest-label meta">
                     <BioWords text={toTitleCase(interest.title)} />
                   </h3>
                   <ul>
                     {interest.bullets.map((b, bIdx) => (
-                      <li key={bIdx} className="body-copy text-[#2B353B]">
+                      <li key={bIdx}>
                         <BioWords text={b} />
                       </li>
                     ))}
@@ -430,22 +433,22 @@ export default function App() {
 
           {/* SECTION 08: CONTACT & DOSSIER (Direct Correspondence Suite) */}
           {/* Kept within one screen on desktop so the final, resting view holds the whole section */}
-          <section id="contact" data-editorial-section className="relative pb-16 sm:pb-20">
+          <section id="contact" data-editorial-section className="relative">
             <RevealBlock variant="section">
               <FloatingSectionHeader
                 sectionId="contact"
-                layout="stacked"
+                layout="monument"
                 title="Direct correspondence"
                 description="Open for B2B development, international logistics coordination, and strategic business inquiries."
               />
             </RevealBlock>
 
-            <div className="contact-grid ed-grid">
-              {/* The address is the last large statement of the descent */}
-              <div className="contact-mail">
-                <span className="meta">
-                  <AsciiText text="electronic mail" />
-                </span>
+            {/* The address is the last large statement of the descent, its label hanging on line a */}
+            <div className="contact-mail ed-grid">
+              <p className="contact-label meta">
+                <AsciiText text="electronic mail" />
+              </p>
+              <div className="contact-mail-body">
                 <a href={CV_DATA.emailHref} className="contact-address text-[#171717]">
                   <AsciiText text={CV_DATA.email} />
                 </a>
@@ -455,12 +458,15 @@ export default function App() {
                   </button>
                 </div>
               </div>
+            </div>
 
+            {/* The closing row, ruled like a colophon: the CV on line b, the other channels on line c */}
+            <footer className="contact-foot ed-grid">
+              <p className="contact-label meta">
+                <AsciiText text="curriculum vitae" />
+              </p>
               <div className="contact-cv">
-                <span className="meta">
-                  <AsciiText text="curriculum vitae" />
-                </span>
-                <h3 className="ocean-h3 text-[#171717]">
+                <h3 className="item">
                   <BioWords text="Original English CV PDF" />
                 </h3>
                 <p className="meta">
@@ -477,12 +483,19 @@ export default function App() {
                   </button>
                 </div>
               </div>
-            </div>
-
-            <footer className="terminal-social">
-              <a href={CV_DATA.linkedin} target="_blank" rel="noopener noreferrer"><AsciiText text="linkedin" /></a>
-              <span aria-hidden="true"><AsciiText text="/" /></span>
-              <a href={CV_DATA.emailHref}><AsciiText text="email" /></a>
+              <div className="contact-elsewhere">
+                <ul>
+                  <li className="item">
+                    <a href={CV_DATA.linkedin} target="_blank" rel="noopener noreferrer"><AsciiText text="LinkedIn" /></a>
+                  </li>
+                  <li className="item">
+                    <a href={CV_DATA.emailHref}><AsciiText text="Email" /></a>
+                  </li>
+                </ul>
+                <p className="meta contact-sign">
+                  <AsciiText text={`© ${new Date().getFullYear()} ${toTitleCase(CV_DATA.name)}`} />
+                </p>
+              </div>
             </footer>
           </section>
         </div>

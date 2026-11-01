@@ -682,8 +682,6 @@ export const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.m
     handleResize();
     const layoutObserver = new ResizeObserver(handleResize);
     layoutObserver.observe(document.documentElement);
-    const globeSection = document.getElementById('global');
-    if (globeSection) layoutObserver.observe(globeSection);
     window.addEventListener('resize', handleResize);
 
     const handleMouseMove = (e: MouseEvent) => {

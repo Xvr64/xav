@@ -10,36 +10,35 @@
   --font-display: 'Newsreader', 'Iowan Old Style', Georgia, serif;
   --font-sans: 'Instrument Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  /* Legacy aliases still referenced by components */
-  --font-serif: var(--font-display);
-  --font-hero: var(--font-display);
-  --font-hero-title: var(--font-display);
-  --font-body: var(--font-sans);
-  --font-title: var(--font-sans);
-  --font-annot: var(--font-mono);
-  --font-tech: var(--font-mono);
 
-  /* Type scale — display sizes are set at opsz 72 */
+  /* Type roles. Each size belongs to one role, and each role to one face:
+       T0 monument   Newsreader  the cover line and the name, nowhere else
+       T1 display    Newsreader  lists set as typography (languages, the email)
+       T2 title      Newsreader  one section title per section
+       T3 entry      Newsreader  a company, an institution, a city; at most ~65% of T2
+       T4 lead       Newsreader  opsz 36: statements' support, roles, degrees, asides
+       T5 item       Instrument  tool names, school names, short list entries
+       T6 body       Instrument  paragraphs, at most 62ch
+       T7 meta       Plex Mono   dates, places, levels, labels; sentence case, never upper */
   --text-cover: clamp(54px, 9.4vw, 160px);
   --text-name: clamp(84px, 16.4vw, 272px);
   --text-statement: clamp(26px, 2.75vw, 44px);
-  --text-display: clamp(40px, 5.6vw, 92px);
-  /* Every section title shares the display voice first set by Experience's sounding header */
-  --text-h2: clamp(38px, 4.5vw, 74px);
-  --text-lead: clamp(21px, 1.95vw, 29px);
-  --text-h3: clamp(20px, 1.65vw, 25px);
+  --text-display: clamp(44px, 5.6vw, 92px);
+  --text-h2: clamp(38px, 4.5vw, 72px);
+  --text-entry: clamp(28px, 3vw, 46px);
+  --text-lead: clamp(20px, 1.8vw, 27px);
+  --text-item: clamp(18px, 1.3vw, 20px);
   --text-body: clamp(16px, 1.05vw, 17px);
   --text-small: 14px;
   --text-meta: 12px;
-  /* kept for components that still read them */
-  --text-hero: var(--text-cover);
-  --text-body-sm: var(--text-small);
-  --text-meta-xs: 11px;
+  /* h3 is the item role */
+  --text-h3: var(--text-item);
 
   --leading-display: 1.02;
   --leading-h2: 1.02;
   --leading-lead: 1.32;
-  --leading-h3: 1.25;
+  --leading-h3: 1.3;
+  --leading-entry: 1.04;
   --leading-body: 1.58;
   --leading-meta: 1.5;
 
@@ -52,10 +51,18 @@
      reading voice opens slightly. 0 on white water, so the surface is unchanged. */
   --display-weight: calc(300 - 26 * var(--ink-light, 0));
   --tracking-body: calc(-0.004em + 0.01em * var(--ink-light, 0));
-  --tracking-mono: 0.02em;
-  --tracking-mono-wide: 0.04em;
+  --tracking-entry: -0.022em;
+  --tracking-mono: 0.04em;
+  --tracking-mono-wide: 0.06em;
 
-  /* Spacing scale (8-based, stretched toward the deep end) */
+  /* Spacing scale (8-based, stretched toward the deep end), and where each step is used:
+       2xs–xs  inside an entry: title → subtitle
+       s       subtitle → meta, between list rows
+       m       between blocks inside an entry
+       l       mobile: section title → content
+       xl      section title → content; between rows of a quiet list
+       2xl     between major entries (stations)
+       3xl     between sections */
   --space-2xs: 4px;
   --space-xs: 8px;
   --space-s: 16px;
@@ -64,9 +71,12 @@
   --space-xl: 64px;
   --space-2xl: 104px;
   --space-3xl: 168px;
-  --section-gap: clamp(150px, 24vh, 272px);
+  --section-gap: var(--space-3xl);
 
-  /* Grid & measure */
+  /* Grid & measure. The 12 columns carry three named lines, and every element starts on one:
+       a (col 1)  the margin: section titles, hanging dates and labels in cols 1–2
+       b (col 3)  the content line: entry titles, statements, lists
+       c (col 9)  the annotation line: deks, scope, secondary facts */
   --page-margin: clamp(20px, 5.2vw, 88px);
   --gutter: clamp(16px, 1.9vw, 32px);
   --measure: 62ch;
@@ -113,11 +123,18 @@ body {
 }
 .terminal-portfolio .cv-arch { margin-top: var(--section-gap) !important; }
 .terminal-portfolio .cv-arch > section + section { margin-top: var(--section-gap) !important; }
-.terminal-portfolio [data-editorial-section] { scroll-margin-top: 100px; }
+/* A jump lands a section's title about a fifth of the way down (with html's scroll-padding),
+   clear of the decode's exit band at the top of the screen */
+.terminal-portfolio [data-editorial-section] { scroll-margin-top: 12vh; }
+/* A section focused by the index is a landing point, not a control */
+.terminal-portfolio [data-editorial-section]:focus { outline: none; }
 
 .ed-grid {
   display: grid;
-  grid-template-columns: repeat(12, minmax(0, 1fr));
+  grid-template-columns:
+    [a] repeat(2, minmax(0, 1fr))
+    [b] repeat(6, minmax(0, 1fr))
+    [c] repeat(4, minmax(0, 1fr)) [end];
   column-gap: var(--gutter);
 }
 
@@ -164,6 +181,25 @@ body {
   max-width: var(--measure);
   text-wrap: pretty;
 }
+/* T3: a company, an institution, a city */
+.entry-title {
+  font-family: var(--font-display);
+  font-variation-settings: 'opsz' 72;
+  font-weight: var(--display-weight, 300);
+  font-size: var(--text-entry);
+  line-height: var(--leading-entry);
+  letter-spacing: var(--tracking-entry);
+  color: var(--ink-171717, #171717);
+  margin: 0;
+}
+/* T5: a short entry in a list */
+.item {
+  font-family: var(--font-sans);
+  font-size: var(--text-item);
+  line-height: var(--leading-h3);
+  letter-spacing: var(--tracking-h3);
+  color: var(--ink-171717, #171717);
+}
 
 /* ---------------------------------------------------------------------------
    Headings
@@ -189,7 +225,9 @@ body {
   letter-spacing: var(--tracking-h3);
   margin: 0;
 }
-.terminal-portfolio :is(article p, article li, #skills .ocean-skill-item, #interests li) {
+/* Reading text in entries and lists defaults to the reading face; metadata keeps its own voice,
+   and any role class (lead, degree, role) overrides this without needing an ID */
+.terminal-portfolio :where(article p, article li, #skills li, #interests li):not(.meta) {
   font-family: var(--font-sans);
   line-height: var(--leading-body);
   letter-spacing: var(--tracking-body);
@@ -218,21 +256,19 @@ body {
   line-height: var(--leading-lead);
   letter-spacing: -0.012em;
   max-width: 30ch;
-  color: var(--ink-171717, #171717);
+  color: var(--ink-2F4858, #2F4858);
 }
-/* surface-left: title broad on the left, dek tucked to its right on the title baseline */
-.section-head--left > .ocean-h2 { grid-column: 1 / span 7; }
-.section-head--left > .section-dek { grid-column: 9 / span 4; grid-row: 1; }
-.section-head--left > .section-aside { grid-column: 2 / span 6; grid-row: 2; margin-top: var(--space-l); }
-/* drift: title enters from the third column, dek steps further right beneath it */
-.section-head--drift > .ocean-h2 { grid-column: 3 / span 8; }
-.section-head--drift > .section-dek { grid-column: 7 / span 5; grid-row: 2; }
-/* counter: title sits on the right half, dek hangs below on the same left edge */
-.section-head--counter > .ocean-h2 { grid-column: 6 / span 7; }
-.section-head--counter > .section-dek { grid-column: 6 / span 5; grid-row: 2; }
-/* stacked: title left, dek indented one column */
-.section-head--stacked > .ocean-h2 { grid-column: 1 / span 8; }
-.section-head--stacked > .section-dek { grid-column: 2 / span 5; grid-row: 2; }
+/* Three header forms, all on the named lines:
+   benchmark  title from line a across seven columns; dek or aside on line c, resting on the
+              title's last line (the "Across languages" composition)
+   indented   title set in on line b; dek beneath it on the same line
+   monument   title from line a across ten columns; dek beneath it */
+.section-head--benchmark > .ocean-h2 { grid-column: a / span 7; }
+.section-head--benchmark > :is(.section-dek, .section-aside) { grid-column: c / end; grid-row: 1; }
+.section-head--indented > .ocean-h2 { grid-column: b / span 8; }
+.section-head--indented > :is(.section-dek, .section-aside) { grid-column: b / span 5; grid-row: 2; }
+.section-head--monument > .ocean-h2 { grid-column: a / span 10; max-width: none; }
+.section-head--monument > :is(.section-dek, .section-aside) { grid-column: a / span 5; grid-row: 2; }
 
 /* ---------------------------------------------------------------------------
    01 · Cover — "A journey without horizons"
@@ -262,13 +298,14 @@ body {
   inset: 0 0 auto 0;
   padding-top: clamp(22px, 3.6vh, 40px);
   align-items: baseline;
+  z-index: 2;
   pointer-events: none;
 }
 .hero-colophon p { margin: 0; }
-.hero-colophon .colophon-name { grid-column: 1 / span 3; color: var(--ink-171717, #171717); }
-.hero-colophon .colophon-role { grid-column: 5 / span 5; }
-.hero-colophon .colophon-depth { grid-column: 10 / span 3; text-align: right; }
-.hero-colophon .colophon-depth b { font-weight: 500; color: var(--ink-171717, #171717); }
+.hero-colophon .colophon-name { grid-column: a / span 2; color: var(--ink-171717, #171717); }
+.hero-colophon .colophon-role { grid-column: b / span 6; }
+.hero-colophon .colophon-cv { grid-column: c / span 2; }
+.hero-colophon a { pointer-events: auto; color: var(--ink-171717, #171717); }
 
 .minimal-hero {
   position: absolute;
@@ -410,8 +447,12 @@ body {
 }
 .intro-name-first { grid-column: 1 / span 12; }
 .intro-name-last { grid-column: 5 / span 8; font-style: italic; }
+/* Who and what: the statement on line b with its label hanging on line a; beneath it the
+   support reads on line b while the facts a recruiter scans for answer on line c */
+.terminal-overview { row-gap: var(--space-xl); align-items: baseline; }
+.terminal-overview .intro-kicker { grid-column: a / span 2; grid-row: 1; margin: 0; }
 .terminal-overview .lead {
-  grid-column: 5 / span 8;
+  grid-column: b / span 8;
   grid-row: 1;
   margin: 0;
   max-width: 21.5em;
@@ -421,85 +462,55 @@ body {
   letter-spacing: -0.016em;
 }
 .terminal-overview .intro-support {
-  grid-column: 9 / span 4;
+  grid-column: b / span 5;
   grid-row: 2;
-  margin: var(--space-xl) 0 0;
-  max-width: 40ch;
+  margin: 0;
+  max-width: 44ch;
   font-size: var(--text-body);
   line-height: var(--leading-body);
   color: var(--ink-2B353B, #2B353B);
 }
+.terminal-overview .intro-facts { grid-column: c / end; grid-row: 2; margin: 0; }
+.intro-facts > div + div { margin-top: var(--space-s); }
+.intro-facts dt { margin: 0; }
+.intro-facts dd { margin: var(--space-2xs) 0 0; }
 
 /* Entries are wrapped by reveal blocks, so rhythm is set on the list, not on siblings */
 .entry-list > * + * { margin-top: var(--space-xl); }
 .entry-list--wide > * + * { margin-top: var(--space-2xl); }
 
 /* ---------------------------------------------------------------------------
-   The Sounding's section header: a Newsreader title set in from the margin columns; the dek
-   reads beneath the title, the aside answers it in italic on the right.
+   03 · Experience — a sounding log on the three lines. A datum draws across the measure above
+   each station; beneath it the date hangs on line a, the company and role read on line b and
+   the scope of the work answers on line c, all resting on the company's first baseline.
    --------------------------------------------------------------------------- */
-.section-head--sounding {
-  row-gap: var(--space-l);
-  align-items: start;
-}
-/* Face, size and tracking come from the shared .ocean-h2; the sounding only places it */
-.terminal-portfolio .section-head--sounding > .ocean-h2 {
-  grid-column: 3 / span 8;
-  grid-row: 1;
-}
-.section-head--sounding > .section-dek { grid-column: 3 / span 4; grid-row: 2; }
-.section-head--sounding > .section-aside {
-  grid-column: 8 / span 4;
-  grid-row: 2;
-  margin: 0;
-  color: var(--ink-2F4858, #2F4858);
-}
-
-/* ---------------------------------------------------------------------------
-   03 · Experience — a sounding log. Each station's name sits on a datum line that runs the
-   full measure, and its date reads at the far end of the line. The record hangs below it, leaving the margin columns open water.
-   --------------------------------------------------------------------------- */
-.station-list { padding-top: var(--space-l); }
+.station-list { padding-top: var(--space-s); }
 .exp-entry {
-  --text-station: clamp(34px, 3.9vw, 62px);
-  row-gap: var(--space-m);
-  align-items: start;
-}
-.terminal-portfolio .exp-entry .exp-company {
-  grid-column: 1 / -1;
-  grid-row: 1;
   position: relative;
-  /* the name starts on column 3; the datum under it spans all twelve */
-  padding-left: calc(2 * (100% + var(--gutter)) / 12);
-  margin: 0;
-  font-family: var(--font-display);
-  font-variation-settings: 'opsz' 72;
-  font-size: var(--text-station);
-  font-weight: var(--display-weight, 300);
-  line-height: 1;
-  letter-spacing: -0.026em;
-  color: var(--ink-171717, #171717);
+  padding-top: var(--space-l);
+  row-gap: var(--space-m);
+  align-items: baseline;
 }
-.exp-entry .exp-company::after {
+.exp-entry::before {
   content: '';
   position: absolute;
   left: 0;
   right: 0;
-  top: calc(100% - 0.17em);
+  top: 0;
   height: 1px;
-  background: var(--rule-46, rgba(23, 23, 23, 0.32));
+  background: var(--rule-20, rgba(23, 23, 23, 0.2));
 }
 /* The datum is taken as the station rises: the line draws from the margin across the measure,
-   tied to scroll (reversible) through the station name's own view timeline. Browsers without
+   tied to scroll (reversible) through the station's own view timeline. Browsers without
    scroll-driven animations, and reduced motion, keep the full line. */
 @media (prefers-reduced-motion: no-preference) {
   @supports (animation-timeline: view()) {
-    .terminal-portfolio .exp-entry .exp-company { view-timeline-name: --station-datum; }
-    .exp-entry .exp-company::after {
+    .exp-entry { view-timeline-name: --station-datum; }
+    .exp-entry::before {
       transform-origin: left center;
       animation: datum-draw linear both;
       animation-timeline: --station-datum;
-      animation-range: entry 0% cover 38%;
+      animation-range: entry 0% cover 30%;
     }
   }
 }
@@ -507,20 +518,11 @@ body {
   from { transform: scaleX(0); }
   to { transform: scaleX(1); }
 }
-.exp-entry .exp-when {
-  grid-column: 8 / span 5;
-  grid-row: 1;
-  align-self: end;
-  justify-self: end;
-  display: flex;
-  gap: var(--space-s);
-  /* rests on the datum line */
-  margin-bottom: calc(0.17 * var(--text-station) + 8px);
-}
-.exp-entry .exp-index { color: var(--ink-2F4858, #2F4858); }
-.exp-entry .exp-who { grid-column: 3 / span 4; grid-row: 2; }
+.exp-entry .exp-when { grid-column: a / span 2; grid-row: 1; margin: 0; }
+.exp-entry .exp-who { grid-column: b / span 5; grid-row: 1; }
+.exp-entry .exp-company { max-width: 12em; }
 #experience .exp-entry .exp-role {
-  margin: 0;
+  margin: var(--space-xs) 0 0;
   font-family: var(--font-display);
   font-variation-settings: 'opsz' 36;
   font-style: italic;
@@ -532,13 +534,14 @@ body {
   max-width: 18em;
   text-wrap: balance;
 }
-.exp-entry .exp-tags { margin-top: var(--space-m); }
-#experience .exp-entry .exp-tags li { font: inherit; letter-spacing: inherit; }
+.exp-entry .exp-scope { grid-column: c / end; grid-row: 1; }
+.exp-entry .exp-scope ul { margin-top: var(--space-s); }
+.exp-entry .exp-scope li + li { margin-top: var(--space-xs); }
+/* The record, when an entry carries one: numbered readings under the role on line b */
 .exp-entry .exp-what {
-  grid-column: 8 / span 5;
+  grid-column: b / span 6;
   grid-row: 2;
   counter-reset: reading;
-  padding-top: 0.3em;
 }
 .exp-entry .exp-what li {
   position: relative;
@@ -547,7 +550,6 @@ body {
   color: var(--ink-1F2428, #1F2428);
   counter-increment: reading;
 }
-/* Each line of the record is a numbered reading */
 .exp-entry .exp-what li::before {
   content: counter(reading, decimal-leading-zero);
   position: absolute;
@@ -562,43 +564,76 @@ body {
 }
 .exp-entry .exp-what li + li { margin-top: var(--space-s); }
 /* Article text defaults to the reading face through an ID-weighted :is(); the instrument
-   lines and the role take it back */
+   lines, the scope and the role take it back */
 #experience .exp-entry .meta {
   font-family: var(--font-mono);
   line-height: var(--leading-meta);
   letter-spacing: var(--tracking-mono);
 }
+#experience .exp-entry .exp-scope li.item { line-height: var(--leading-h3); letter-spacing: var(--tracking-h3); }
 
 /* ---------------------------------------------------------------------------
-   05 · Skills — a typographic index: category, then its tools
+   05 · Skills — an index across the full measure: one ruled row per discipline, its label
+   hanging on line a and its tools running along line b
    --------------------------------------------------------------------------- */
-.skill-band { row-gap: var(--space-l); align-items: start; }
-.skill-band .skill-head { grid-column: 6 / span 3; }
-.skill-band .skill-head p { margin-top: var(--space-xs); color: var(--ink-52595E, #52595E); font-size: var(--text-small); line-height: 1.55; max-width: 32ch; }
-.skill-band .skill-list {
-  grid-column: 9 / span 4;
-  display: grid;
-  row-gap: var(--space-s);
+.skill-row {
+  border-top: 1px solid var(--rule-15, rgba(23, 23, 23, 0.15));
+  padding-block: var(--space-m);
+  align-items: baseline;
 }
-.terminal-portfolio #skills .ocean-skill-item { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 0; }
-.terminal-portfolio #skills .ocean-skill-item > span:first-child { font-size: var(--text-h3); line-height: 1.25; letter-spacing: var(--tracking-h3); }
+.skill-row:last-child { border-bottom: 1px solid var(--rule-15, rgba(23, 23, 23, 0.15)); }
+.skill-row .skill-label { grid-column: a / span 2; margin: 0; }
+.skill-row .skill-items {
+  grid-column: b / end;
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: var(--space-l);
+  row-gap: var(--space-xs);
+}
+.terminal-portfolio #skills .skill-items li { line-height: var(--leading-h3); letter-spacing: var(--tracking-h3); }
 
 /* ---------------------------------------------------------------------------
-   06 · Education — a chronology with a hanging date column
+   06 · Education — the degree as an entry, then the schools as a ruled list. Every row hangs
+   its dates on line a, names the institution on line b and places it on line c, all on one
+   baseline.
    --------------------------------------------------------------------------- */
-.edu-entry { align-items: start; row-gap: var(--space-xs); }
-.edu-entry .edu-when { grid-column: 1 / span 2; padding-top: 0.5em; }
-.edu-entry .edu-body { grid-column: 3 / span 6; }
-.edu-entry .edu-where { grid-column: 10 / span 3; padding-top: 0.5em; text-align: right; }
-.edu-entry .edu-degree { margin-top: var(--space-2xs); color: var(--ink-3E4C52, #3E4C52); }
+.edu-entry { align-items: baseline; row-gap: var(--space-xs); }
+.edu-entry .edu-when { grid-column: a / span 2; margin: 0; }
+.edu-entry .edu-body { grid-column: b / span 6; }
+.edu-entry .edu-where { grid-column: c / end; margin: 0; }
+.terminal-portfolio .edu-entry .edu-degree {
+  margin-top: var(--space-xs);
+  font-family: var(--font-display);
+  font-variation-settings: 'opsz' 36;
+  font-weight: var(--display-weight, 300);
+  font-size: var(--text-lead);
+  line-height: var(--leading-lead);
+  letter-spacing: -0.012em;
+  color: var(--ink-2F4858, #2F4858);
+}
 .edu-entry .edu-highlights { margin-top: var(--space-s); max-width: var(--measure); }
 .edu-entry .edu-highlights p + p { margin-top: var(--space-xs); }
+.edu-tier-label { margin: var(--space-2xl) 0 var(--space-s); }
+/* The schools: one ruled row each, the rule running from line b to the margin */
+.edu-entry--school { padding-block: var(--space-s); }
+.edu-entry--school::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: calc(2 * (100% + var(--gutter)) / 12);
+  border-top: 1px solid var(--rule-12, rgba(23, 23, 23, 0.12));
+}
+.edu-tier-label { padding-left: calc(2 * (100% + var(--gutter)) / 12); }
+.terminal-portfolio #education .edu-entry h3 { font-weight: var(--display-weight, 300); }
+.terminal-portfolio #education .edu-entry--school h3 { font-weight: 400; line-height: var(--leading-h3); letter-spacing: var(--tracking-h3); }
 
 /* ---------------------------------------------------------------------------
-   07 · Languages — oversized words, one per line, stepping deeper
+   07 · Languages — oversized words, one per line, alternating between line b and one column
+   deeper, like a swell; each level follows its word in the metadata voice
    --------------------------------------------------------------------------- */
 .lang-list { display: grid; row-gap: clamp(6px, 1vw, 14px); }
-/* Each word starts on its own grid column (col k starts at (k-1)·(100% + gutter)/12); its level follows it */
+/* col k starts at (k-1)·(100% + gutter)/12: odd rows on line b (col 3), even rows on col 4 */
 .lang-row {
   display: flex;
   align-items: baseline;
@@ -606,49 +641,68 @@ body {
   column-gap: var(--space-m);
   margin-left: calc((var(--lang-col, 3) - 1) * (100% + var(--gutter)) / 12);
 }
+.lang-row:nth-child(even) { --lang-col: 4; }
 .lang-row .lang-name {
   font-size: var(--text-display);
   margin: 0;
   color: var(--ink-171717, #171717);
 }
-.lang-row:nth-child(2) { --lang-col: 4; }
-.lang-row:nth-child(3) { --lang-col: 5; }
-.lang-row:nth-child(4) { --lang-col: 6; }
-.lang-row:nth-child(5) { --lang-col: 5; }
-.lang-row:nth-child(6) { --lang-col: 4; }
 
 /* ---------------------------------------------------------------------------
-   08 · Interests — three vignettes descending across the grid
+   08 · Interests — a quiet coda: each interest's label hangs on line a and its notes read in
+   the lead voice on line b, one per line
    --------------------------------------------------------------------------- */
-.interest-flow { row-gap: var(--space-2xl); }
-.interest-flow .interest { max-width: 52ch; }
-.interest-flow .interest:nth-child(1) { grid-column: 1 / span 5; }
-.interest-flow .interest:nth-child(2) { grid-column: 5 / span 5; }
-.interest-flow .interest:nth-child(3) { grid-column: 8 / span 5; }
-.interest-flow .interest ul { margin-top: var(--space-s); }
-.interest-flow .interest li + li { margin-top: var(--space-xs); }
+.interest-list > * + * { margin-top: var(--space-l); }
+.interest { align-items: baseline; row-gap: var(--space-xs); }
+.interest .interest-label { grid-column: a / span 2; margin: 0; }
+.interest ul { grid-column: b / span 7; }
+.terminal-portfolio #interests .interest li {
+  font-family: var(--font-display);
+  font-variation-settings: 'opsz' 36;
+  font-weight: var(--display-weight, 300);
+  font-size: var(--text-lead);
+  line-height: var(--leading-lead);
+  letter-spacing: -0.012em;
+  color: var(--ink-171717, #171717);
+  max-width: 34em;
+  text-wrap: pretty;
+}
+.interest li + li { margin-top: var(--space-2xs); }
 
 /* ---------------------------------------------------------------------------
    09 · Contact
    --------------------------------------------------------------------------- */
-.contact-grid { row-gap: var(--space-xl); align-items: start; }
-.contact-grid .contact-mail { grid-column: 1 / span 9; }
-.contact-grid .contact-mail .meta { display: block; margin-bottom: var(--space-s); }
+/* The address on line b with its label hanging on line a; beneath it a ruled closing row */
+#contact { padding-bottom: var(--space-xl); }
+.contact-mail { align-items: baseline; row-gap: var(--space-xs); }
+.contact-label { grid-column: a / span 2; margin: 0; }
+.contact-mail-body { grid-column: b / end; }
+/* T1: the email is one of the page's four monumental moments */
 .terminal-portfolio #contact .contact-address {
   font-family: var(--font-display);
   font-variation-settings: 'opsz' 72;
   font-style: italic;
   font-weight: var(--display-weight, 300);
-  font-size: clamp(34px, 5.2vw, 84px);
+  font-size: clamp(34px, 5.6vw, 92px);
   line-height: 1.04;
   letter-spacing: -0.025em;
   overflow-wrap: anywhere;
   text-decoration-thickness: 1px;
   text-underline-offset: 0.16em;
 }
-.contact-grid .contact-cv { grid-column: 7 / span 5; }
-.contact-grid .contact-cv .ocean-h3 { margin-top: var(--space-xs); }
-.contact-grid .contact-actions { display: flex; flex-wrap: wrap; gap: var(--space-s); margin-top: var(--space-m); }
+.contact-actions { display: flex; flex-wrap: wrap; gap: var(--space-s); margin-top: var(--space-m); }
+.contact-foot {
+  margin-top: var(--space-2xl);
+  padding-top: var(--space-l);
+  border-top: 1px solid var(--rule-15, rgba(23, 23, 23, 0.15));
+  align-items: baseline;
+  row-gap: var(--space-m);
+}
+.contact-foot .contact-cv { grid-column: b / span 6; }
+.contact-foot .contact-cv .meta { margin-top: var(--space-2xs); }
+.contact-foot .contact-elsewhere { grid-column: c / end; }
+.contact-elsewhere li + li { margin-top: var(--space-xs); }
+.contact-elsewhere .contact-sign { margin-top: var(--space-l); }
 
 /* Text-weight controls: quiet outlines, never filled panels */
 .text-control {
@@ -667,16 +721,6 @@ body {
 .text-control:hover { border-color: currentColor; }
 .text-control--bare { padding-inline: 0; border-color: transparent; }
 
-.terminal-social {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-s);
-  margin-top: var(--space-xl);
-  font-family: var(--font-mono);
-  font-size: var(--text-meta);
-}
-.terminal-portfolio #contact .terminal-social a { font-size: var(--text-meta); }
-
 /* ---------------------------------------------------------------------------
    Links & focus
    --------------------------------------------------------------------------- */
@@ -689,40 +733,25 @@ body {
 }
 .terminal-portfolio a:hover { text-decoration-color: currentColor; }
 .terminal-portfolio :is(a, button):focus-visible { outline: 1px solid currentColor; outline-offset: 6px; }
-.terminal-portfolio .ocean-skill-item:hover { transform: none; }
 
 /* ---------------------------------------------------------------------------
    Tablet: keep the grid, relax the offsets
    --------------------------------------------------------------------------- */
 @media (max-width: 1100px) {
   .minimal-hero .cover-line--drift { grid-column: 3 / span 10; }
-  .hero-colophon .colophon-role { grid-column: 4 / span 6; }
   .hero-name-last, .intro-name-last { grid-column: 3 / span 10; }
-  .terminal-overview .lead { grid-column: 4 / span 9; }
-  .terminal-overview .intro-support { grid-column: 7 / span 6; }
-  .terminal-portfolio .section-head--sounding > .ocean-h2 { grid-column: 4 / span 9; }
-  .section-head--sounding > .section-dek { grid-column: 4 / span 5; }
-  .section-head--sounding > .section-aside { grid-column: 4 / span 7; grid-row: 3; }
-  .terminal-portfolio .exp-entry .exp-company { padding-left: 0; }
-  .exp-entry .exp-who { grid-column: 1 / span 4; }
-  .exp-entry .exp-what { grid-column: 6 / span 7; }
-  .skill-band .skill-head { grid-column: 3 / span 4; }
-  .skill-band .skill-list { grid-column: 7 / span 6; }
-  .section-head--counter > :is(.ocean-h2, .section-dek) { grid-column-start: 4; grid-column-end: span 9; }
-  .section-head--drift > .ocean-h2 { grid-column: 2 / span 10; }
-  .section-head--left > .ocean-h2 { grid-column: 1 / span 8; }
-  .section-head--left > .section-dek { grid-column: 1 / span 7; grid-row: 2; }
-  .section-head--left > .section-aside { grid-row: 3; }
-  .interest-flow .interest:nth-child(n) { grid-column: auto / span 6; }
-  .interest-flow .interest:nth-child(2) { grid-column: 7 / span 6; }
-  .interest-flow .interest:nth-child(3) { grid-column: 4 / span 7; }
+  .terminal-overview .lead { grid-column: b / end; }
+  /* Headers: the benchmark's annotation drops beneath its title on line b */
+  .section-head--benchmark > .ocean-h2 { grid-column: a / span 9; }
+  .section-head--benchmark > :is(.section-dek, .section-aside) { grid-column: b / span 6; grid-row: 2; }
+  .section-head--indented > .ocean-h2 { grid-column: b / end; }
 }
 
 /* ---------------------------------------------------------------------------
    Mobile: one clear reading column
    --------------------------------------------------------------------------- */
 @media (max-width: 767px) {
-  :root { --section-gap: 132px; }
+  :root { --section-gap: 112px; }
   .ed-grid { grid-template-columns: minmax(0, 1fr); }
   .ed-grid > *,
   .minimal-hero .cover-title > * { grid-column: 1 / -1 !important; grid-row: auto !important; }
@@ -731,32 +760,35 @@ body {
   .hero-colophon { grid-template-columns: 1fr auto; }
   .hero-colophon .colophon-name { grid-column: 1 !important; }
   .hero-colophon .colophon-role { grid-column: 1 !important; grid-row: 2 !important; }
-  .hero-colophon .colophon-depth { grid-column: 2 !important; grid-row: 1 !important; }
+  .hero-colophon .colophon-cv { grid-column: 2 !important; grid-row: 2 !important; }
   .minimal-hero { padding-top: calc(50svh - 1.88 * var(--text-cover)); }
   .minimal-hero .cover-line--drift { padding-left: 1.1em; }
+  /* Chinese sets every character as a full em: the six-character line keeps to one line by
+     dropping the drift indent and, on the narrowest phones, stepping down to fit the measure */
+  .minimal-hero .cover-title:lang(zh) .cover-line--drift {
+    padding-left: 0;
+    font-size: min(1em, calc((100vw - 2 * var(--page-margin)) / 6.3));
+  }
   .hero-name { padding-top: 17svh; }
   .hero-name, .intro-name { grid-template-columns: minmax(0, 1fr); }
   .hero-name > *, .intro-name > * { grid-column: 1 / -1 !important; }
   .hero-name-last, .intro-name-last { padding-left: 1.05em; }
   .terminal-overview { padding-top: 6vh; }
-  .terminal-overview .intro-support { margin-top: var(--space-l); padding-left: var(--space-xl); }
+  .terminal-overview { row-gap: var(--space-l); }
   .section-head { row-gap: var(--space-s); padding-bottom: var(--space-l); }
   .section-head .section-dek { padding-left: 0; }
   .section-head .section-aside { margin-top: var(--space-s) !important; }
   .entry-list--wide > * + * { margin-top: var(--space-xl); }
   .exp-entry { row-gap: var(--space-s); }
-  .exp-entry .exp-when { justify-self: start; margin: 0; padding-top: var(--space-2xs); }
   .exp-entry .exp-what { margin-top: var(--space-s); }
   .exp-entry .exp-what li { padding-left: 2.6em; }
-  .skill-band { row-gap: var(--space-m); }
-  .skill-band .skill-list { padding-left: var(--space-l); }
-  .edu-entry .edu-where { text-align: left; padding-top: var(--space-xs); }
-  .edu-entry .edu-when { padding-top: 0; }
+  .exp-entry .exp-scope { margin-top: var(--space-xs); }
+  .skill-row { row-gap: var(--space-xs); padding-block: var(--space-s); }
   .lang-row { margin-left: 0; column-gap: var(--space-s); }
   .lang-row:nth-child(even) { margin-left: var(--space-l); }
-  .interest-flow { row-gap: var(--space-xl); }
-  .interest-flow .interest:nth-child(2) { padding-left: var(--space-l); }
-  .contact-grid { row-gap: var(--space-l); }
+  .contact-foot { margin-top: var(--space-xl); }
+  .edu-entry--school::before { left: 0; }
+  .edu-tier-label { padding-left: 0; margin-top: var(--space-xl); }
 }
 
 /* ---------------------------------------------------------------------------
@@ -827,13 +859,91 @@ body {
 .decode-sound-toggle:hover,
 .decode-sound-toggle[aria-pressed='true'] { opacity: 1; }
 .decode-sound-toggle:focus-visible { outline: 1px solid currentColor; outline-offset: 3px; opacity: 1; }
-@media (prefers-reduced-motion: no-preference) {
-  /* The cover's depth reading steps left to make room for the control */
-  .hero-colophon .colophon-depth { padding-right: var(--sound-toggle-space); }
-}
 
 .terminal-portfolio [data-journey-runway] { overflow: visible; }
-.terminal-portfolio #global { overflow: visible; }
+
+/* ---------------------------------------------------------------------------
+   Section index (SectionIndex.tsx): the cover's colophon returns once the journey is over —
+   name on line a, the index on line b, the CV on line c, the sound control at the margin. It
+   tucks away while reading down and returns on any scroll up, on focus and at the page's end.
+   --------------------------------------------------------------------------- */
+.section-index {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 40;
+  max-width: 1440px;
+  margin-inline: auto;
+  padding: clamp(22px, 3.6vh, 40px) var(--page-margin) 0;
+  align-items: baseline;
+  pointer-events: none;
+  text-shadow: 0 0 2px var(--abyss-halo), 0 0 9px var(--abyss-halo);
+  transition: opacity 0.35s ease, transform 0.35s ease, visibility 0s;
+}
+.section-index > * { margin: 0; pointer-events: auto; }
+.section-index[data-arrived='false'] { opacity: 0; visibility: hidden; transition: opacity 0.35s ease, visibility 0s 0.35s; }
+.section-index[data-tucked='true'] { opacity: 0; transform: translateY(-8px); }
+.section-index[data-tucked='true'] > * { pointer-events: none; }
+.section-index[data-tucked='true']:focus-within { opacity: 1; transform: none; }
+.section-index[data-tucked='true']:focus-within > * { pointer-events: auto; }
+.section-index-name { grid-column: a / span 2; color: var(--ink-171717, #171717); }
+.section-index-links { grid-column: b / span 6; display: flex; flex-wrap: wrap; column-gap: var(--space-m); }
+.section-index-cv { grid-column: c / span 2; }
+.terminal-portfolio .section-index a { color: var(--ink-52595E, #52595E); text-decoration-color: transparent; }
+.terminal-portfolio .section-index a:hover,
+.terminal-portfolio .section-index a[aria-current] { color: var(--ink-171717, #171717); }
+.terminal-portfolio .section-index a[aria-current] { text-decoration-color: currentColor; }
+.terminal-portfolio .section-index-cv a { color: var(--ink-171717, #171717); }
+.section-index-menu {
+  display: none;
+  min-height: 32px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink-171717, #171717);
+  cursor: pointer;
+}
+/* The phone menu: the index as a full-screen list in the display voice, on the water's colour */
+.section-menu {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  padding: clamp(22px, 3.6vh, 40px) var(--page-margin) var(--space-xl);
+  background: var(--ocean-background, #ffffff);
+  color: var(--ink-171717, #171717);
+}
+.section-menu-head { display: flex; justify-content: space-between; align-items: baseline; }
+.section-menu-head p { margin: 0; color: var(--ink-171717, #171717); }
+.section-menu-head button { min-height: 32px; padding: 0; border: 0; background: transparent; color: var(--ink-171717, #171717); cursor: pointer; }
+.section-menu-links { margin-top: var(--space-2xl); display: grid; row-gap: var(--space-xs); }
+.terminal-portfolio .section-menu-links a {
+  font-family: var(--font-display);
+  font-variation-settings: 'opsz' 72;
+  font-weight: var(--display-weight, 300);
+  font-size: var(--text-h2);
+  line-height: 1.12;
+  letter-spacing: var(--tracking-h2);
+  color: var(--ink-171717, #171717);
+  text-decoration: none;
+}
+.terminal-portfolio .section-menu-links a[aria-current] { font-style: italic; }
+.section-menu-cv { margin-top: auto; padding-top: var(--space-xl); }
+@media (max-width: 1100px) {
+  /* Six entries on one line: the index tightens before it would wrap */
+  .section-index-links { column-gap: var(--space-s); }
+}
+/* Below the width that holds the six entries on one line, the row folds into "Menu" */
+@media (max-width: 1023px) {
+  .section-index :is(.section-index-name, .section-index-links, .section-index-cv) { display: none; }
+  .section-index-menu { display: inline-block; grid-column: a / span 4; justify-self: start; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .section-index { transition: none; }
+}
 
 @media (prefers-reduced-motion: reduce) {
   .ascii-word, .ascii-source { opacity: 1 !important; }
@@ -949,6 +1059,19 @@ body {
 @media print {
   .lantern, .lantern-light { display: none !important; }
 }
+
+/* The Globe's caption: the city is the stretch's title (T2), set on line a; its index, country
+   and years read in the metadata voice, the years a step darker as the fact that matters */
+.globe-caption .globe-city {
+  margin-bottom: 0;
+  font-family: var(--font-display);
+  font-variation-settings: 'opsz' 72;
+  font-weight: var(--display-weight, 300);
+  font-size: var(--text-h2);
+  line-height: var(--leading-h2);
+  letter-spacing: var(--tracking-h2);
+}
+.globe-caption .globe-period { opacity: 1; }
 
 /* The Globe's pinned runway: its lead is the convergence (two whales circle each other and become
    the Earth, WhaleConvergence.tsx), then the city journey keeps its own 600vh. Reduced motion

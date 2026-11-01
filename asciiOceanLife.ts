@@ -225,12 +225,11 @@ interface JellySpec {
   seed: number;
 }
 
-// Sizes stay comparable to the whales (main whale ≈ 0.58·min(w,h) long); margins keep the
-// reading column clear. Individual periods, phases, spins and drifts avoid synchronised motion.
+// Sizes stay comparable to the whales (main whale ≈ 0.58·min(w,h) long). Every creature keeps to
+// the page margins (x ≤ 0.15 or ≥ 0.88), outside the grid's content columns, so the deep water
+// stays quiet behind the reading measure; the far-mist plane, which drifted through those
+// columns, is left empty. Individual periods, phases, spins and drifts avoid synchronised motion.
 const JELLY_SPECS: readonly JellySpec[] = [
-  { tier: 0, species: 0, pal: 0, xFrac: 0.24, yFrac: 0.12, R: 25, parallax: 0.18, minDepth: 0.14, rampSpan: 0.2, period: 5.6, phase: 0.1, driftAmp: 14, driftFreq: 0.11, rise: 2.4, tilt: 0.08, spin: 0.05, seed: 0.13 },
-  { tier: 0, species: 1, pal: 1, xFrac: 0.74, yFrac: 0.55, R: 23, parallax: 0.21, minDepth: 0.2, rampSpan: 0.2, period: 4.9, phase: 0.55, driftAmp: 16, driftFreq: 0.09, rise: 2.9, tilt: -0.1, spin: -0.04, seed: 0.41 },
-  { tier: 0, species: 2, pal: 2, xFrac: 0.6, yFrac: 0.88, R: 21, parallax: 0.16, minDepth: 0.3, rampSpan: 0.22, period: 6.3, phase: 0.8, driftAmp: 12, driftFreq: 0.1, rise: 2.1, tilt: 0.06, spin: 0.06, seed: 0.77 },
   { tier: 1, species: 1, pal: 1, xFrac: 0.11, yFrac: 0.42, R: 40, parallax: 0.36, minDepth: 0.24, rampSpan: 0.24, period: 4.6, phase: 0.33, driftAmp: 20, driftFreq: 0.085, rise: 3.6, tilt: 0.12, spin: 0.045, seed: 0.29 },
   { tier: 1, species: 0, pal: 0, xFrac: 0.88, yFrac: 0.2, R: 43, parallax: 0.39, minDepth: 0.28, rampSpan: 0.24, period: 5.9, phase: 0.71, driftAmp: 18, driftFreq: 0.07, rise: 3.1, tilt: -0.1, spin: -0.035, seed: 0.62 },
   { tier: 1, species: 2, pal: 2, xFrac: 0.15, yFrac: 0.93, R: 36, parallax: 0.42, minDepth: 0.38, rampSpan: 0.24, period: 6.7, phase: 0.05, driftAmp: 16, driftFreq: 0.08, rise: 2.6, tilt: 0.07, spin: 0.05, seed: 0.88 },

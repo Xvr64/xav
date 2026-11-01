@@ -767,7 +767,7 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
       {/* Current destination — all 7 captions pre-mounted in a grid stack (zero DOM childList mutations on city change) */}
       <div
         ref={captionRef}
-        className="grid items-center absolute left-5 right-5 bottom-24 md:right-auto md:left-[6vw] md:bottom-auto md:top-1/2 md:-translate-y-1/2 md:w-[min(28vw,440px)]"
+        className="globe-caption grid items-center absolute left-0 right-0 bottom-24 md:right-auto md:bottom-auto md:top-1/2 md:-translate-y-1/2 md:w-[min(30vw,460px)]"
         aria-live="polite"
       >
         {locations.map((city, cIdx) => {
@@ -782,18 +782,20 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
               }}
               className={`col-start-1 row-start-1 ${isCityActive ? 'globe-caption-in' : 'opacity-0'}`}
             >
-              <p className="font-mono text-xs uppercase tracking-[0.18em] text-[#3E4C52]">
+              {/* The caption speaks the page's roles: index and facts in the metadata voice, the
+                  city in the display voice (it is this stretch's title) */}
+              <p className="meta">
                 <PlainText text={`${String(cIdx + 1).padStart(2, '0')} / ${String(locations.length).padStart(2, '0')}`} />
               </p>
-              <h3 className="mt-2 font-arch text-[38px] md:text-[54px] lg:text-[62px] leading-[1.02] tracking-[-0.02em] text-[#162633]">
+              <h3 className="globe-city mt-2 text-[#162633]">
                 <PlainText text={city.city} />
               </h3>
               {city.country && city.country !== city.city && (
-                <p className="mt-2.5 font-mono text-xs md:text-[13px] uppercase tracking-[0.16em] text-[#3E4C52]">
+                <p className="meta mt-3">
                   <PlainText text={city.country} />
                 </p>
               )}
-              <p className="mt-3 font-mono text-lg md:text-[22px] leading-none tracking-[0.06em] text-[#1F3B57]">
+              <p className="globe-period meta mt-1 text-[#162633]">
                 <PlainText text={city.period} />
               </p>
             </div>

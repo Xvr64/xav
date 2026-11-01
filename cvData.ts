@@ -86,7 +86,7 @@ export const CV_DATA = {
   heroIntroConcise:
     'Like the whale migrating across oceans without borders, my journey has been shaped by constant movement, living across Doha, Paris, Jakarta, Moscow, Singapore, Pau, Bordeaux, and Shanghai.',
   heroIntroSecondary:
-    'Navigating shifting currents from one culture to the next forged natural adaptability and cross-cultural communication. Today, in a third-year International Business student at ESSCA.',
+    'Navigating shifting currents from one culture to the next forged natural adaptability and cross-cultural communication. Today, I am a third-year International Business student at ESSCA.',
   verbatimProfile:
     'Third-year Bachelor student at ESSCA with an international background shaped by living across Doha, Paris, Jakarta, Moscow, Singapore, Pau, Bordeaux, and Shanghai. Proven adaptability, strong cross-cultural communication, and practical experience in project coordination.',
   experiences: [
@@ -382,11 +382,11 @@ export const CV_DATA = {
       bullets: [
         'Luxury retail positioning.',
         'Flagship concepts and brand activations across Europe and Asia.',
-        'Celine, Louis Vuitton, and Hermes'
+        'Celine, Louis Vuitton, and Hermès'
       ],
       verbatimNote:
-        'Monitoring luxury retail positioning, flagship concepts, and brand activations across Europe and Asia (Celine, Louis Vuitton, Hermes).',
-      namedEntities: ['Celine', 'Louis Vuitton', 'Hermes']
+        'Monitoring luxury retail positioning, flagship concepts, and brand activations across Europe and Asia (Celine, Louis Vuitton, Hermès).',
+      namedEntities: ['Celine', 'Louis Vuitton', 'Hermès']
     }
   ] as InterestCategory[]
 };

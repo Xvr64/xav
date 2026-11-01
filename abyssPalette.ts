@@ -14,6 +14,8 @@ export const ABYSS_TEXT: { hex: string; light: AbyssRGB; dark: AbyssRGB }[] = [
   { hex: '1F2428', light: [31, 36, 40], dark: [226, 232, 229] },
   { hex: '2B353B', light: [43, 53, 59], dark: [212, 222, 219] },
   { hex: '1F3B57', light: [31, 59, 87], dark: [178, 204, 212] },
+  // The sea accent (roles, asides, italics): a pale sea-glass on night water
+  { hex: '2F4858', light: [47, 72, 88], dark: [168, 196, 204] },
   { hex: '3E4C52', light: [62, 76, 82], dark: [180, 198, 192] },
   { hex: '3E5666', light: [62, 86, 102], dark: [176, 196, 200] },
   { hex: '49606E', light: [73, 96, 110], dark: [170, 190, 194] },

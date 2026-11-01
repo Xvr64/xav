@@ -21,6 +21,8 @@ import {
 export interface ProgressiveOceanEntryProps {
   onExploreDossier: () => void;
   onDownloadPdf: () => void;
+  /** The original CV, opened from the colophon */
+  cvUrl: string;
 }
 
 export const NAME_WORDS = [
@@ -45,15 +47,16 @@ export const toTitleCase = (text: string) => text.toLowerCase().replace(/(^|[\s/
 
 // Whale lanes (main, companion) for each moment of the cover and introduction, chosen against
 // the type: on arrival they frame the headline from above and below, so the scene fills the
-// screen from the first frame; at the edges while the fragments own the middle, beside the name,
-// and, after the journey, in the introduction's open left field while the statement reads on the
-// right. While the finished name holds, the main whale glides beneath it through the empty
-// lower band — the one movement between two still compositions — so it never crosses the type.
+// screen from the first frame; at the edges while the fragments own the middle, and beside the
+// name. While the finished name holds, the main whale glides beneath it through the empty lower
+// band — the one movement between two still compositions — so it never crosses the type. After
+// the journey the introduction's statement and facts span line b to the margin, so the whales
+// swim the open band beneath them.
 export const LANES_SURFACE: Lane[] = [{ x: 0.74, y: 0.82 }, { x: 0.26, y: 0.2 }];
 export const LANES_DESCENT: Lane[] = [{ x: 0.83, y: 0.8 }, { x: 0.13, y: 0.86 }];
 export const LANES_NAME: Lane[] = [{ x: 0.85, y: 0.68 }, { x: 0.12, y: 0.9 }];
 export const LANES_HOLD: Lane[] = [{ x: 0.36, y: 0.86 }, { x: 0.1, y: 0.92 }];
-export const LANES_INTRO: Lane[] = [{ x: 0.17, y: 0.6 }, { x: 0.1, y: 0.93 }];
+export const LANES_INTRO: Lane[] = [{ x: 0.24, y: 0.9 }, { x: 0.82, y: 0.95 }];
 // One reading column on phones leaves no open field: the whales keep to the bottom edge
 export const LANES_INTRO_NARROW: Lane[] = [{ x: 0.86, y: 0.95 }, { x: 0.12, y: 0.97 }];
 
@@ -116,6 +119,21 @@ export const HeroCurrentLayer: React.FC = React.memo(() => {
 // screen, beneath the eye line, where the next station is only rising into view.
 export const LANES_EXPERIENCE: Lane[] = [{ x: 0.17, y: 0.91 }, { x: 0.88, y: 0.96 }];
 export const LANES_EXPERIENCE_NARROW: Lane[] = [{ x: 0.86, y: 0.95 }, { x: 0.12, y: 0.97 }];
+
+// The rest of the deep water. Each section leaves one open field and its whales are set there.
+// A lane centres a whale's habitat, it never pins the whale, and the companion follows above and
+// behind the lead, so lanes were chosen by measuring how often a torso crosses the copy over
+// long simulated swims (1440×900): the lead holding the right of the screen keeps the skills
+// index, the education list and the interests clearest; the languages' swell leaves the lower
+// right open; and at the last screen the lead rests to the right of the email. On phones the
+// reading column fills the width, so the whales keep to the bottom edge throughout.
+const LANES_RIGHT: Lane[] = [{ x: 0.85, y: 0.6 }, { x: 0.15, y: 0.95 }];
+export const LANES_SKILLS = LANES_RIGHT;
+export const LANES_EDUCATION = LANES_RIGHT;
+export const LANES_LANGUAGES: Lane[] = [{ x: 0.83, y: 0.64 }, { x: 0.12, y: 0.95 }];
+export const LANES_INTERESTS = LANES_RIGHT;
+export const LANES_CONTACT: Lane[] = [{ x: 0.86, y: 0.44 }, { x: 0.5, y: 0.97 }];
+export const LANES_DEEP_NARROW: Lane[] = [{ x: 0.86, y: 0.95 }, { x: 0.12, y: 0.97 }];
 
 /**
  * The ambient whales around the Globe. When the convergence can draw (WhaleConvergence.tsx), they
@@ -303,7 +321,7 @@ export const animatedHeroLetters = (text: string, progress: number, isRtl = fals
   });
 };
 
-export const ProgressiveOceanEntry: React.FC<ProgressiveOceanEntryProps> = React.memo(() => {
+export const ProgressiveOceanEntry: React.FC<ProgressiveOceanEntryProps> = React.memo(({ cvUrl }) => {
   const [transIdx, setTransIdx] = useState(0);
   const [phase, setPhase] = useState<'entered' | 'exiting' | 'entering'>('entered');
   const [decodeProgress, setDecodeProgress] = useState(1);
@@ -387,6 +405,7 @@ export const ProgressiveOceanEntry: React.FC<ProgressiveOceanEntryProps> = React
             {/* The cover's line is the page's epigraph; the name below is its one h1 */}
             <p
               className="display cover-title"
+              lang={current.lang}
               style={{
                 direction: isRtl ? 'rtl' : 'ltr'
               }}
@@ -407,6 +426,17 @@ export const ProgressiveOceanEntry: React.FC<ProgressiveOceanEntryProps> = React
             <span className="hero-name-first" data-hero-name-line>Xavier</span>
             <span className="hero-name-last" data-hero-name-line>Hery</span>
           </p>
+          {/* Colophon: who, what and the CV, readable from the first frame while the cover plays */}
+          <div className="hero-colophon ed-grid">
+            <p className="colophon-name meta">{toTitleCase(CV_DATA.name)}</p>
+            <p className="colophon-role meta">International Business · {CV_DATA.education[0].institution}</p>
+            <p className="colophon-cv meta">
+              <a href={cvUrl} target="_blank" rel="noopener noreferrer">
+                CV <span aria-hidden="true">↗</span>
+                <span className="sr-only"> (PDF, opens in a new tab)</span>
+              </a>
+            </p>
+          </div>
         </div>
         {/* The page's one h1. With motion the name resolved on the stage carries it visually, so it
             is clipped (and kept out of the word system); without motion it is set as type here. */}
@@ -424,9 +454,29 @@ export const ProgressiveOceanEntry: React.FC<ProgressiveOceanEntryProps> = React
  * Earth and the city journey has ended. It uses the shared ASCII word reveal like every other
  * section; the whales keep to its open left field while it reads.
  */
+const essca = CV_DATA.education[0];
+const shanghai = CV_DATA.locations.find((l) => l.id === 'shanghai');
+
+/** The facts a recruiter scans for, read straight from the CV data. */
+const INTRO_FACTS = [
+  { label: 'Studying', value: `${essca.degree}, ${essca.institution}, ${essca.date}` },
+  ...(shanghai ? [{ label: 'Exchange', value: `${shanghai.city}, ${shanghai.period}` }] : []),
+  { label: 'Experience', value: CV_DATA.experiences.map((e) => toTitleCase(e.company)).join(' · ') },
+  { label: 'Languages', value: CV_DATA.languages.slice(0, 3).map((l) => l.language).join(' · ') }
+];
+
 export const OceanIntroduction: React.FC = React.memo(() => (
   <section id="introduction" data-editorial-section className="terminal-overview ed-grid relative">
+    <p className="intro-kicker meta"><AsciiText text="Profile" /></p>
     <p className="lead" data-text-rank="2"><AsciiText text={CV_DATA.heroIntroConcise} /></p>
     <p className="intro-support" data-text-rank="3"><AsciiText text={CV_DATA.heroIntroSecondary} /></p>
+    <dl className="intro-facts">
+      {INTRO_FACTS.map((fact) => (
+        <div key={fact.label}>
+          <dt className="meta"><AsciiText text={fact.label} /></dt>
+          <dd className="item"><AsciiText text={fact.value} /></dd>
+        </div>
+      ))}
+    </dl>
   </section>
 ));

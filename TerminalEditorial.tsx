@@ -23,9 +23,11 @@ import './terminal.css';
 
 /**
  * Eligibility for the character decode, in one place:
- *  - Every `<AsciiText>` inside a `[data-editorial-section]` decodes. All ordinary page copy
- *    (headings, intro, experience, education, skills, languages, interests, contact, footer,
- *    dates and metadata) is written through `AsciiText`, so nothing opts in element by element.
+ *  - All ordinary page copy inside a `[data-editorial-section]` is written through `AsciiText`,
+ *    but only the display tier decodes: section titles, entry titles (companies, the degree's
+ *    institution), the languages and the email (`DISPLAY`). Reading text (statements, roles, lists,
+ *    paragraphs and metadata) stays still and fully legible wherever it sits on screen; its words
+ *    are simply never measured, so they keep showing their plain overlay.
  *  - `[data-ascii-preserve]` opts a subtree out. It is used only where another system already
  *    owns the motion: the cover stage (its own letter-to-current headline animation), the
  *    visually clipped semantic name under the cover, and the Globe runway (city captions are
@@ -37,6 +39,8 @@ import './terminal.css';
  */
 const ELIGIBLE = '[data-editorial-section] [data-ascii-text]';
 const EXCLUDED = '[data-ascii-preserve]';
+/** The display tier: the only text that decodes on scroll. */
+const DISPLAY = '.ocean-h2, .entry-title, .lang-name, .contact-address';
 
 /** Original text reserves every word's exact geometry and remains accessible.
  * Only the absolutely positioned, aria-hidden duplicate is ever mutated. */
@@ -136,7 +140,7 @@ export function useEditorialScroll() {
       const next: Word[] = [];
       let counter = 0;
       document.querySelectorAll<HTMLElement>(ELIGIBLE).forEach((text) => {
-        if (text.closest(EXCLUDED)) return;
+        if (text.closest(EXCLUDED) || !text.closest(DISPLAY)) return;
         const block = blockOf(text).getBoundingClientRect();
         const lines: { top: number; words: Word[] }[] = [];
         text.querySelectorAll<HTMLElement>('.ascii-word').forEach((el) => {
