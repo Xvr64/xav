@@ -9,6 +9,7 @@ import { SectionIndex } from './SectionIndex';
 import { JourneyGlobe } from './JourneyGlobe';
 import { AsciiWhaleBackground } from './AsciiWhaleBackground';
 import { WhaleConvergence } from './WhaleConvergence';
+import { AsciiOceanField } from './AsciiOceanField';
 import {
   GlobeDive,
   HeroCurrentLayer,
@@ -176,6 +177,8 @@ export default function App() {
       <style>{GLOBAL_PORTFOLIO_CSS}</style>
 
       <ReadingZoneTracker />
+      {/* The ASCII water every other layer sits in; first, so it stacks beneath the hero current */}
+      <AsciiOceanField />
       <HeroCurrentLayer />
       <WhaleStretch sectionId="introduction" lanes={LANES_INTRO} narrowLanes={LANES_INTRO_NARROW} />
       <WhaleStretch sectionId="experience" lanes={LANES_EXPERIENCE} narrowLanes={LANES_EXPERIENCE_NARROW} />

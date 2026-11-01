@@ -94,6 +94,18 @@ export function applyAbyssPalette(t: number) {
   );
 }
 
+// Other layers that follow the water (the ASCII ocean field) listen here instead of polling
+let lastAbyss = 0;
+const abyssListeners = new Set<(abyssLevel: number) => void>();
+/** Calls `listener` with the current water level now and on every change; returns the unsubscribe. */
+export function onAbyssWash(listener: (abyssLevel: number) => void) {
+  abyssListeners.add(listener);
+  listener(lastAbyss);
+  return () => {
+    abyssListeners.delete(listener);
+  };
+}
+
 /**
  * Text washes & halos track the WATER colour continuously (no light panel cut out of dark
  * water): a touch lighter than the water while text is dark, a touch darker once it is pale.
@@ -106,6 +118,8 @@ export function applyAbyssWash(abyssLevel: number) {
   root.setProperty('--abyss-halo', `rgba(${shade}, ${shade}, ${shade}, 0.82)`);
   // The cursor descends with the water: quiet slate at the surface, a lantern in the deep
   setLanternDepth(abyssLevel);
+  lastAbyss = abyssLevel;
+  abyssListeners.forEach((listener) => listener(abyssLevel));
 }
 
 export function buildAbyssCss(): string {
