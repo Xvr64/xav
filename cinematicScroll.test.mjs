@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createWheelGestures, mountCinematicScroll, timelineY, timelineTime, timelineTimes, sequenceTarget, GESTURE_GAP_MS } from './cinematicScroll.ts';
+import { createWheelGestures, mountCinematicScroll, timelineY, timelineTime, timelineTimes, sequenceTarget, GESTURE_GAP_MS, SETTLE_MS } from './cinematicScroll.ts';
 
 /** Feed a sequence of [delta, ms-after-previous] and count the gestures recognised. */
 const gesturesIn = (events, g = createWheelGestures()) => {
@@ -50,6 +50,9 @@ const stops = {
 function browser(t, initialY = 100, reducedMotion = false) {
   let now = 1000, next = 0;
   const frames = new Map(), listeners = new Map(), mediaListeners = new Set();
+  // The browser's own smooth scrolling of a wheel notch: a glide toward a target, which any
+  // programmatic scroll ends (as Chrome's does)
+  let glide = null;
   class Element {
     tagName = 'DIV'; scrollHeight = 0; clientHeight = 0; parentElement = null;
     isContentEditable = false;
@@ -68,7 +71,7 @@ function browser(t, initialY = 100, reducedMotion = false) {
   const win = {
     scrollY: initialY, innerHeight: 800,
     matchMedia: () => media,
-    scrollTo({top}) { this.scrollY = Math.max(0, Math.round(top)); },
+    scrollTo({top}) { glide = null; this.scrollY = Math.max(0, Math.round(top)); },
     addEventListener(kind, fn) { if (!listeners.has(kind)) listeners.set(kind, new Set()); listeners.get(kind).add(fn); },
     removeEventListener(kind, fn) { listeners.get(kind)?.delete(fn); },
   };
@@ -92,10 +95,18 @@ function browser(t, initialY = 100, reducedMotion = false) {
   return {
     win, controller, emit,
     get active() { return frames.size; },
+    get now() { return now; },
     advance(ms) {
       const end = now + ms;
       while (now < end) {
         now = Math.min(end, now + 16);
+        if (glide) {
+          // About a fifth of what is left each frame: the browser's eased glide over ~250 ms
+          const step = Math.abs(glide.target - win.scrollY) < 2 ? glide.target - win.scrollY : (glide.target - win.scrollY) * 0.2;
+          win.scrollY = Math.round(win.scrollY + step);
+          if (win.scrollY === glide.target) glide = null;
+          emit('scroll');
+        }
         const queued = [...frames.values()]; frames.clear();
         for (const fn of queued) fn(now);
         emit('scroll');
@@ -104,6 +115,12 @@ function browser(t, initialY = 100, reducedMotion = false) {
     wheel(delta, extra = {}) {
       const e = emit('wheel', {deltaY:delta, deltaX:0, deltaMode:0, ...extra});
       if (!e.defaultPrevented) { win.scrollY += delta; emit('scroll'); }
+      return e;
+    },
+    /** A mouse-wheel notch the browser scrolls smoothly when the page lets it. */
+    notch(delta) {
+      const e = emit('wheel', {deltaY:delta, deltaX:0, deltaMode:0});
+      if (!e.defaultPrevented) glide = { target: (glide ? glide.target : win.scrollY) + delta };
       return e;
     },
     reduced(value) { media.matches = value; for (const fn of mediaListeners) fn(); },
@@ -182,6 +199,7 @@ test('reverse gestures replay each complete film in reverse', t => {
   assert.equal(b.win.scrollY, 1150);
   b.wheel(-100); b.advance(14000);
   assert.equal(b.win.scrollY, 100);
+  b.advance(SETTLE_MS);
   assert.equal(b.wheel(-100).defaultPrevented, false);
 });
 
@@ -293,4 +311,63 @@ test('a swipe begun during playback cannot become queued input when lifted after
   b.advance(3000);
   assert.equal(b.win.scrollY, 1150);
   assert.equal(b.active, 0);
+});
+
+
+/** Scroll position at every frame of the first film, from the frame it starts until it rests. */
+function filmFrames(b) {
+  const out = [];
+  for (let i = 0; i < 1200 && (b.active || out.length === 0); i++) { out.push(b.win.scrollY); b.advance(16); }
+  out.push(b.win.scrollY);
+  return out;
+}
+
+test('gentle and aggressive input play the identical film at the same pace', async t => {
+  let calm, rough;
+  await t.test('one notch', st => {
+    const b = browser(st);
+    b.wheel(100);
+    calm = filmFrames(b);
+  });
+  await t.test('a spun wheel, then trackpad-like bursts of hard momentum all through the film', st => {
+    const b = browser(st);
+    b.wheel(400);
+    rough = [];
+    for (let i = 0; i < 1200 && (b.active || rough.length === 0); i++) {
+      rough.push(b.win.scrollY);
+      for (let k = 0; k < 3; k++) b.wheel(i % 40 < 30 ? 120 : 6);
+      b.advance(16);
+    }
+    rough.push(b.win.scrollY);
+  });
+  assert.deepEqual(rough, calm, 'every frame of the film the same');
+  assert.equal(calm.at(-1), 1150);
+  // The whole first film: its knots' seconds, not a frame more or less
+  const seconds = stops.dur.slice(0, stops.earth).reduce((a, d) => a + d, 0);
+  assert.ok(Math.abs((calm.length - 2) * 0.016 - seconds) <= 0.033, `${(calm.length - 2) * 0.016} s vs ${seconds} s`);
+});
+
+test('a smooth scroll still gliding as the film begins never carries the page into it nor cancels it', t => {
+  const b = browser(t, 0);
+  // Notches spun from above the section: the browser glides toward their targets
+  for (let k = 0; k < 4; k++) { b.notch(40); b.advance(16); }
+  assert.ok(b.active, 'the film began from the gliding page');
+  const frames = filmFrames(b);
+  for (let k = 1; k < frames.length; k++) assert.ok(frames[k] >= frames[k - 1], 'never jumps back');
+  assert.ok(frames[0] <= stops.y[0] + 1, `entered at ${frames[0]}`);
+  assert.equal(frames.at(-1), 1150, 'played to the Earth, never stopped half-way');
+});
+
+test('a fresh flick the moment a film ends is still the last gesture; after a breath, the next film', t => {
+  const b = browser(t);
+  b.wheel(100);
+  b.advance(13600 - 200);
+  // A pause, then a new burst just as the Earth arrives
+  b.advance(GESTURE_GAP_MS + 30);
+  for (let i = 0; i < 20; i++) { b.wheel(60); b.advance(16); }
+  assert.equal(b.win.scrollY, 1150, 'the city journey did not launch');
+  assert.equal(b.active, 0);
+  b.advance(SETTLE_MS + GESTURE_GAP_MS);
+  b.wheel(60);
+  assert.equal(b.active, 1, 'a deliberate gesture after the settle starts the journey');
 });

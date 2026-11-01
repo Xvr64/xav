@@ -19,8 +19,10 @@ import {
   yawPitchRoll
 } from './whale3dPose.ts';
 import {
+  FILM_HANDOFF_SECONDS,
   FILM_SECONDS,
   FILM_STOPS,
+  FILM_TOTAL_SECONDS,
   PHASE,
   WHALE_LEN,
   earthDistance,
@@ -32,7 +34,7 @@ import {
 } from './convergenceScene.ts';
 import { ambientCamera, sampleAmbientWhale } from './ambientWhaleScene.ts';
 import { WHALE_RIG } from './whaleRig.ts';
-import { CINEMATIC_SPEED } from './cinematicScroll.ts';
+import { CINEMATIC_SPEED, timelineTimes, timelineY } from './cinematicScroll.ts';
 
 const near = (a, b, eps = 1e-6) => Math.abs(a - b) <= eps;
 const vlen = (v) => Math.hypot(v[0], v[1], v[2]);
@@ -222,11 +224,22 @@ test('convergence: deterministic and reversible (any order, same frames)', () =>
   assert.deepEqual(sampleConvergence(7, VIEWS[0]), sampleConvergence(1, VIEWS[0]));
 });
 
-test('convergence: the whales circle each other repeatedly before they dissolve', () => {
-  // At least two full turns around the shared centre between the approach and the unravelling
+test('convergence: the whales circle each other once, unhurried, before they dissolve', () => {
+  // One even circle around the shared centre between the approach and the unravelling, and
+  // little more while they unravel: never the repeated spinning of the first cut
   const turns = (orbitAngle(PHASE.dissolve) - orbitAngle(PHASE.orbit)) / (2 * Math.PI);
-  assert.ok(turns >= 2, `${turns.toFixed(2)} turns`);
-  for (let k = 1; k <= 200; k++) assert.ok(orbitAngle(k / 200) > orbitAngle((k - 1) / 200), 'always forward');
+  assert.ok(turns >= 0.9 && turns <= 1.5, `${turns.toFixed(2)} turns`);
+  const total = (orbitAngle(1) - orbitAngle(0)) / (2 * Math.PI);
+  assert.ok(total <= 2.2, `${total.toFixed(2)} turns in all`);
+  let fastest = 0;
+  for (let k = 1; k <= 200; k++) {
+    assert.ok(orbitAngle(k / 200) > orbitAngle((k - 1) / 200), 'always forward');
+    // Degrees per second of the film as it plays: a slow sweep that eases (never spins up) as they unravel
+    const rate = ((orbitAngle(k / 200) - orbitAngle((k - 1) / 200)) / (filmSeconds(k / 200) - filmSeconds((k - 1) / 200))) * 57.3;
+    if (k / 200 > PHASE.sphere + 0.05) assert.ok(rate <= fastest + 1e-6, `circling sped up at ${k / 200}`);
+    fastest = Math.max(fastest, rate);
+  }
+  assert.ok(fastest < 240, `${fastest.toFixed(0)} deg/s`);
   const g = buildWhaleGeometry();
   const skin = (w) => {
     const fr = skinFrames(w.articulation);
@@ -240,8 +253,10 @@ test('convergence: the whales circle each other repeatedly before they dissolve'
   };
   for (let k = 0; k <= 84; k++) {
     const f = sampleConvergence(k / 100, VIEWS[0]);
+    if (!f.whales[0].visible || !f.whales[1].visible) continue;
     const d = vlen(vsub(f.whales[0].position, f.whales[1].position));
-    // Centres more than a body length apart, and the skinned bodies themselves well clear
+    // While their bodies show, centres more than a body length apart, and the skinned bodies
+    // themselves well clear
     assert.ok(d > WHALE_LEN, `whales too close at ${k / 100}: ${d}`);
     if (k % 3 === 0) {
       const a = skin(f.whales[0]);
@@ -358,15 +373,18 @@ test('convergence entry: the bodies never change size, only the camera draws bac
       // The shared rig's proportions, A's body exactly its world length, from the first frame on
       assert.equal(f.whales[0].scale, whaleLength(0));
       assert.ok(near(f.whales[1].scale / f.whales[0].scale, WHALE_RIG.scale[1] / WHALE_RIG.scale[0], 1e-12));
-      // The camera only ever draws back (or holds) while the whales come together
+      // The camera only ever draws back (or holds) while the whales come together, over most of
+      // their approach (as it ends, the framing follows the orbit as that slowly tightens)
       const r = vlen(f.camera.position) * Math.tan((f.camera.fov * Math.PI) / 360);
-      if (k / 64 <= 0.21) assert.ok(r >= reach * 0.9999 || reach === Infinity, `camera closed in at ${k / 64}`);
-      if (k / 64 <= 0.21) reach = r;
+      if (filmSeconds(f.p) <= 1.8) {
+        assert.ok(r >= reach * 0.9999 || reach === Infinity, `camera closed in at ${f.p}`);
+        reach = r;
+      }
     }
   }
 });
 
-test('convergence entry: the whales swim from their places into the orbit without a snap', () => {
+test('convergence entry: the whales swim from their places into the orbit without a snap or a spin', () => {
   const view = VIEWS[0];
   // Film time → progress, as JourneyGlobe plays it
   const pAt = (s) => {
@@ -377,20 +395,27 @@ test('convergence entry: the whales swim from their places into the orbit withou
   for (const t of ENTRY_TIMES) {
     const start = prepareConvergence(entryAt(t, view), view);
     let prev = null;
-    for (let s = 0; s <= filmSeconds(PHASE.sphere); s += 1 / 60) {
+    let prevSpeed = null;
+    for (let s = 0; s <= filmSeconds(PHASE.dissolve + 0.1); s += 1 / 60) {
       const f = sampleConvergence(pAt(s), view, start);
       if (prev) {
+        const speed = [0, 1].map((i) => (vlen(vsub(prev[i].position, f.whales[i].position)) * 60) / WHALE_LEN);
         for (let i = 0; i < 2; i++) {
-          // Turning no faster than a quick roll (deg/s of film); the orbit itself turns them ~400
+          // The whole body (heading, bank and the beat's rock together) turns no faster than a
+          // heavy animal's sweep, in degrees per second of film; the first cut spun them at 600 to 900
           const rate = (qAngle(prev[i].quaternion, f.whales[i].quaternion) * 57.3) * 60;
-          assert.ok(rate < 1600, `t ${t} whale ${i} turned ${rate.toFixed(0)} deg/s at ${s.toFixed(2)} s`);
-          assert.ok(vlen(vsub(prev[i].position, f.whales[i].position)) < 0.35 * WHALE_LEN, 'no jump in place');
+          assert.ok(rate < 400, `t ${t} whale ${i} turned ${rate.toFixed(0)} deg/s at ${s.toFixed(2)} s`);
+          // An unhurried swim (body lengths per second; the first cut reached 9) that gathers and
+          // eases without a surge (under 8.4 BL/s², where the first cut's clock jolted at 240)
+          assert.ok(speed[i] < 5, `t ${t} whale ${i} swam ${speed[i].toFixed(2)} BL/s at ${s.toFixed(2)} s`);
+          if (prevSpeed) assert.ok(Math.abs(speed[i] - prevSpeed[i]) < 0.14, `t ${t} whale ${i} lurched at ${s.toFixed(2)} s`);
         }
+        prevSpeed = speed;
       }
       prev = f.whales;
     }
-    // By the sphere they circle half a turn apart about the shared centre, on the orbit
-    const f = sampleConvergence(PHASE.sphere - 0.02, view, start);
+    // Before the first glyph leaves them they circle half a turn apart about the shared centre
+    const f = sampleConvergence(PHASE.dissolve - 0.01, view, start);
     const az = f.whales.map((w) => Math.atan2(w.position[2], w.position[0]));
     assert.ok(Math.abs(Math.cos(az[1] - az[0]) + 1) < 0.02, `not half a turn apart: ${az}`);
   }
@@ -398,7 +423,51 @@ test('convergence entry: the whales swim from their places into the orbit withou
 
 test('convergence pacing: the scene keeps the film clock JourneyGlobe plays', () => {
   assert.equal(FILM_STOPS[0], 0);
-  assert.equal(FILM_STOPS[FILM_STOPS.length - 1], PHASE.earth);
-  assert.ok(near(filmSeconds(PHASE.earth), FILM_SECONDS.reduce((a, b) => a + b, 0) / CINEMATIC_SPEED, 1e-9));
+  assert.equal(FILM_STOPS[FILM_STOPS.length - 1], 1);
+  // The same length as the first cut: 5.5 s of whales and 2.6 s onto the first city, at 1x
+  assert.equal(FILM_TOTAL_SECONDS, 5.5 + 2.6);
+  assert.ok(near(FILM_SECONDS.reduce((a, b) => a + b, 0) + FILM_HANDOFF_SECONDS, FILM_TOTAL_SECONDS, 1e-9));
+  assert.ok(near(filmSeconds(1), FILM_SECONDS.reduce((a, b) => a + b, 0) / CINEMATIC_SPEED, 1e-9));
+  let t = 0;
+  FILM_STOPS.forEach((p, k) => {
+    assert.ok(near(filmSeconds(p), t / CINEMATIC_SPEED, 1e-6), `knot ${k}`);
+    t += FILM_SECONDS[k] ?? 0;
+  });
   for (let k = 1; k <= 100; k++) assert.ok(filmSeconds(k / 100) > filmSeconds((k - 1) / 100));
 });
+
+test('convergence pacing: played as JourneyGlobe plays it, one steady pace that gathers and eases', () => {
+  // The lead and the hold onto the first city, as the page lays them out (px)
+  const lead = 1536, hold = 0.062 * lead;
+  const y = [...FILM_STOPS.map((p) => p * lead), lead + hold, lead + hold + 2000];
+  const st = { y, dur: [...FILM_SECONDS, FILM_HANDOFF_SECONDS, 2].map((s) => s / CINEMATIC_SPEED), earth: FILM_STOPS.length };
+  const times = timelineTimes(st);
+  assert.ok(near(times[st.earth], FILM_TOTAL_SECONDS / CINEMATIC_SPEED, 1e-9), 'the first film keeps its 5.4 s');
+  const dt = 1 / 120;
+  const pace = [];
+  for (let s = 0; s <= times[st.earth]; s += dt) pace.push((timelineY(st, s + dt / 2) - timelineY(st, Math.max(0, s - dt / 2))) / dt / lead);
+  const cruise = Math.max(...pace);
+  // The page's clock and the scene's agree wherever the whales swim
+  for (let s = 0.5; s < filmSeconds(1); s += 0.25) assert.ok(Math.abs(timelineY(st, s) / lead - pAt(s)) < 0.006, `clock drift at ${s} s`);
+  let peak = 0;
+  for (let k = 1; k < pace.length; k++) {
+    // Never a jolt: the pace changes by less than a twentieth of its cruise per 1/120 s
+    assert.ok(Math.abs(pace[k] - pace[k - 1]) < cruise * 0.05, `pace jumps at ${(k * dt).toFixed(2)} s`);
+    if (pace[k] >= cruise * 0.999 && !peak) peak = k;
+  }
+  // It gathers from rest, holds a long cruise and eases out
+  assert.ok(pace[0] < cruise * 0.02);
+  assert.ok(pace.filter((v) => v > cruise * 0.95).length * dt > 2.2, 'a long steady cruise');
+  assert.ok(peak * dt > 0.8 && peak * dt < 3.6, `cruise reached at ${peak * dt} s`);
+});
+
+/** Film time -> progress, as the scene's clock runs. */
+function pAt(s) {
+  let lo = 0, hi = 1;
+  for (let k = 0; k < 50; k++) {
+    const m = (lo + hi) / 2;
+    if (filmSeconds(m) < s) lo = m;
+    else hi = m;
+  }
+  return lo;
+}

@@ -4,15 +4,21 @@
  * that leads into the Globe's pinned stage) and of where the film begins: scrolling back plays
  * every part of it in reverse, stopping freezes it, and any p can be sampled directly.
  *
- *   0.00–0.15  approach   the ambient whales swim on from wherever the viewer saw them, turn toward
- *                         each other and sweep into the orbit, while the camera draws back
- *   0.15–0.45  orbit      a slow, wide, banked circle around a shared centre, half a turn apart
- *   0.45–0.65  sphere     each orbit tilts away from the other, so together they trace a sphere;
- *                         the first glyphs stream off the flukes
- *   0.64–0.84  transform  the whales unravel tail-first into glyph streams that wrap the sphere
- *                         and settle as the continents and the graticule
- *   0.84–1.00  Earth      the spin settles on the journey's first city; the camera arrives at
- *                         the Globe's own framing and the stage hands over to it
+ * It plays as one film on a steady clock (filmSeconds; 5.4 s with the hand-over onto the first
+ * city), the same whatever the input that started it. Seconds as played:
+ *
+ *   0.00–0.20  approach   0.0–1.6 s  the ambient whales gather speed from wherever the viewer saw
+ *                                    them along one planned curve each, onto the orbit, while the
+ *                                    camera draws back over the whole approach
+ *   0.20–0.45  orbit      1.6–2.3 s  one slow, wide, banked circle around a shared centre, settling
+ *                                    half a turn apart (about one turn in all before they dissolve)
+ *   0.45–0.60  sphere     2.3–2.8 s  each orbit tilts away from the other, so together they trace a
+ *                                    sphere; the first glyphs stream off the flukes
+ *   0.60–0.84  transform  2.8–3.7 s  the whales unravel tail-first into glyph ribbons that wrap the
+ *                                    sphere at the whales' own pace and settle as the continents
+ *                                    and the graticule, the circling easing all the while
+ *   0.84–1.00  Earth      3.7–4.5 s  the spin settles on the journey's first city; the camera
+ *                                    arrives at the Globe's own framing and the stage hands over
  *
  * The film begins from a ConvergenceEntry: the ambient whales and camera exactly as the page last
  * drew them (ambientWhaleScene.ts). At p = 0 the frame is that very picture, the same two animals
@@ -57,33 +63,12 @@ export const whaleLength = (i: number, size = 1) => WHALE_LEN * size * WHALE_RIG
 export const PHASE = {
   orbit: 0.15,
   sphere: 0.45,
-  dissolve: 0.64,
-  dissolveSpan: 0.19,
+  dissolve: 0.6,
+  dissolveSpan: 0.18,
   earth: 0.84,
   handoff: 0.955,
   handoffEnd: 0.99
 } as const;
-
-/**
- * The film's pacing, as JourneyGlobe plays it: progress knots and the seconds between them at 1×
- * (the whales-to-Globe film runs twice as fast as its first cut), all scaled by CINEMATIC_SPEED.
- */
-export const FILM_STOPS = [0, PHASE.orbit, 0.3, PHASE.sphere, PHASE.earth];
-export const FILM_SECONDS = [2.0, 2.6, 2.6, 3.8].map((s) => s / 2);
-/** Real seconds into the film at progress p (the knots joined linearly; beyond them, their pace). */
-export function filmSeconds(p: number): number {
-  const n = FILM_SECONDS.length;
-  let t = 0;
-  for (let k = 0; k < n; k++) {
-    const a = FILM_STOPS[k];
-    const b = FILM_STOPS[k + 1];
-    const rate = FILM_SECONDS[k] / (b - a);
-    if (k === 0 && p < a) return (p - a) * rate / CINEMATIC_SPEED;
-    if (p <= b || k === n - 1) return (t + (p - a) * rate) / CINEMATIC_SPEED;
-    t += FILM_SECONDS[k];
-  }
-  return t / CINEMATIC_SPEED;
-}
 
 export const clamp01 = (x: number) => Math.max(0, Math.min(1, x));
 export const smoothstep = (a: number, b: number, x: number) => {
@@ -97,39 +82,91 @@ const smoother = (a: number, b: number, x: number) => {
 };
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
+/**
+ * The film's clock, in seconds at 1× (JourneyGlobe divides every duration by CINEMATIC_SPEED).
+ * One gesture starts it; from then on it runs at one steady pace whatever the input: it gathers
+ * from rest over `rise`, cruises, and eases over `fall` into the hand-over, still moving at `end`
+ * of its cruise as the convergence completes; the Globe's segment (FILM_HANDOFF_SECONDS) then
+ * brings it to rest on the first city. The whole film keeps the length of its first cut.
+ */
+export const FILM_TOTAL_SECONDS = 8.1;
+export const FILM_HANDOFF_SECONDS = 1.35;
+const PACE = { rise: 2.1, fall: 1.6, end: 0.5 };
+const FILM_KNOTS = 24;
+const PACE_N = 2400;
+/** Progress at each step of the convergence's own seconds (1×), tabulated once. */
+const PACE_P = new Float64Array(PACE_N + 1);
+const WHALE_SECONDS = FILM_TOTAL_SECONDS - FILM_HANDOFF_SECONDS;
+const paceShape = (s: number) => smoother(0, PACE.rise, s) * lerp(PACE.end, 1, smoother(WHALE_SECONDS, WHALE_SECONDS - PACE.fall, s));
+for (let k = 1; k <= PACE_N; k++) PACE_P[k] = PACE_P[k - 1] + paceShape(((k - 0.5) / PACE_N) * WHALE_SECONDS);
+for (let k = 1; k <= PACE_N; k++) PACE_P[k] /= PACE_P[PACE_N];
+/** Progress per second (1×) at the convergence's end, where the hand-over takes the pace on. */
+const PACE_END = (PACE_N * (PACE_P[PACE_N] - PACE_P[PACE_N - 1])) / WHALE_SECONDS;
+
+/**
+ * The pace as JourneyGlobe plays it: progress knots evenly spaced in time and the seconds between
+ * them at 1×. Its timeline joins them smoothly, so the film follows the profile above.
+ */
+export const FILM_STOPS = Array.from({ length: FILM_KNOTS + 1 }, (_, k) => PACE_P[Math.round((k * PACE_N) / FILM_KNOTS)]);
+export const FILM_SECONDS = Array.from({ length: FILM_KNOTS }, () => WHALE_SECONDS / FILM_KNOTS);
+
+/** Real seconds into the film at progress p (the profile inverted; beyond it, its end pace). */
+export function filmSeconds(p: number): number {
+  const first = PACE_P[1] / (WHALE_SECONDS / PACE_N);
+  if (p <= 0) return p / first / CINEMATIC_SPEED;
+  if (p >= 1) return (WHALE_SECONDS + (p - 1) / PACE_END) / CINEMATIC_SPEED;
+  let lo = 0, hi = PACE_N;
+  while (hi - lo > 1) {
+    const m = (lo + hi) >> 1;
+    if (PACE_P[m] < p) lo = m; else hi = m;
+  }
+  const t = (p - PACE_P[lo]) / Math.max(1e-12, PACE_P[hi] - PACE_P[lo]);
+  return ((lo + t) / PACE_N) * WHALE_SECONDS / CINEMATIC_SPEED;
+}
+
 /** Orbit radius: a spiral in from the sides, a wide orbit, then a tightening onto the sphere. */
 export function orbitRadius(p: number): number {
-  if (p < PHASE.orbit) return lerp(3.5, 1.82, smoothstep(0, PHASE.orbit, p) ** 0.85);
-  if (p < PHASE.sphere) return lerp(1.82, 1.74, (p - PHASE.orbit) / (PHASE.sphere - PHASE.orbit));
-  return lerp(1.74, 1.22, smoothstep(PHASE.sphere, PHASE.earth, p));
+  // C2 throughout, so the curve the whales swim never kinks where one stretch gives way to the next
+  if (p < PHASE.orbit) return lerp(3.5, 1.82, smoother(0, PHASE.orbit, p));
+  return 1.82 - 0.08 * smoother(PHASE.orbit, PHASE.sphere + 0.08, p) - 0.52 * smoother(PHASE.sphere - 0.05, PHASE.earth, p);
 }
-/** Swimming speed along the orbit (world units per unit of progress), easing as they unravel. */
-const orbitSpeed = (p: number) => lerp(58, 34, smoothstep(0.58, 0.84, p));
 
-// Orbit angle: integral of speed / radius, tabulated once (deterministic, monotone)
+/** Turns the pair swims around their shared centre from joining the orbit to the first glyph. */
+export const ORBIT_TURNS = 1.0;
+/**
+ * The circling's angular speed over film time, relative to its cruise: gathering on the approach,
+ * one even, unhurried circle, then easing as the bodies unravel into the Earth (never spinning up).
+ */
+const omegaShape = (p: number) => lerp(0.45, 1, smoother(0, PHASE.orbit + 0.04, p)) * lerp(1, 0.55, smoother(PHASE.sphere + 0.05, PHASE.earth, p));
+
+// Orbit angle: the integral of that angular speed over film seconds, tabulated once (monotone)
 const TABLE_N = 4000;
 const THETA = new Float64Array(TABLE_N + 1);
 for (let i = 1; i <= TABLE_N; i++) {
-  const pm = (i - 0.5) / TABLE_N;
-  THETA[i] = THETA[i - 1] + orbitSpeed(pm) / orbitRadius(pm) / TABLE_N;
+  THETA[i] = THETA[i - 1] + omegaShape((i - 0.5) / TABLE_N) * (filmSeconds(i / TABLE_N) - filmSeconds((i - 1) / TABLE_N));
 }
+const OMEGA_CRUISE = (ORBIT_TURNS * 2 * Math.PI) / (THETA[Math.round(PHASE.dissolve * TABLE_N)] - THETA[Math.round(PHASE.orbit * TABLE_N)]);
+for (let i = 1; i <= TABLE_N; i++) THETA[i] *= OMEGA_CRUISE;
+/** Angular speed (radians per unit progress) at p: radians per second times seconds per unit progress. */
+export const orbitOmega = (p: number) => {
+  const q = clamp01(p);
+  const h = 1e-3;
+  return (OMEGA_CRUISE * omegaShape(q) * (filmSeconds(q + h) - filmSeconds(q - h))) / (2 * h);
+};
 /** Total angle swum around the centre by progress p (radians); whale B is half a turn ahead. */
 export function orbitAngle(p: number): number {
-  const x = clamp01(p) * TABLE_N;
-  const i = Math.min(TABLE_N - 1, Math.floor(x));
-  const base = THETA[i] + (THETA[i + 1] - THETA[i]) * (x - i);
   // Beyond the ends keep moving at the end speed, so a pose is defined for any p
-  if (p < 0) return p * (orbitSpeed(0) / orbitRadius(0));
-  if (p > 1) return THETA[TABLE_N] + (p - 1) * (orbitSpeed(1) / orbitRadius(1));
-  return base;
+  if (p < 0) return p * orbitOmega(0.002);
+  if (p > 1) return THETA[TABLE_N] + (p - 1) * orbitOmega(1);
+  const x = p * TABLE_N;
+  const i = Math.min(TABLE_N - 1, Math.floor(x));
+  return THETA[i] + (THETA[i + 1] - THETA[i]) * (x - i);
 }
-/** Angular speed (radians per unit progress) at p. */
-export const orbitOmega = (p: number) => orbitSpeed(clamp01(p)) / orbitRadius(clamp01(p));
 
 /** Tilt of each whale's orbit plane (radians, opposite signs): 0 while circling, then apart. */
-export const orbitTilt = (p: number) => 0.66 * smoothstep(PHASE.sphere - 0.03, 0.66, p);
+export const orbitTilt = (p: number) => 0.66 * smoother(PHASE.sphere - 0.05, 0.68, p);
 /** Slow precession of the line where the two orbit planes cross. */
-const nodeAngle = (p: number) => 0.35 + 1.1 * smoothstep(PHASE.sphere, PHASE.earth, p);
+const nodeAngle = (p: number) => 0.35 + 1.1 * smoother(PHASE.sphere - 0.03, PHASE.earth, p);
 
 /** Unit normal of whale i's orbit plane at p: world up tilted about the line of nodes. */
 export function orbitNormal(i: number, p: number): V3 {
@@ -140,9 +177,10 @@ export function orbitNormal(i: number, p: number): V3 {
 
 /**
  * Whale i's centre on its orbit at p (i = 1 swims half a turn ahead, a little lower). `phase`
- * turns both places about the axis: where the orbit meets whales that swam in from the page.
+ * turns both places about the axis: where the orbit meets whales that swam in from the page; `dh`
+ * raises it, where such a whale still settles onto the ring's height.
  */
-export function orbitPosition(i: number, p: number, phase = 0): V3 {
+export function orbitPosition(i: number, p: number, phase = 0, dh = 0): V3 {
   const r = orbitRadius(p);
   const th = orbitAngle(p) + phase + (i === 0 ? 0 : Math.PI);
   const a = nodeAngle(p);
@@ -150,7 +188,8 @@ export function orbitPosition(i: number, p: number, phase = 0): V3 {
   const e1: V3 = [Math.cos(a), 0, Math.sin(a)];
   const e2 = vNorm(vCross(n, e1));
   // A gentle helix: one whale rides a little above the other, and each rises and falls slowly
-  const lift = (i === 0 ? 0.16 : -0.16) * (1 - smoothstep(0.55, 0.8, p)) + 0.07 * Math.sin(th * 0.5 + i * 1.7);
+  // (a swell of the film's time, not of where on the circle: every phase is the same orbit)
+  const lift = dh + (i === 0 ? 0.16 : -0.16) * (1 - smoothstep(0.55, 0.8, p)) + 0.07 * Math.sin(orbitAngle(p) * 0.5 + i * 1.7);
   return [
     r * (Math.cos(th) * e1[0] + Math.sin(th) * e2[0]) + lift * n[0],
     r * (Math.cos(th) * e1[1] + Math.sin(th) * e2[1]) + lift * n[1],
@@ -158,9 +197,13 @@ export function orbitPosition(i: number, p: number, phase = 0): V3 {
   ];
 }
 
-/** Swimming effort: strong strokes on the approach, a cruise in the orbit, glides as they unravel. */
+/**
+ * Swimming effort: strong strokes as they gather speed on the approach, an even cruise in the
+ * orbit that swells and eases slowly (a breath every few seconds of film, never a flutter), and
+ * long glides as they unravel.
+ */
 const effortAt = (i: number, p: number) =>
-  lerp(1.25, 0.7, smoothstep(0.05, PHASE.orbit + 0.05, p)) + 0.18 * Math.sin(p * 37 + i * 2.4) * (1 - smoothstep(0.6, 0.8, p)) - 0.3 * smoothstep(0.66, 0.84, p);
+  lerp(1.2, 0.72, smoothstep(0.04, PHASE.orbit + 0.08, p)) + 0.12 * Math.sin(filmSeconds(p) * 1.9 + i * 2.4) * (1 - smoothstep(0.6, 0.8, p)) - 0.3 * smoothstep(0.66, 0.84, p);
 
 /** Whale i's swim along its orbit with the shared rig; `size` scales the pair. */
 export function whaleMotion(i: number, size = 1): WhaleMotion {
@@ -171,15 +214,15 @@ export function whaleMotion(i: number, size = 1): WhaleMotion {
     effort: (u) => effortAt(i, u),
     phase: WHALE_RIG.phase[i],
     stride: WHALE_RIG.stride[i],
-    bankGain: 0.5,
-    maxBank: 0.5,
-    rig: { powerStroke: WHALE_RIG.powerStroke, maxTurn: WHALE_RIG.maxTurn, maxClimb: WHALE_RIG.maxClimb, tailLag: WHALE_RIG.tailLag[i], leanWindow: WHALE_RIG.leanWindow, maxBeatHz: WHALE_RIG.maxBeatHz },
+    bankGain: 0.42,
+    maxBank: 0.36,
+    rig: { powerStroke: WHALE_RIG.powerStroke, maxTurn: WHALE_RIG.maxTurn, maxClimb: WHALE_RIG.maxClimb, tailLag: WHALE_RIG.tailLag[i], leanWindow: WHALE_RIG.leanWindow, maxBeatHz: WHALE_RIG.maxBeatHz, cadence: WHALE_RIG.cadence },
     seconds: filmSeconds
   };
 }
 
 /** The Earth's remaining turn about its pole: it spins as it forms and settles on the first city. */
-export const earthSpin = (p: number) => -1.9 * (1 - smoothstep(0.6, 0.955, p)) ** 2;
+export const earthSpin = (p: number) => -1.2 * (1 - smoother(0.56, 0.955, p)) ** 2;
 
 export interface ConvergenceView {
   /** Stage size in CSS px. */
@@ -235,7 +278,7 @@ export interface ConvergenceEntry {
 /** The entry carried into the world: each whale's approach, and the camera it begins from. */
 export interface ConvergenceStart {
   phase: number;
-  /** Each whale's own orbit phase as it arrives, eased into `phase` by SPACING_END. */
+  /** Each whale's own orbit phase as it arrives, eased into `phase` over SPACING_SPAN. */
   offsets: [number, number];
   size: number;
   whales: {
@@ -243,6 +286,8 @@ export interface ConvergenceStart {
     track: Float64Array;
     /** Where it joins its orbit (progress). */
     join: number;
+    /** How much higher than its ring it joins the orbit (eased away over SPACING_SPAN). */
+    dh: number;
     up: V3;
     strokePhase: number;
     articulation: Articulation;
@@ -259,29 +304,35 @@ const FOV_EARTH = 16;
 const EL_START = 10;
 /** The ambient camera's view axis meets the Earth's centre this far beyond its focal plane (body lengths). */
 const ENTRY_DEPTH = 0.25;
-/** The camera has drawn back into the orbit's framing by this progress. */
-const PULL_END = 0.21;
+/** The camera's draw-back into the orbit's framing, in seconds of the film: it starts as the
+ * whales set off and is spread over their whole approach, so they recede steadily, never in a rush. */
+const PULL_SECONDS: [number, number] = [0.15, 2.1];
 /** The entry's own lean, roll and articulation have given way to the swim by this progress. */
 const SETTLE_END = 0.11;
 /** The approach's opening pace along the whale's own heading, as a share of its orbit speed. */
 const LAUNCH = 0.45;
-/** Steps of the integrated approach. */
+/** Steps of the approach's table. */
 const APPROACH_STEPS = 832;
-/** How briskly a whale answers a new heading (per unit progress), and its tightest curve (1 / world units). */
-const STEER_K = 30;
-/** How quickly the turn rate answers (per unit progress). */
-const STEER_EASE = 90;
-const MAX_CURVE = 1.6;
-/** Progress over which the steering opens up to its tightest curve. */
-const TURN_IN = 0.045;
-/** The steepest climb or dive of the approach (radians). */
-const MAX_PITCH = 0.6;
-/** Progress over which each approach is corrected onto its orbit exactly, before it joins. */
-const CORRECT_SPAN = 0.035;
-/** The latest a whale joins its orbit (the camera has drawn back by then). */
-const JOIN_LATEST = 0.26;
-/** By here the two circle exactly half a turn apart (well before any glyph leaves them). */
-const SPACING_END = 0.38;
+/** Where a whale may join its orbit (progress): the earliest gives the camera's pull-back time to
+ * frame the circle, the latest leaves a whole, unhurried circle before the glyphs leave them. */
+const JOIN_EARLIEST = 0.2;
+const JOIN_LATEST = 0.32;
+/** Candidate places on the orbit a whale weighs joining at (per whale, per join time). */
+const JOIN_CANDIDATES = 72;
+/** The tightest comfortable curve of the approach (turning radius, body lengths), its steepest
+ * climb or dive (radians), and the slowest it may ease to (share of its orbit pace). */
+const TURN_RADIUS = 1.1;
+const MAX_PITCH = 0.42;
+const MIN_PACE = 0.4;
+/** Share of the height between a whale's entry and its ring that it makes up on the approach
+ * (the rest it gains slowly on the orbit). */
+const CLIMB_SHARE = 0.55;
+/** Progress after its join over which a whale makes up what is left of the half turn between the
+ * two (and its height), and the most of it either may have to make up (radians): a gentle
+ * quickening or easing of its swim, never a stall, so the two circle half a turn apart well before
+ * any glyph leaves them. */
+const SPACING_SPAN = 0.26;
+const MAX_SPACING = 0.55;
 
 /** Camera distance that shows the Earth (radius 1) at `rPx` on a stage `h` px tall. */
 export function earthDistance(rPx: number, h: number, fovDeg: number): number {
@@ -291,28 +342,33 @@ export function earthDistance(rPx: number, h: number, fovDeg: number): number {
   return Math.sqrt(1 + 1 / (k * t) ** 2);
 }
 
-/** Quintic Hermite through (p0, v0, a0) at t = 0 and (p1, v1, a1) at t = 1 (C2 at both ends). */
-function quintic(from: [V3, V3, V3], to: [V3, V3, V3], T: number, t: number): V3 {
+/**
+ * Quintic Hermite through (p0, v0, a0) at t = 0 and (p1, v1, a1) at t = 1 (C2 at both ends), the
+ * derivatives given per unit of the span T; `d` = 1 or 2 returns its velocity or acceleration
+ * per unit of that span.
+ */
+function quintic(from: [V3, V3, V3], to: [V3, V3, V3], T: number, t: number, d = 0): V3 {
   const t2 = t * t, t3 = t2 * t, t4 = t3 * t, t5 = t4 * t;
-  const h0 = 1 - 10 * t3 + 15 * t4 - 6 * t5;
-  const h1 = t - 6 * t3 + 8 * t4 - 3 * t5;
-  const h2 = 0.5 * t2 - 1.5 * t3 + 1.5 * t4 - 0.5 * t5;
-  const h3 = 0.5 * t3 - t4 + 0.5 * t5;
-  const h4 = -4 * t3 + 7 * t4 - 3 * t5;
-  const h5 = 10 * t3 - 15 * t4 + 6 * t5;
+  const h =
+    d === 0
+      ? [1 - 10 * t3 + 15 * t4 - 6 * t5, t - 6 * t3 + 8 * t4 - 3 * t5, 0.5 * t2 - 1.5 * t3 + 1.5 * t4 - 0.5 * t5, 0.5 * t3 - t4 + 0.5 * t5, -4 * t3 + 7 * t4 - 3 * t5, 10 * t3 - 15 * t4 + 6 * t5]
+      : d === 1
+        ? [-30 * t2 + 60 * t3 - 30 * t4, 1 - 18 * t2 + 32 * t3 - 15 * t4, t - 4.5 * t2 + 6 * t3 - 2.5 * t4, 1.5 * t2 - 4 * t3 + 2.5 * t4, -12 * t2 + 28 * t3 - 15 * t4, 30 * t2 - 60 * t3 + 30 * t4]
+        : [-60 * t + 180 * t2 - 120 * t3, -36 * t + 96 * t2 - 60 * t3, 1 - 9 * t + 18 * t2 - 10 * t3, 3 * t - 12 * t2 + 10 * t3, -24 * t + 84 * t2 - 60 * t3, 60 * t - 180 * t2 + 120 * t3];
+  const k = T ** -d;
   const out: V3 = [0, 0, 0];
-  for (let k = 0; k < 3; k++) {
-    out[k] = h0 * from[0][k] + h1 * from[1][k] * T + h2 * from[2][k] * T * T + h3 * to[2][k] * T * T + h4 * to[1][k] * T + h5 * to[0][k];
+  for (let c = 0; c < 3; c++) {
+    out[c] = k * (h[0] * from[0][c] + h[1] * from[1][c] * T + h[2] * from[2][c] * T * T + h[3] * to[2][c] * T * T + h[4] * to[1][c] * T + h[5] * to[0][c]);
   }
   return out;
 }
 
 /** Position, velocity and acceleration of the orbit at p (per unit progress). */
-function orbitJet(i: number, p: number, phase: number): [V3, V3, V3] {
+function orbitJet(i: number, p: number, phase: number, dh = 0): [V3, V3, V3] {
   const h = 1e-3;
-  const a = orbitPosition(i, p - h, phase);
-  const b = orbitPosition(i, p, phase);
-  const c = orbitPosition(i, p + h, phase);
+  const a = orbitPosition(i, p - h, phase, dh);
+  const b = orbitPosition(i, p, phase, dh);
+  const c = orbitPosition(i, p + h, phase, dh);
   return [b, vScale(vSub(c, a), 1 / (2 * h)), vScale(vAdd(vSub(c, vScale(b, 2)), a), 1 / (h * h))];
 }
 
@@ -348,7 +404,6 @@ export function prepareConvergence(entry: ConvergenceEntry, view: ConvergenceVie
   const toWorld = (p: V3) => vScale(qRotate(qR, vSub(p, origin)), k);
   const up = qRotate(qR, [0, 1, 0]);
 
-  const T = PHASE.orbit;
   const whales = entry.whales.slice(0, 2).map((w, i) => {
     const quaternion = qMul(qR, w.quaternion);
     const fwd = qRotate(quaternion, [0, 0, -1]);
@@ -359,112 +414,81 @@ export function prepareConvergence(entry: ConvergenceEntry, view: ConvergenceVie
     return { position: toWorld(w.position), quaternion, fwd, strokePhase: x, articulation: w.articulation };
   });
 
-  // Each whale swims on from its entry and turns onto the orbit's circle at a bounded rate, never
-  // slower than its launch pace (so its heading can never swing round on the spot), steering clear
-  // of the other, and joins the orbit once it is swimming along it. Integrated once, as a table
-  // the film then plays (deterministic for this entry, so it plays the same in reverse).
+  // Each whale swims on from its entry along one planned C2 curve onto its orbit: a quintic from
+  // its place, heading and opening pace to the orbit's place, pace and curve where it joins. Of
+  // every place and moment it could join, it takes the one its own heading leads to most
+  // naturally: wide curves, a shallow climb, no slowing to turn on the spot and no turn it then
+  // has to undo, clear of the other whale, the two arriving close to half a turn apart. Computed
+  // once per entry, as a table the film plays (deterministic, so it plays the same in reverse).
   const L = whaleLength(0, size);
-  const cruise = vLen(orbitJet(0, T, 0)[1]);
-  const n = orbitNormal(0, T);
-  const e1: V3 = [1, 0, 0];
-  const e2 = vCross(n, e1);
-  const azimuth = (x: V3) => Math.atan2(vDot(x, e2), vDot(x, e1));
-  const wrap = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
-  const lift = (i: number) => (i === 0 ? 0.16 : -0.16);
   const N = APPROACH_STEPS;
   const dp = JOIN_LATEST / N;
-  const pos = whales.map((w) => w.position);
-  const dir = whales.map((w) => w.fwd);
-  const spin: V3[] = [[0, 0, 0], [0, 0, 0]];
-  const angle = pos.map(azimuth);
-  const tracks = [new Float64Array((N + 1) * 6), new Float64Array((N + 1) * 6)];
-  // Where each is closest to swimming along its orbit (radius, height, heading), from PHASE.orbit
-  const best = [{ k: N, miss: Infinity }, { k: N, miss: Infinity }];
-  for (let k = 0; k <= N; k++) {
-    const p = k * dp;
-    const gather = lerp(LAUNCH, 1, smoother(0, T, p));
-    // Pace themselves toward half a turn apart (what is left, the first lap makes up)
-    const sync = 0.3 * Math.tanh(1.5 * wrap(angle[1] - angle[0] - Math.PI)) * smoother(0.15 * T, 0.75 * T, p);
-    const next = pos.map((x, i) => {
-      const speed = gather * cruise * (1 + (i === 0 ? sync : -sync));
-      tracks[i].set([...x, ...vScale(dir[i], speed)], k * 6);
-      // Along the circle in the orbit's sense, drawn onto its radius and its height
-      const ring = orbitRadius(Math.max(p, T));
-      const h = vDot(x, n);
-      const flat = vSub(x, vScale(n, h));
-      const rho = vLen(flat);
-      const er = rho > 1e-4 ? vScale(flat, 1 / rho) : e1;
-      const et = vCross(n, er);
-      if (p >= T) {
-        // A slight preference for joining early, so the whales circle as soon as they can
-        const miss = Math.abs(rho - ring) / ring + 0.5 * Math.abs(h - lift(i)) + 3 * (1 - vDot(dir[i], et)) + 0.4 * (p - T);
-        if (miss < best[i].miss) best[i] = { k, miss };
+  const wrap = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
+  const M = 24;
+  type Plan = { k: number; phase: number; dh: number; from: [V3, V3, V3]; to: [V3, V3, V3]; cost: number };
+  const curve = (pl: Plan, p: number) => quintic(pl.from, pl.to, pl.k * dp, Math.min(1, p / (pl.k * dp)));
+  const plans = whales.map((w, i) => {
+    // The best moment to join at each place on the orbit
+    const out: Plan[] = [];
+    const kStep = Math.round(0.03 / dp);
+    for (let k = Math.round(JOIN_EARLIEST / dp); k <= N; k += kStep) {
+      const J = k * dp;
+      const n = orbitNormal(i, J);
+      const cruise = vLen(orbitJet(i, J, 0)[1]);
+      const from: [V3, V3, V3] = [w.position, vScale(w.fwd, LAUNCH * cruise), [0, 0, 0]];
+      for (let c = 0; c < JOIN_CANDIDATES; c++) {
+        const phase = (c / JOIN_CANDIDATES) * 2 * Math.PI;
+        const dh = (vDot(w.position, n) - vDot(orbitPosition(i, J, phase), n)) * (1 - CLIMB_SHARE);
+        const to = orbitJet(i, J, phase, dh);
+        // Its curvature (against the comfortable turn), climb, pace and turning along the way
+        let bend = 0, over = 0, turned = 0;
+        let prev: V3 | null = null;
+        for (let m = 0; m <= M; m++) {
+          const v = quintic(from, to, J, m / M, 1);
+          const acc = quintic(from, to, J, m / M, 2);
+          const speed = Math.max(1e-6, vLen(v));
+          const kappa = (vLen(vCross(v, acc)) / speed ** 3) * L * TURN_RADIUS;
+          const tangent = vScale(v, 1 / speed);
+          bend += (kappa * kappa) / (M + 1);
+          over = Math.max(over, kappa - 1, (MIN_PACE - speed / cruise) / MIN_PACE, (Math.abs(vDot(tangent, n)) - Math.sin(MAX_PITCH)) * 4);
+          if (prev) turned += Math.acos(Math.max(-1, Math.min(1, vDot(prev, tangent))));
+          prev = tangent;
+        }
+        const net = Math.acos(Math.max(-1, Math.min(1, vDot(w.fwd, vNorm(to[1])))));
+        const cost = bend + 6 * Math.max(0, over) + 0.8 * Math.max(0, turned - net) + 0.3 * (J - JOIN_EARLIEST) / (JOIN_LATEST - JOIN_EARLIEST);
+        if (!out[c] || cost < out[c].cost) out[c] = { k, phase, dh, from, to, cost };
       }
-      let want = vAdd(vAdd(et, vScale(er, -1.4 * Math.tanh((rho - ring) / (0.35 * ring)))), vScale(n, -1.2 * Math.tanh((h - lift(i)) / 0.5)));
-      // ... and clear of the other whale, passing beside it rather than over or under
-      const toOther = vSub(x, pos[1 - i]);
-      const gap = vLen(toOther);
-      const away = vSub(toOther, vScale(n, vDot(toOther, n)));
-      if (gap < 1.4 * L) want = vAdd(want, vScale(away, (1.5 * (1.4 * L - gap)) / (0.4 * L) / Math.max(1e-4, vLen(away))));
-      // Climbing or diving as a whale does, never steeper than MAX_PITCH (its back stays defined)
-      want = vNorm(want);
-      const rise = vDot(want, n);
-      if (Math.abs(rise) > Math.sin(MAX_PITCH)) {
-        const level = vNorm(vSub(want, vScale(n, rise)));
-        want = vAdd(vScale(level, Math.cos(MAX_PITCH)), vScale(n, Math.sign(rise) * Math.sin(MAX_PITCH)));
-      }
-      // Turn toward it (with the circle's own turning fed forward, so it never swims wide of the
-      // ring), the turn rate easing in like a heavy body's, no tighter than the swim's tightest curve
-      const axis = vCross(dir[i], want);
-      const turn = Math.atan2(vLen(axis), vDot(dir[i], want));
-      const err = vLen(axis) > 1e-9 ? vScale(axis, turn / vLen(axis)) : vScale(n, turn);
-      const follow = vScale(n, (speed / Math.max(0.5 * ring, rho)) * Math.max(0, vDot(dir[i], et)));
-      spin[i] = vAdd(spin[i], vScale(vSub(vAdd(vScale(err, STEER_K), follow), spin[i]), 1 - Math.exp(-STEER_EASE * dp)));
-      const rate = vLen(spin[i]);
-      // The turn eases in: each first carries on along its own heading, then leans into the curve
-      const cap = speed * MAX_CURVE * smoother(0, TURN_IN, p);
-      if (rate > cap) spin[i] = vScale(spin[i], cap / rate);
-      const th = Math.min(rate, cap) * dp;
-      if (th > 0) {
-        const u = vNorm(spin[i]);
-        dir[i] = vNorm(vAdd(vAdd(vScale(dir[i], Math.cos(th)), vScale(vCross(u, dir[i]), Math.sin(th))), vScale(u, vDot(u, dir[i]) * (1 - Math.cos(th)))));
-      }
-      // Nor does the heading itself ever rear up past a whale's steepest climb or dive
-      const pitch = vDot(dir[i], n);
-      const limit = Math.sin(MAX_PITCH + 0.25);
-      if (Math.abs(pitch) > limit) {
-        const level = vNorm(vSub(dir[i], vScale(n, pitch)));
-        dir[i] = vAdd(vScale(level, Math.sqrt(1 - limit * limit)), vScale(n, Math.sign(pitch) * limit));
-      }
-      return vAdd(x, vScale(dir[i], speed * dp));
-    });
-    next.forEach((x, i) => {
-      angle[i] += wrap(azimuth(x) - azimuth(pos[i]));
-      pos[i] = x;
-    });
-  }
-  // Each joins its orbit where it arrived; the orbit's phase splits what is left of their half turn
-  // apart, which they make up by SPACING_END. A short C2 correction before each join lands it
-  // exactly on its orbit, at its pace and curve
-  const joins = best.map((b) => b.k);
-  const at = (tr: Float64Array, k: number): V3 => [tr[k * 6], tr[k * 6 + 1], tr[k * 6 + 2]];
-  const vel = (tr: Float64Array, k: number): V3 => [tr[k * 6 + 3], tr[k * 6 + 4], tr[k * 6 + 5]];
-  const own = [0, 1].map((i) => azimuth(at(tracks[i], joins[i])) - azimuth(orbitPosition(i, joins[i] * dp)));
-  const phase = own[0] + wrap(own[1] - own[0]) / 2;
-  const offsets: [number, number] = [wrap(own[0] - phase), wrap(own[1] - phase)];
-  tracks.forEach((tr, i) => {
-    const kj = joins[i];
-    const from = Math.max(1, kj - Math.round(CORRECT_SPAN / dp));
-    const span = (kj - from) * dp;
-    const o = orbitJet(i, kj * dp, phase + offsets[i]);
-    const zero: [V3, V3, V3] = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
-    const miss: [V3, V3, V3] = [vSub(o[0], at(tr, kj)), vSub(o[1], vel(tr, kj)), vSub(o[2], vScale(vSub(vel(tr, kj), vel(tr, kj - 1)), 1 / dp))];
-    for (let k = from; k <= kj; k++) {
-      const t = (k - from) / (kj - from);
-      const a = Math.max(0, t - 1e-4), b = Math.min(1, t + 1e-4);
-      const cv = vScale(vSub(quintic(zero, miss, span, b), quintic(zero, miss, span, a)), 1 / ((b - a) * span));
-      tr.set([...vAdd(at(tr, k), quintic(zero, miss, span, t)), ...vAdd(vel(tr, k), cv)], k * 6);
     }
+    return out.sort((x, y) => x.cost - y.cost);
+  });
+  // The pair: each its own best, unless they would crowd each other or arrive far from half a
+  // turn apart (what spacing is left, the first part of the circle makes up)
+  let pick: [Plan, Plan] = [plans[0][0], plans[1][0]];
+  let bestCost = Infinity;
+  const end = Math.max(...plans.flatMap((list) => list.map((pl) => pl.k))) * dp;
+  const at = (pl: Plan, i: number, p: number) => (p < pl.k * dp ? curve(pl, p) : orbitPosition(i, p, pl.phase, pl.dh));
+  for (const a of plans[0]) {
+    if (a.cost + plans[1][0].cost >= bestCost) break;
+    for (const b of plans[1]) {
+      const spacing = Math.abs(wrap(b.phase - a.phase)) / 2;
+      const known = a.cost + b.cost + 5 * spacing + 20 * Math.max(0, spacing - MAX_SPACING);
+      if (known >= bestCost) continue;
+      let gap = Infinity;
+      for (let m = 1; m <= M; m++) gap = Math.min(gap, vLen(vSub(at(a, 0, (m / M) * end), at(b, 1, (m / M) * end))));
+      const cost = known + 6 * Math.max(0, (1.3 * L - gap) / L);
+      if (cost < bestCost) {
+        bestCost = cost;
+        pick = [a, b];
+      }
+    }
+  }
+  const phase = pick[0].phase + wrap(pick[1].phase - pick[0].phase) / 2;
+  const offsets: [number, number] = [wrap(pick[0].phase - phase), wrap(pick[1].phase - phase)];
+  const tracks = pick.map((pl) => {
+    const tr = new Float64Array((N + 1) * 6);
+    const J = pl.k * dp;
+    for (let k = 0; k <= pl.k; k++) tr.set([...quintic(pl.from, pl.to, J, k / pl.k), ...quintic(pl.from, pl.to, J, k / pl.k, 1)], k * 6);
+    return tr;
   });
 
   // The camera begins exactly where the ambient one stood: same view, scaled into the world
@@ -472,7 +496,7 @@ export function prepareConvergence(entry: ConvergenceEntry, view: ConvergenceVie
     phase,
     offsets,
     size,
-    whales: whales.map((w, i) => ({ track: tracks[i], join: joins[i] * dp, up, strokePhase: w.strokePhase, articulation: w.articulation, position: w.position, quaternion: w.quaternion })),
+    whales: whales.map((w, i) => ({ track: tracks[i], join: pick[i].k * dp, dh: pick[i].dh, up, strokePhase: w.strokePhase, articulation: w.articulation, position: w.position, quaternion: w.quaternion })),
     camera: { distance: depth * k, fov: entry.camera.fov }
   };
 }
@@ -499,7 +523,12 @@ function enteredMotion(i: number, start: ConvergenceStart): WhaleMotion {
   return {
     ...base,
     // Before the film the whale swims straight on along its heading (the approach starts at rest)
-    path: (u) => (u >= J ? orbitPosition(i, u, start.phase + start.offsets[i] * (1 - smoother(J, SPACING_END, u))) : u <= 0 ? vAdd([w.track[0], w.track[1], w.track[2]], vScale(v0, u)) : trackAt(w.track, u, last)),
+    path: (u) => {
+      if (u <= 0) return vAdd([w.track[0], w.track[1], w.track[2]], vScale(v0, u));
+      if (u < J) return trackAt(w.track, u, last);
+      const k = 1 - smoother(J, J + SPACING_SPAN, u);
+      return orbitPosition(i, u, start.phase + start.offsets[i] * k, w.dh * k);
+    },
     up: (u) => (u >= J ? orbitNormal(i, u) : vNorm(vAdd(vScale(w.up, 1 - smoother(0, J, u)), vScale(orbitNormal(i, u), smoother(0, J, u))))),
     phase: w.strokePhase
   };
@@ -559,14 +588,15 @@ export function sampleConvergence(progress: number, view: ConvergenceView, start
   let fov = lerp(FOV_ORBIT, FOV_EARTH, toEarth);
   // Elevation: from just above the water line, up over the orbit, then level with the Earth
   const el = lerp(EL_START, portrait ? 40 : 26, smoothstep(0, 0.3, p)) * (1 - smoothstep(0.5, 0.9, p));
-  // Azimuth: a slow drift against the swimmers, returning to face the Earth's first city
-  const az = -34 * smoothstep(0.05, 0.42, p) * (1 - smoothstep(0.5, 0.88, p));
+  // Azimuth: a slow drift along with the swimmers (it calms their circling rather than adding to
+  // it), returning to face the Earth's first city
+  const az = 16 * smoother(0.05, 0.45, p) * (1 - smoother(0.5, 0.88, p));
   const shift = smoothstep(0.55, 0.88, p);
   let centerY = lerp(view.height * (portrait ? 0.46 : 0.5), view.globeY, shift);
   if (start) {
     // The pull-back: from the ambient camera's own view (its field and reach), drawing back
     // smoothly into the orbit's framing; the apparent size of the whales eases with it
-    const pull = smoother(0, PULL_END, p);
+    const pull = smoother(PULL_SECONDS[0], PULL_SECONDS[1], filmSeconds(p));
     const tanOf = (f: number) => Math.tan((f * Math.PI) / 360);
     const reach = Math.exp(lerp(Math.log(start.camera.distance * tanOf(start.camera.fov)), Math.log(dist * tanOf(fov)), pull));
     fov = lerp(start.camera.fov, fov, pull);

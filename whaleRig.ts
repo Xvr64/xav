@@ -21,13 +21,17 @@ export const WHALE_RIG = {
   maxClimb: 0.42,
   /** How long the tail stock takes to follow the body's bend (s). */
   tailLag: [0.85, 0.65],
-  /** How long a lean into a turn takes to build or reverse (s), where a film plays a path. */
-  leanWindow: 0.14,
+  /** How long a lean into a turn takes to build or reverse (s), where a film plays a path: a heavy
+   * body rolls into a curve over most of a second, never at the instant the path bends. */
+  leanWindow: 0.5,
   /**
    * The fastest tail beat (Hz). However fast a film runs, the flukes keep a stroke the eye can
    * follow: a quicker swim lengthens each beat's reach instead of blurring the beat.
    */
   maxBeatHz: 1.2,
+  /** Body lengths of stroke per second a film's whale beats even while it barely moves (gathering
+   * from rest, the flukes are already working rather than frozen). */
+  cadence: 0.3,
   /** Body heave (body lengths) and rock (radians) each beat of the flukes drives through the body. */
   heave: 0.013,
   rock: 0.028

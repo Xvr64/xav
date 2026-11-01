@@ -4,7 +4,7 @@ import type { LocationItem } from './cvData';
 import { abyssFromProgress, globeScrollGeometry, globeScrollProgress, lerpN } from './abyssPalette';
 import { convergence, convergenceProgress, diveWake, globeRevealAt, setGlobeZone } from './oceanDirection';
 import { CINEMATIC_SPEED, mountCinematicScroll, type CinematicStops } from './cinematicScroll';
-import { FILM_SECONDS, FILM_STOPS } from './convergenceScene';
+import { FILM_HANDOFF_SECONDS, FILM_SECONDS, FILM_STOPS } from './convergenceScene';
 
 const PlainText = ({ text }: { text: string }) => <>{text}</>;
 
@@ -650,7 +650,7 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
     // The whales-to-globe film's pacing lives with its scene (its stroke and tail keep that clock)
     const WHALE_STOPS = FILM_STOPS;
     const WHALE_SEC = FILM_SECONDS;
-    const EARTH_SEC = 2.6;
+    const EARTH_SEC = FILM_HANDOFF_SECONDS;
     const cinematicStops = (): CinematicStops | null => {
       if (prefersReduced || !runway || !pinned || runwayTravel <= 1 || !Number.isFinite(convergence.start)) return null;
       const y: number[] = [];

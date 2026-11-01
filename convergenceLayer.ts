@@ -184,8 +184,10 @@ void main() {
   float a = dot(cd, cd) - dr * dr;
   float b = dot(pd, cd) + r0 * dr;
   float c = dot(pd, pd) - r0 * r0;
-  float t = clamp((b + sqrt(max(0.0, b * b - a * c))) / a, 0.0, 1.0);
-  vec4 col = mix(vec4(249.0, 248.0, 245.0, 0.95 * 255.0), vec4(231.0, 235.0, 236.0, 0.95 * 255.0), t) / 255.0;
+  // The canvas's rule: the larger root (the focus lies inside the disc, so a < 0 here)
+  float root = sqrt(max(0.0, b * b - a * c));
+  float t = clamp(max((b + root) / a, (b - root) / a), 0.0, 1.0);
+  vec4 col = mix(vec4(226.0, 242.0, 250.0, 0.92 * 255.0), vec4(198.0, 226.0, 244.0, 0.92 * 255.0), t) / 255.0;
   float fill = clamp(R - d + 0.5, 0.0, 1.0);
   // Hairline limb
   float ring = clamp(1.0 - abs(d - R) * uDpr, 0.0, 1.0);
@@ -202,9 +204,9 @@ void main() {
 
 const FLIGHT_GLYPHS = ['·', '.', ':', '·', '+', "'", '-', '.'];
 const BAND_RGB: [number, number, number][] = [
-  [86, 99, 109],
-  [60, 72, 82],
-  [38, 49, 58]
+  [76, 100, 124],
+  [52, 74, 98],
+  [32, 50, 72]
 ];
 const v3 = (c: [number, number, number]) => new THREE.Vector3(c[0] / 255, c[1] / 255, c[2] / 255);
 
@@ -371,15 +373,17 @@ export function createConvergenceLayer(canvas: HTMLCanvasElement, firstCity: { l
         ? PHASE.sphere + 0.02 + rnd() * (PHASE.dissolve - PHASE.sphere + 0.02)
         : PHASE.dissolve + (1 - Math.min(1, key)) * PHASE.dissolveSpan * 0.97 + (seed - 0.5) * 0.012;
       // Each glyph leaves the whale whose orbit leads to its place soonest, and travels for as
-      // long as the winding takes: the streams stay ribbons that wrap the sphere as they deposit
-      const guess = depart + 0.08;
+      // long as the winding takes at about the whales' own unhurried pace around the sphere: the
+      // streams stay ribbons that wrap it as they deposit, never a spin
+      const guess = depart + 0.12;
       const arc0 = arcTo(0, depart, i, guess);
       const arc1 = arcTo(1, depart, i, guess);
       const whale = arc0 <= arc1 ? 0 : 1;
       const arc = Math.min(arc0, arc1);
+      const settleBy = PHASE.handoff - 0.012 - depart;
       const travel = grat
-        ? 0.1 + arc / 52 + 0.03 * rnd()
-        : Math.min(0.955 - 0.012 - depart, 0.032 + arc / 44 + 0.012 * rnd());
+        ? Math.min(settleBy, 0.1 + arc / 12 + 0.03 * rnd())
+        : Math.min(settleBy, 0.032 + arc / 8 + 0.012 * rnd());
       aSkin.set([whale, src.spine[k], src.info[k * 4], key], i * 4);
       aOff.set([src.offset[k * 3], src.offset[k * 3 + 1], src.offset[k * 3 + 2]], i * 3);
       aMeta.set([kind[i], seed, depart, Math.max(0.02, travel)], i * 4);
@@ -477,7 +481,9 @@ export function createConvergenceLayer(canvas: HTMLCanvasElement, firstCity: { l
       du.uCanvasDev.value.set(Math.round(W * dpr), Math.round(H * dpr));
       du.uDpr.value = dpr;
       du.uDisc.value.set(f.camera.centerX, f.camera.centerY, rPersp + (view.globeR - rPersp) * f.ortho);
-      du.uAlpha.value = f.disc * f.layer;
+      // The Globe's own disc fades in above this one: together they cover exactly as much as either
+      // alone (0.92), so the disc never brightens while both show
+      du.uAlpha.value = (f.disc * f.layer * (1 - f.globeReveal)) / (1 - 0.92 * f.globeReveal);
       disc.visible = f.disc > 0.001;
 
       ascii.render();

@@ -409,6 +409,8 @@ export interface MotionRig {
   /** Seconds of film the lean into a turn is taken over (each side). */
   leanWindow: number;
   maxBeatHz: number;
+  /** Body lengths of stroke per second the flukes keep however slowly the film moves the whale. */
+  cadence?: number;
 }
 
 const DIST_STEPS = 64;
@@ -427,11 +429,13 @@ export function distanceAlong(m: WhaleMotion, u: number): number {
 
 /**
  * The stroke's measure of distance under a film clock: body lengths swum, but never faster than
- * the rig's fastest beat allows (stride × beats per second of the film's real time).
+ * the rig's fastest beat allows (stride × beats per second of the film's real time), nor slower
+ * than its resting cadence.
  */
 function strokeDistance(m: WhaleMotion, u: number): number {
   if (!m.rig || !m.seconds) return distanceAlong(m, u);
   const cap = m.rig.maxBeatHz * (m.stride ?? 0.95);
+  const floor = Math.min(cap, m.rig.cadence ?? 0);
   const steps = Math.max(1, Math.ceil(DIST_STEPS * Math.abs(u)));
   let d = 0;
   let prev = m.path(0);
@@ -440,7 +444,8 @@ function strokeDistance(m: WhaleMotion, u: number): number {
     const v = (u * i) / steps;
     const p = m.path(v);
     const t = m.seconds(v);
-    d += Math.min(vLen(vSub(p, prev)) / m.length, cap * Math.abs(t - prevT));
+    const dt = Math.abs(t - prevT);
+    d += Math.max(floor * dt, Math.min(vLen(vSub(p, prev)) / m.length, cap * dt));
     prev = p;
     prevT = t;
   }

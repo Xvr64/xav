@@ -69,7 +69,13 @@ export interface CinematicScroll {
 }
 
 export const CINEMATIC_SPEED = 1.5;
-const RATE_EASE_SECONDS = 0.12 / CINEMATIC_SPEED;
+/** A reversal mid-film turns the playback round over about this long (s): heavy, never a snap. */
+const RATE_EASE_SECONDS = 0.28;
+/** How long after a film ends any input still belongs to the gesture that played it (ms): a fast
+ * trackpad's next flick or a spun wheel can never launch the next film the moment one arrives. */
+export const SETTLE_MS = 700;
+/** How long the browser may still be animating a wheel's native smooth scroll after it (ms). */
+const NATIVE_GLIDE_MS = 500;
 
 export const timelineTimes = (st: CinematicStops): number[] => {
   const t = [0];
@@ -122,6 +128,9 @@ export function mountCinematicScroll(stops: () => CinematicStops | null): Cinema
   let entryGesture: -1 | 0 | 1 = 0;
   let lastDirection: -1 | 1 = 1;
   let expectedY: number | null = null;
+  let settleUntil = -Infinity;
+  /** Where the browser's own smooth scrolling of recent, uncaptured wheel events is heading. */
+  let native: { target: number; until: number } | null = null;
   const reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
   const geometry = () => reduced.matches ? null : stops();
   const scrollTo = (y: number) => {
@@ -137,6 +146,7 @@ export function mountCinematicScroll(stops: () => CinematicStops | null): Cinema
     cancel();
     // Events seen during playback never queue the next film, including momentum at its end.
     wheelLocked = true;
+    settleUntil = performance.now() + SETTLE_MS;
     gestures = createWheelGestures();
   };
   const frame = (now: number) => {
@@ -166,10 +176,16 @@ export function mountCinematicScroll(stops: () => CinematicStops | null): Cinema
     if (Math.abs(end - time) < 0.0001) return;
     const direction = end > time ? 1 : -1;
     lastDirection = direction;
-    expectedY = window.scrollY;
-    play = { time, target, direction, rate: play?.rate ?? 0, last: performance.now(),
+    const times = timelineTimes(st);
+    // From rest at a film's start or end the timeline itself eases in, so playback runs at full
+    // rate at once and every film keeps its exact length; anywhere else it gathers its pace
+    const resting = times.some((t, k) => (k === 0 || k >= st.earth) && Math.abs(t - time) < 1e-6);
+    play = { time, target, direction, rate: play?.rate ?? (resting ? direction : 0), last: performance.now(),
       lo: Math.min(target, window.scrollY >= st.y[st.earth] - 2 ? st.earth : 0),
       hi: Math.max(target, window.scrollY <= st.y[st.earth] + 2 ? st.earth : st.y.length - 1) };
+    // Take the scroll now: a programmatic scroll ends any smooth scroll the browser is still
+    // animating, so it can neither carry the page on into the film nor cancel it
+    scrollTo(timelineY(st, time));
     if (!raf) raf = requestAnimationFrame(frame);
   };
   const step = (dir: -1 | 1) => {
@@ -214,8 +230,9 @@ export function mountCinematicScroll(stops: () => CinematicStops | null): Cinema
     if (quiet) entryGesture = 0;
     lastWheel = now;
     const dir = Math.sign(delta) as -1 | 1;
-    // Keep an uninterrupted tail captured even at the outer endpoints, until a new gesture.
-    if (wheelLocked && !quiet) {
+    // Keep an uninterrupted tail captured even at the outer endpoints, until a new gesture; and
+    // just after a film ends, even a fresh one in the same direction belongs to the last
+    if (wheelLocked && (!quiet || now < settleUntil)) {
       const g = gestures.feed(delta, now);
       if (!g || g === lastDirection) { e.preventDefault(); return; }
       // A reversal needs the full intent threshold too: tiny trackpad sign bounces cannot unlock.
@@ -224,18 +241,24 @@ export function mountCinematicScroll(stops: () => CinematicStops | null): Cinema
       return;
     }
     if (wheelLocked) { wheelLocked = false; gestures = createWheelGestures(); }
-    if (!captures(st, window.scrollY, dir, delta)) {
+    // Outside the films, judge where the page is heading, not where it is: the browser may still
+    // be gliding toward the targets of earlier notches, and would carry the page into a film
+    if (native && (now > native.until || Math.sign(native.target - window.scrollY) !== dir)) native = null;
+    const heading = native ? native.target : window.scrollY;
+    if (!captures(st, heading, dir, delta)) {
       const g = gestures.feed(delta, now);
       if (g) entryGesture = g;
+      native = { target: heading + delta, until: now + NATIVE_GLIDE_MS };
       return;
     }
     e.preventDefault();
     const g = gestures.feed(delta, now);
     const entering = window.scrollY < st.y[0] - 2 || window.scrollY > st.y[st.y.length - 1] + 2;
-    if (g || (entering && entryGesture === dir)) {
+    if (g || (entering && entryGesture === dir) || (entering && native)) {
       step(g || dir);
       entryGesture = 0;
     }
+    native = null;
   };
   const onKey = (e: KeyboardEvent) => {
     if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey || editable(e.target) || nestedScroller(e.target)) return;
@@ -285,9 +308,10 @@ export function mountCinematicScroll(stops: () => CinematicStops | null): Cinema
     touchEligible = false;
   };
   const onTouchCancel = () => { touchCaptured = false; touchEligible = false; };
-  // Scrollbar drags, anchors and assistive navigation always override playback.
+  // Scrollbar drags, anchors and assistive navigation always override playback; the last of a
+  // smooth scroll the browser was animating as a film began does not, the film's frames keep the page
   const onScroll = () => {
-    if (play && expectedY !== null && Math.abs(window.scrollY - expectedY) > 2) cancel();
+    if (play && expectedY !== null && Math.abs(window.scrollY - expectedY) > 2 && !(native && performance.now() < native.until)) cancel();
   };
   const onPointerDown = (e: PointerEvent) => {
     if (e.pointerType === 'mouse' && e.clientX >= document.documentElement.clientWidth) cancel();
