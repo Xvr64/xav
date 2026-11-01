@@ -10,19 +10,25 @@
   },
   "dependencies": {
     "@glyphcss/maps": "^0.3.1",
+    "@tabler/icons-react": "^3.50.0",
+    "clsx": "^2.1.1",
     "glyphcss": "^0.3.1",
     "lucide-react": "^0.460.0",
+    "motion": "^14.9.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "tailwind-merge": "^3.7.0",
     "three": "^0.170.0"
   },
   "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.3",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@types/three": "^0.170.0",
     "@vitejs/plugin-react": "^4.3.3",
     "postcss": "^8.5.32",
     "tailwindcss": "3.4.17",
+    "tailwindcss-v4": "npm:tailwindcss@^4.3.3",
     "typescript": "^5.6.3",
     "vite": "^6.4.5"
   }

@@ -13,6 +13,6 @@
     "jsx": "react-jsx",
     "strict": false
   },
-  "include": ["*.ts", "*.tsx"]
+  "include": ["*.ts", "*.tsx", "components/**/*.tsx", "lib/**/*.ts"]
 }
 

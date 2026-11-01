@@ -1,0 +1,3 @@
+/* Keep the reference's Tailwind v4 styles isolated from the portfolio's v3 CSS. */
+@import "tailwindcss-v4" source(none);
+@source "./components";
