@@ -114,7 +114,6 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
   const activeIdRef = useRef(activeId);
   activeIdRef.current = activeId;
   const goToCityRef = useRef<(id: string) => void>((id) => setActiveId(id));
-  const skipRef = useRef<() => void>(() => {});
   const requestRenderRef = useRef<() => void>(() => {});
   const segs = useMemo(() => buildJourneyTimeline(locations), [locations]);
 
@@ -679,7 +678,6 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
       return { y, dur: dur.map(seconds => seconds / CINEMATIC_SPEED), earth };
     };
     const cinematic = mountCinematicScroll(cinematicStops);
-    skipRef.current = cinematic.skip;
     // Travel to a city = glide to that city's checkpoint
     goToCityRef.current = (id: string) => {
       const idx = locations.findIndex((l) => l.id === id);
@@ -722,7 +720,6 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
     return () => {
       disposed = true;
       cinematic.destroy();
-      skipRef.current = () => {};
       motionQuery.removeEventListener('change', onMotionChange);
       convergence.listeners.delete(onResize);
       convergence.length = 0;
@@ -746,10 +743,6 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
   return (
     <div ref={stageRef} className="relative w-full max-w-full h-full overflow-hidden">
       <canvas ref={canvasRef} aria-hidden="true" className="absolute inset-0 w-full max-w-full h-full block" />
-      <a href="#skills" onClick={() => skipRef.current()}
-        className="absolute top-5 right-5 z-20 p-3 font-mono text-xs underline underline-offset-4 focus-visible:outline focus-visible:outline-2">
-        Skip animation
-      </a>
 
       {/* Subtle water-matched veil softens whale glyphs directly behind the destination caption */}
       <div
