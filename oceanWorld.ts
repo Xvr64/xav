@@ -2,13 +2,13 @@
 // OCEAN WORLD — the one water the whole document sits in
 // ============================================================================
 // Every point of the page has a fixed depth, from 0 at the top of the cover to 1 at the end of
-// the contact section. Depth decides the water's colour (cream → beige → cooling sea → dark
-// blue → near-black abyss), the ASCII glyphs' ink, and how dense and how strong they are.
+// the contact section. Depth decides the water's colour (sky blue → light ocean → saturated
+// ocean blue → deep navy → near-black abyss), the ASCII glyphs' ink, and how dense and how strong they are.
 // Because it belongs to the document and not to the screen, scrolling travels through it and
 // scrolling back returns to exactly the same water.
 //
 // The depth follows the existing descent so the page's ink stays readable: the cover settles
-// from cream into beige, the Globe journey carries the old abyss curve (its ink flip lands on
+// from the sky-blue surface into lighter ocean, the Globe journey carries the old abyss curve (its ink flip lands on
 // the mid-tone of this palette), and the CV sections keep sinking from dark blue to black.
 
 export type RGB = [number, number, number];
@@ -17,32 +17,30 @@ export type RGB = [number, number, number];
 export const COVER_DEPTH = 0.12;
 export const JOURNEY_DEPTH = 0.74;
 
-/** The water, by depth: cream, beige, cooling stone and mist, sea, ocean blue, abyss. */
+/** The water, by depth, sampled from the reference: sky-blue surface, light ocean, saturated
+ *  mid-ocean blue, deep navy, near-black abyss. */
 export const WATER_STOPS: [number, string][] = [
-  [0.0, '#F7F2E8'],
-  [0.12, '#ECE0CA'],
-  [0.22, '#DDD9C9'],
-  [0.32, '#BACDCB'],
-  [0.4, '#90B1BA'],
-  [0.46, '#64889B'],
-  [0.56, '#3A627C'],
-  [0.66, '#1F4260'],
-  [0.74, '#142C47'],
-  [0.87, '#0B182B'],
-  [1.0, '#05080F']
+  [0.0, '#99D6F1'],
+  [0.12, '#84CAEF'],
+  [0.26, '#6BB7EB'],
+  [0.54, '#2563CE'],
+  [0.74, '#172264'],
+  [1.0, '#111017']
 ];
 
-/** The glyphs' ink, by depth: darker than the water near the surface, lighter below the flip. */
+/** The glyphs' ink, by depth: a deeper blue than the water near the surface, a lighter one
+ *  below the flip, crossing over in a short stretch so the texture never thins out for long. */
 export const INK_STOPS: [number, string][] = [
-  [0.0, '#B8A584'],
-  [0.12, '#A38E6B'],
-  [0.24, '#8E9C94'],
-  [0.34, '#7896A0'],
-  [0.42, '#A2C3CB'],
-  [0.5, '#A4CAD6'],
-  [0.66, '#6FA2BD'],
-  [0.8, '#4C7FA6'],
-  [1.0, '#3B6592']
+  [0.0, '#2E79C0'],
+  [0.12, '#2B73BD'],
+  [0.26, '#2C6FBF'],
+  [0.36, '#2560B6'],
+  [0.44, '#8FC3F2'],
+  [0.54, '#7AAEEF'],
+  [0.64, '#6593E2'],
+  [0.74, '#4C6CC8'],
+  [0.88, '#4462B6'],
+  [1.0, '#4060B0']
 ];
 
 export interface OceanGeometry {

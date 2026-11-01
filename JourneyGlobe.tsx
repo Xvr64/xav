@@ -325,21 +325,21 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
       const mc = (l: number[], d: number[]) =>
         `rgba(${Math.round(lerpN(l[0], d[0], nt))}, ${Math.round(lerpN(l[1], d[1], nt))}, ${Math.round(lerpN(l[2], d[2], nt))}, ${lerpN(l[3] ?? 1, d[3] ?? 1, nt).toFixed(3)})`;
 
-      // Sphere: soft paper disc (separates the globe from the whales) + hairline limb
+      // Sphere: soft sea-glass disc (separates the globe from the whales) + hairline limb
       const ocean = ctx.createRadialGradient(cx - R * 0.3, cy - R * 0.35, R * 0.1, cx, cy, R);
-      ocean.addColorStop(0, mc([249, 248, 245, 0.95], [150, 172, 170, 0.6]));
-      ocean.addColorStop(1, mc([231, 235, 236, 0.95], [112, 134, 132, 0.66]));
+      ocean.addColorStop(0, mc([226, 242, 250, 0.92], [134, 170, 226, 0.6]));
+      ocean.addColorStop(1, mc([198, 226, 244, 0.92], [96, 132, 204, 0.66]));
       ctx.beginPath();
       ctx.arc(cx, cy, R, 0, Math.PI * 2);
       ctx.fillStyle = ocean;
       ctx.fill();
       ctx.lineWidth = 1;
-      ctx.strokeStyle = mc([31, 59, 87, 0.22], [200, 218, 216, 0.32]);
+      ctx.strokeStyle = mc([31, 59, 87, 0.22], [200, 218, 240, 0.32]);
       ctx.stroke();
 
       // Graticule (front hemisphere only, batched into 1 stroke call)
       ctx.lineWidth = 0.6;
-      ctx.strokeStyle = mc([31, 59, 87, 0.08], [16, 34, 30, 0.12]);
+      ctx.strokeStyle = mc([31, 59, 87, 0.08], [12, 26, 64, 0.12]);
       ctx.beginPath();
       for (const line of graticule) {
         let pen = false;
@@ -361,9 +361,9 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
         const vx = view[0], vy = view[1], vz = view[2];
         const dotScale = Math.max(0.75, Math.min(1.6, R / 300));
         const bandColors = [
-          mc([86, 99, 109], [36, 60, 54]),
-          mc([60, 72, 82], [22, 44, 38]),
-          mc([38, 49, 58], [10, 26, 22])
+          mc([76, 100, 124], [30, 52, 104]),
+          mc([52, 74, 98], [18, 38, 86]),
+          mc([32, 50, 72], [8, 22, 62])
         ];
         const bCounts = [0, 0, 0, 0];
         for (let b = 0; b < 3; b++) {
@@ -441,8 +441,8 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
         }
         const isCurrent = j === st.tracing;
         ctx.strokeStyle = isCurrent
-          ? mc([22, 38, 51, 0.85], [6, 20, 16, 0.9])
-          : mc([31, 59, 87, 0.55], [14, 38, 32, 0.6]);
+          ? mc([22, 38, 51, 0.85], [6, 16, 44, 0.9])
+          : mc([31, 59, 87, 0.55], [12, 30, 72, 0.6]);
         ctx.lineWidth = isCurrent ? 1.8 : 1.3;
         ctx.stroke();
         if (isCurrent) head = last;
@@ -459,7 +459,7 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
         ctx.setLineDash([1.5, 5]);
         ctx.lineWidth = 1.3;
         ctx.globalAlpha = Math.min(1, diveWake.strength);
-        ctx.strokeStyle = mc([31, 59, 87, 0.8], [14, 38, 32, 0.8]);
+        ctx.strokeStyle = mc([31, 59, 87, 0.8], [12, 30, 72, 0.8]);
         ctx.beginPath();
         ctx.moveTo(fromX, fromY);
         ctx.lineTo(fromX + (toX - fromX) * diveWake.reach, fromY + (toY - fromY) * diveWake.reach);
@@ -470,7 +470,7 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
       if (head) {
         ctx.beginPath();
         ctx.arc(head.x, head.y, 3, 0, Math.PI * 2);
-        ctx.fillStyle = mc([22, 38, 51], [6, 20, 16]);
+        ctx.fillStyle = mc([22, 38, 51], [6, 16, 44]);
         ctx.fill();
       }
 
@@ -490,7 +490,7 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
         if (rv <= 0.01) {
           ctx.beginPath();
           ctx.arc(x, y, 2.4, 0, Math.PI * 2);
-          ctx.strokeStyle = mc([31, 59, 87, 0.35], [14, 38, 32, 0.45]);
+          ctx.strokeStyle = mc([31, 59, 87, 0.35], [12, 30, 72, 0.45]);
           ctx.lineWidth = 1;
           ctx.stroke();
           continue;
@@ -498,17 +498,17 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
         if (isActive) {
           ctx.beginPath();
           ctx.arc(x, y, 10, 0, Math.PI * 2);
-          ctx.strokeStyle = mc([22, 38, 51, 0.45], [6, 20, 16, 0.55]);
+          ctx.strokeStyle = mc([22, 38, 51, 0.45], [6, 16, 44, 0.55]);
           ctx.lineWidth = 1;
           ctx.stroke();
         }
         ctx.globalAlpha = 0.35 + 0.65 * rv;
         ctx.beginPath();
         ctx.arc(x, y, isActive ? 4.5 : 3.4, 0, Math.PI * 2);
-        ctx.fillStyle = mc([22, 38, 51], [6, 20, 16]);
+        ctx.fillStyle = mc([22, 38, 51], [6, 16, 44]);
         ctx.fill();
         ctx.lineWidth = 1.5;
-        ctx.strokeStyle = mc([247, 246, 242, 0.95], [200, 218, 216, 0.9]);
+        ctx.strokeStyle = mc([240, 248, 253, 0.95], [200, 218, 240, 0.9]);
         ctx.stroke();
         ctx.globalAlpha = 1;
 
@@ -535,9 +535,9 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
         ctx.textAlign = align;
         ctx.textBaseline = 'alphabetic';
         ctx.lineWidth = 4;
-        ctx.strokeStyle = mc([245, 243, 238, 0.92], [168, 190, 188, 0.88]);
+        ctx.strokeStyle = mc([232, 245, 252, 0.92], [150, 182, 230, 0.88]);
         ctx.strokeText(label, lx, ly);
-        ctx.fillStyle = isActive ? mc([22, 38, 51], [4, 16, 13]) : mc([43, 53, 59], [14, 32, 28]);
+        ctx.fillStyle = isActive ? mc([22, 38, 51], [4, 12, 36]) : mc([43, 53, 59], [12, 26, 62]);
         ctx.fillText(label, lx, ly);
       }
       blit();

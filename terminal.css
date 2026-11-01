@@ -84,8 +84,8 @@
 
   /* Static fallbacks (the abyss palette sets --ink-* live) */
   --ink-primary: #171717;
-  --ink-secondary: #3E4C52;
-  --ink-muted: #52595E;
+  --ink-secondary: rgb(34, 56, 80);
+  --ink-muted: rgb(38, 62, 88);
 }
 
 /* overflow-x:hidden makes body a scroll container and breaks the globe's sticky stage. */
@@ -335,7 +335,7 @@ body {
   font-style: italic;
   font-weight: var(--display-weight, 300);
   margin-top: 0.1em;
-  color: #2F4858;
+  color: rgb(36, 66, 98);
 }
 
 

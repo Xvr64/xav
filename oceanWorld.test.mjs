@@ -40,12 +40,30 @@ test('before the Globe is measured the whole page is surface water', () => {
   assert.equal(depthAtScroll(6000, unmeasured), 0);
 });
 
-test('the palette is cream at the top, blue in the middle and near-black at the bottom', () => {
-  const [r0, g0, b0] = waterAt(0);
-  assert.ok(r0 > 0.93 && r0 > b0, 'warm cream surface');
-  const [r1, g1, b1] = waterAt(0.6);
-  assert.ok(b1 > r1 && g1 > r1, 'cool ocean blue in the middle');
-  assert.ok(luminance(waterAt(1)) < 0.005, 'near-black abyss');
+const hex = (rgb) => '#' + rgb.map((v) => Math.round(v * 255).toString(16).padStart(2, '0')).join('').toUpperCase();
+
+test('the water passes through the reference colours: sky blue, light ocean, ocean blue, navy, abyss', () => {
+  for (const [depth, colour] of [
+    [0, '#99D6F1'],
+    [0.26, '#6BB7EB'],
+    [0.54, '#2563CE'],
+    [0.74, '#172264'],
+    [1, '#111017']
+  ]) {
+    assert.equal(hex(waterAt(depth)), colour, `water at depth ${depth}`);
+  }
+});
+
+test('every depth is blue water, never cream or grey, darkening all the way down', () => {
+  let previous = Infinity;
+  for (let d = 0; d <= 1.0001; d += 0.02) {
+    const [r, g, b] = waterAt(d);
+    assert.ok(b > r, `blue water at depth ${d.toFixed(2)}`);
+    const y = luminance(waterAt(d));
+    assert.ok(y <= previous + 1e-9, `water lightened at depth ${d.toFixed(2)}`);
+    previous = y;
+  }
+  assert.ok(luminance(waterAt(1)) < 0.01, 'near-black abyss');
 });
 
 test("the page ink flips where the water is mid-tone, so both inks stay readable", () => {
