@@ -9,7 +9,8 @@ import {
   entryEndFor,
   exitStartFor,
   isDecodable,
-  lineProgress
+  lineProgress,
+  VIEWPORT_ZONES
 } from './terminalMotion';
 import {
   disableDecodeSound,
@@ -23,24 +24,18 @@ import './terminal.css';
 
 /**
  * Eligibility for the character decode, in one place:
- *  - All ordinary page copy inside a `[data-editorial-section]` is written through `AsciiText`,
- *    but only the display tier decodes: section titles, entry titles (companies, the degree's
- *    institution), the languages and the email (`DISPLAY`). Reading text (statements, roles, lists,
- *    paragraphs and metadata) stays still and fully legible wherever it sits on screen; its words
- *    are simply never measured, so they keep showing their plain overlay.
+ *  - Every `<AsciiText>` inside a `[data-editorial-section]` decodes. All ordinary page copy
+ *    (headings, personal introduction, experience, education, skills, languages, interests, contact,
+ *    and metadata) is written through `AsciiText`.
  *  - `[data-ascii-preserve]` opts a subtree out. It is used only where another system already
  *    owns the motion: the cover stage (its own letter-to-current headline animation), the
  *    visually clipped semantic name under the cover, and the Globe runway (city captions are
  *    part of the Globe's own sequence).
  *  - Canvas art (whales, boat, jellyfish, ocean, particles, Globe) is not DOM text and is never
  *    touched. Overlays outside the sections (CV preview modal, download toast) are not scroll copy.
- * In development the controller warns about visible section text that is neither decoded nor
- * excluded, so a new paragraph cannot silently bypass the system.
  */
 const ELIGIBLE = '[data-editorial-section] [data-ascii-text]';
 const EXCLUDED = '[data-ascii-preserve]';
-/** The display tier: the only text that decodes on scroll. */
-const DISPLAY = '.ocean-h2, .entry-title, .lang-name, .contact-address';
 
 /** Original text reserves every word's exact geometry and remains accessible.
  * Only the absolutely positioned, aria-hidden duplicate is ever mutated. */
@@ -96,6 +91,21 @@ type Word = {
   /** Last state shown per character (RESOLVED or a glyph state) and last opacity written. */
   states: Int8Array;
   opacities: Float32Array;
+
+  // Reveal lifecycle tracking
+  revealState: 'hidden' | 'revealing' | 'revealed' | 'exiting';
+  revealStartTime: number;
+  currentP: number;
+};
+
+type Line = {
+  top: number;
+  entryEnd: number;
+  exitStart: number;
+  words: Word[];
+  revealState: 'hidden' | 'revealing' | 'revealed' | 'exiting';
+  revealStartTime: number;
+  currentP: number;
 };
 
 /** The nearest block-level ancestor: the column a line of text is set in. */
@@ -120,10 +130,13 @@ function auditCoverage() {
   if (missed.length) console.warn('[ascii-decode] section text outside the decode system:', missed);
 }
 
+const DURATION_MS = 380;
+
 export function useEditorialScroll() {
   useEffect(() => {
     const media = window.matchMedia('(prefers-reduced-motion: reduce)');
     const cache = new WeakMap<HTMLElement, Word>();
+    let docLines: Line[] = [];
     let words: Word[] = [];
     let frame = 0;
     let dirty = true;
@@ -137,12 +150,13 @@ export function useEditorialScroll() {
       viewport = window.innerHeight;
       const scrollY = window.scrollY;
       const maxScroll = Math.max(0, document.documentElement.scrollHeight - viewport);
-      const next: Word[] = [];
+      const nextWords: Word[] = [];
+      const lineMap = new Map<number, Line>();
       let counter = 0;
+
       document.querySelectorAll<HTMLElement>(ELIGIBLE).forEach((text) => {
-        if (text.closest(EXCLUDED) || !text.closest(DISPLAY)) return;
+        if (text.closest(EXCLUDED)) return;
         const block = blockOf(text).getBoundingClientRect();
-        const lines: { top: number; words: Word[] }[] = [];
         text.querySelectorAll<HTMLElement>('.ascii-word').forEach((el) => {
           const visual = el.querySelector<HTMLElement>('.ascii-visual');
           const source = el.querySelector<HTMLElement>('.ascii-source');
@@ -152,6 +166,7 @@ export function useEditorialScroll() {
           if (rect.width === 0 && rect.height === 0) return;
           const original = visual.dataset.word || source.textContent || '';
           let word = cache.get(el);
+          const wasRevealed = word?.revealState === 'revealed';
           if (!word || word.original !== original) {
             const chars = Array.from(original);
             word = {
@@ -175,7 +190,10 @@ export function useEditorialScroll() {
               cellW: null,
               cells: null,
               states: new Int8Array(chars.length).fill(RESOLVED),
-              opacities: new Float32Array(chars.length).fill(1)
+              opacities: new Float32Array(chars.length).fill(1),
+              revealState: wasRevealed ? 'revealed' : 'hidden',
+              revealStartTime: 0,
+              currentP: wasRevealed ? 1 : 0
             };
             if (visual.textContent !== original) visual.textContent = original;
             cache.set(el, word);
@@ -189,23 +207,51 @@ export function useEditorialScroll() {
           word.ts = word.cellX = word.cellW = null;
           word.cells = null;
           if (word.shown === 'cells') word.shown = 'stale';
+
           const top = rect.top + scrollY;
-          let line = lines.find((l) => Math.abs(l.top - top) <= 4);
-          if (!line) lines.push((line = { top, words: [] }));
-          line.words.push(word);
+          let matchedLine: Line | undefined;
+          for (const key of lineMap.keys()) {
+            if (Math.abs(key - top) <= 6) {
+              matchedLine = lineMap.get(key);
+              break;
+            }
+          }
+          if (!matchedLine) {
+            const entryEnd = entryEndFor(top - maxScroll, viewport);
+            const exitStart = exitStartFor(top - maxScroll, viewport);
+            matchedLine = {
+              top,
+              entryEnd,
+              exitStart,
+              words: [],
+              revealState: word.revealState,
+              revealStartTime: word.revealStartTime,
+              currentP: word.currentP
+            };
+            lineMap.set(top, matchedLine);
+          }
+          if (word.revealState === 'revealed') {
+            matchedLine.revealState = 'revealed';
+            matchedLine.currentP = 1;
+          } else if (word.revealState === 'revealing' && matchedLine.revealState !== 'revealed') {
+            matchedLine.revealState = 'revealing';
+            matchedLine.revealStartTime = word.revealStartTime;
+            matchedLine.currentP = word.currentP;
+          }
+          matchedLine.words.push(word);
+          word.top = matchedLine.top;
+          word.entryEnd = matchedLine.entryEnd;
+          word.exitStart = matchedLine.exitStart;
+          nextWords.push(word);
         });
-        lines.forEach((line) => {
-          const entryEnd = entryEndFor(line.top - maxScroll, viewport);
-          const exitStart = exitStartFor(line.top - maxScroll, viewport);
-          line.words.forEach((word) => {
-            word.top = line.top;
-            word.entryEnd = entryEnd;
-            word.exitStart = exitStart;
-          });
-        });
-        lines.forEach((line) => next.push(...line.words));
       });
-      words = next;
+
+      docLines = Array.from(lineMap.values());
+      docLines.sort((a, b) => a.top - b.top);
+      for (const line of docLines) {
+        line.words.sort((a, b) => a.el.getBoundingClientRect().left - b.el.getBoundingClientRect().left);
+      }
+      words = nextWords;
       dirty = false;
       if (!audited && (import.meta as { env?: { DEV?: boolean } }).env?.DEV) {
         audited = true;
@@ -252,20 +298,96 @@ export function useEditorialScroll() {
       frame = 0;
       if (dirty) measure();
       const y = window.scrollY;
-      // Sound answers scrolling only: resizes, font loads and focus changes re-render silently
-      const scrolled = Number.isFinite(lastY) && y !== lastY;
+      const now = performance.now();
       lastY = y;
       const isReduced = media.matches;
       const focused = document.activeElement;
 
-      // Pass 1 (reads only): which words change this frame, and character geometry they need
+      const entryThreshold = viewport * VIEWPORT_ZONES.ENTRY_START;
+      const exitThreshold = viewport * VIEWPORT_ZONES.EXIT_END;
+
+      let needsAnotherRaf = false;
+
+      // Count newly entering lines to apply a gentle cascading stagger when multiple lines enter at once
+      let newlyEnteredCount = 0;
+      for (const line of docLines) {
+        const relTop = line.top - y;
+        const inViewport = relTop <= entryThreshold && relTop >= viewport * line.exitStart;
+        if (inViewport && line.revealState === 'hidden' && !isReduced) {
+          newlyEnteredCount++;
+        }
+      }
+
+      let newlyEnteredIndex = 0;
+
+      // Pass 1: Update reveal state and progress per line
+      for (const line of docLines) {
+        const relTop = line.top - y;
+        const exitStartThreshold = viewport * line.exitStart;
+
+        if (isReduced) {
+          line.revealState = 'revealed';
+          line.currentP = 1;
+        } else if (relTop > entryThreshold) {
+          // Below the viewport
+          line.revealState = 'hidden';
+          line.currentP = 0;
+        } else if (relTop < exitThreshold) {
+          // Scrolled completely above the viewport
+          line.revealState = 'hidden';
+          line.currentP = 0;
+        } else if (relTop < exitStartThreshold) {
+          // Exiting out the top scramble zone (between 0.04 and 0.14)
+          line.revealState = 'exiting';
+          line.currentP = lineProgress(relTop, viewport, line.entryEnd, line.exitStart);
+        } else {
+          // Inside the visible / reading zone
+          if (line.revealState === 'revealed') {
+            line.currentP = 1;
+          } else if (line.revealState === 'exiting') {
+            // Re-entered the reading zone from above: fully resolved!
+            line.revealState = 'revealed';
+            line.currentP = 1;
+          } else if (line.revealState === 'hidden') {
+            // Newly entered!
+            const stagger = newlyEnteredCount > 1 ? Math.min(newlyEnteredIndex++ * 35, 140) : 0;
+            line.revealState = 'revealing';
+            line.revealStartTime = now + stagger;
+            line.currentP = 0;
+            needsAnotherRaf = true;
+          } else if (line.revealState === 'revealing') {
+            if (now < line.revealStartTime) {
+              line.currentP = 0;
+              needsAnotherRaf = true;
+            } else {
+              const elapsed = now - line.revealStartTime;
+              const timeP = Math.min(1, elapsed / DURATION_MS);
+              line.currentP = timeP;
+              if (timeP < 1) {
+                needsAnotherRaf = true;
+              } else {
+                line.currentP = 1;
+                line.revealState = 'revealed';
+              }
+            }
+          }
+        }
+
+        // Sync state back to each word in this line
+        for (const w of line.words) {
+          w.revealState = line.revealState;
+          w.currentP = line.currentP;
+        }
+      }
+
+      // Pass 2: Determine which words need updating in DOM this frame
       const pending: { w: Word; p: number; entering: boolean }[] = [];
       for (const w of words) {
         const relTop = w.top - y;
         const forced = isReduced || (w.control !== null && w.control === focused);
-        const lineP = forced ? 1 : lineProgress(relTop, viewport, w.entryEnd, w.exitStart);
+        const lineP = forced ? 1 : w.currentP;
         const entering = relTop > viewport * 0.5;
-        // Quantized so sub-pixel scroll jitter never re-renders (or clicks)
+        // Quantized to prevent micro-renders on subpixel jitter
         const p = Math.round(lineP * 240) / 240;
         const key = entering ? p : -p - 1;
         if (w.key === key) continue;
@@ -274,7 +396,7 @@ export function useEditorialScroll() {
         pending.push({ w, p, entering });
       }
 
-      // Pass 2 (writes only)
+      // Pass 3 (DOM writes)
       let enterChanges = 0;
       let exitChanges = 0;
       let locks = 0;
@@ -301,6 +423,10 @@ export function useEditorialScroll() {
           });
           w.states.fill(0);
           w.opacities.fill(-1);
+          if (w.shown !== 'text') {
+            w.visual.textContent = w.original;
+            w.shown = 'text';
+          }
           w.el.style.opacity = '0';
         } else {
           if (!w.cells) buildCells(w);
@@ -333,7 +459,15 @@ export function useEditorialScroll() {
         if (entering) enterChanges += changes;
         else exitChanges += changes;
       }
-      if (scrolled) noteDecodeActivity(enterChanges + exitChanges, locks, exitChanges > enterChanges);
+
+      if (enterChanges + exitChanges > 0) {
+        noteDecodeActivity(enterChanges + exitChanges, locks, exitChanges > enterChanges);
+      }
+
+      // Keep RAF loop running while any line is revealing
+      if (needsAnotherRaf && !disposed) {
+        schedule();
+      }
     };
 
     const schedule = () => {

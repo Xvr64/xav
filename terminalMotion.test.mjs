@@ -189,3 +189,91 @@ test('background remains white before the globe and black after its exact end', 
     previous = shade;
   }
 });
+
+test('reveal state machine guarantees animation on fast scroll without skipping', () => {
+  const viewport = 900;
+  const DURATION_MS = 380;
+  const entryThreshold = viewport * VIEWPORT_ZONES.ENTRY_START; // 855px
+  const exitStartThreshold = viewport * VIEWPORT_ZONES.EXIT_START; // 126px
+  const exitThreshold = viewport * VIEWPORT_ZONES.EXIT_END; // 36px
+
+  // Simulate a line component using the state machine
+  class TestLine {
+    constructor(top) {
+      this.top = top;
+      this.revealState = 'hidden';
+      this.revealStartTime = 0;
+      this.currentP = 0;
+    }
+
+    update(y, now) {
+      const relTop = this.top - y;
+      if (relTop > entryThreshold || relTop < exitThreshold) {
+        this.revealState = 'hidden';
+        this.currentP = 0;
+      } else if (relTop < exitStartThreshold) {
+        this.revealState = 'exiting';
+        this.currentP = lineProgress(relTop, viewport);
+      } else {
+        if (this.revealState === 'revealed') {
+          this.currentP = 1;
+        } else if (this.revealState === 'hidden') {
+          this.revealState = 'revealing';
+          this.revealStartTime = now;
+          this.currentP = 0;
+        } else if (this.revealState === 'revealing') {
+          const elapsed = now - this.revealStartTime;
+          const timeP = Math.min(1, elapsed / DURATION_MS);
+          this.currentP = timeP;
+          if (timeP >= 1) {
+            this.revealState = 'revealed';
+          }
+        }
+      }
+      return this.currentP;
+    }
+  }
+
+  const line = new TestLine(1500);
+
+  // 1. Offscreen initially at y = 0
+  assert.equal(line.update(0, 0), 0);
+  assert.equal(line.revealState, 'hidden');
+
+  // 2. Fast scroll: a single mouse wheel flick / jump brings it directly into reading zone (relTop = 450)
+  const jumpY = 1050; // relTop = 1500 - 1050 = 450 (exactly in reading zone)
+  const p0 = line.update(jumpY, 100);
+  // Crucial requirement: It MUST NOT skip to 1! It starts at 0 and enters 'revealing'
+  assert.equal(p0, 0, 'On the instant of arrival during fast scroll, progress must start at 0');
+  assert.equal(line.revealState, 'revealing');
+
+  // 3. Across subsequent frames, it decodes through ASCII glyph states
+  const p1 = line.update(jumpY, 195); // 95ms in (1/4 through duration)
+  assert.ok(p1 >= 0.24 && p1 <= 0.26, `Quarter through duration should be ~0.25, got ${p1}`);
+  assert.equal(line.revealState, 'revealing');
+
+  // Characters at p1 are genuinely decoding through glyphs, not resolved
+  const midDecoded = decodeChars('EXPERIENCE', 0, 10, p1, true, 42);
+  assert.notEqual(midDecoded, 'EXPERIENCE', 'Text must show ASCII glyphs during decoding wave');
+
+  // 4. At the end of the duration, it cleanly resolves into readable text
+  const pFinal = line.update(jumpY, 480);
+  assert.equal(pFinal, 1, 'After duration completes, text must be fully resolved');
+  assert.equal(line.revealState, 'revealed');
+  assert.equal(decodeChars('EXPERIENCE', 0, 10, pFinal, true, 42), 'EXPERIENCE');
+
+  // 5. While staying in the reading zone, further small scrolls or time changes do NOT restart or flicker
+  const pStay = line.update(jumpY + 30, 600);
+  assert.equal(pStay, 1);
+  assert.equal(line.revealState, 'revealed');
+
+  // 6. Reverse scrolling: scrolling back up past the bottom resets to hidden
+  line.update(0, 700); // relTop = 1500 > entryThreshold
+  assert.equal(line.revealState, 'hidden');
+  assert.equal(line.currentP, 0);
+
+  // 7. Scrolling down again re-triggers the reveal reliably
+  line.update(jumpY, 800);
+  assert.equal(line.revealState, 'revealing');
+  assert.equal(line.currentP, 0);
+});
