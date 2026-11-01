@@ -21,7 +21,6 @@ import {
   toTitleCase
 } from './OceanEntry';
 import { GLOBAL_PORTFOLIO_CSS } from './portfolioStyles';
-import { HadalFloor } from './HadalFloor';
 
 // ============================================================================
 // PAGE COMPOSITION — the layers and sections live in their own modules:
@@ -429,7 +428,6 @@ export default function App() {
           {/* SECTION 08: CONTACT & DOSSIER (Direct Correspondence Suite) */}
           {/* Kept within one screen on desktop so the final, resting view holds the whole section */}
           <section id="contact" data-editorial-section className="relative pb-16 sm:pb-20">
-            <HadalFloor />
             <RevealBlock variant="section">
               <FloatingSectionHeader
                 sectionId="contact"
