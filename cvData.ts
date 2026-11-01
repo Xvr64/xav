@@ -96,7 +96,7 @@ export const CV_DATA = {
       company: 'FRESHPEPPER',
       role: 'Business Development & Operations Intern',
       date: 'April 2025',
-      domainTag: 'B2B Negotiations / Commercial Quotations / Cross-Team Workflow',
+      domainTag: '',
       concisePoints: [],
       verbatimPoints: []
     },
@@ -106,7 +106,7 @@ export const CV_DATA = {
       company: 'BOLLORÉ LOGISTICS',
       role: 'Logistics Operations Intern',
       date: 'July 2022',
-      domainTag: 'International Air & Sea Freight / Carrier Coordination / Customs Documentation',
+      domainTag: '',
       concisePoints: [],
       verbatimPoints: []
     }

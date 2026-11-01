@@ -249,20 +249,12 @@ export default function App() {
                       <BioWords text={toTitleCase(exp.company)} />
                     </h3>
                     <p className="exp-when meta">
-                      <span className="exp-index" aria-hidden="true"><AsciiText text={`stn ${exp.index}`} /></span>
                       <BioWords text={exp.date} />
                     </p>
                     <div className="exp-who">
                       <p className="exp-role">
                         <BioWords text={exp.role} />
                       </p>
-                      <ul className="exp-tags meta">
-                        {exp.domainTag.split(/\s*\/\s*/).map((tag) => (
-                          <li key={tag}>
-                            <BioWords text={tag} />
-                          </li>
-                        ))}
-                      </ul>
                     </div>
                     {exp.concisePoints && exp.concisePoints.length > 0 && (
                       <ul className="exp-what">
