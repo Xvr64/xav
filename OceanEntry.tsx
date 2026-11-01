@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { AsciiText } from './TerminalEditorial';
 import { createHeroCurrent } from './heroCurrent';
 import { CV_DATA } from './cvData';
@@ -282,118 +282,7 @@ export const MigrationRunway: React.FC = React.memo(() => {
   return <div ref={ref} className="migration-runway" aria-hidden="true" />;
 });
 
-export const HEADLINE_TRANSLATIONS = [
-  { line1: 'A journey without', line2: 'horizons', full: 'A journey without horizons', lang: 'en' },
-  { line1: 'Un voyage sans', line2: 'horizons', full: 'Un voyage sans horizons', lang: 'fr' },
-  { line1: 'Un viaje sin', line2: 'horizontes', full: 'Un viaje sin horizontes', lang: 'es' },
-  { line1: '一段没有', line2: '地平线的旅程', full: '一段没有地平线的旅程', lang: 'zh' },
-  { line1: 'رحلة بلا', line2: 'آفاق', full: 'رحلة بلا آفاق', lang: 'ar', dir: 'rtl' },
-  { line1: 'Путешествие без', line2: 'горизонтов', full: 'Путешествие без горизонтов', lang: 'ru' }
-] as const;
-
-const DECODE_GLYPHS = ['·', ':', '~', '+', '=', '*', '/', '\\', '-', '°'];
-
-/**
- * Progressive character decode ripple.
- * Characters shimmer through fluid oceanic ASCII glyphs before locking in.
- */
-export const animatedHeroLetters = (text: string, progress: number, isRtl = false) => {
-  const chars = Array.from(text);
-  const L = chars.length;
-  return chars.map((ch, i) => {
-    if (ch === ' ') return ' ';
-    if (progress >= 1) {
-      return (
-        <span key={i} className="hero-letter" data-hero-letter>
-          {ch}
-        </span>
-      );
-    }
-    const idx = isRtl ? L - 1 - i : i;
-    const threshold = (idx / Math.max(1, L)) * 0.62;
-    const isResolved = progress >= threshold + 0.38;
-    const displayed = isResolved ? ch : DECODE_GLYPHS[(i + Math.floor(progress * 14)) % DECODE_GLYPHS.length];
-    return (
-      <span key={i} className="hero-letter" data-hero-letter>
-        {displayed}
-      </span>
-    );
-  });
-};
-
 export const ProgressiveOceanEntry: React.FC<ProgressiveOceanEntryProps> = React.memo(({ cvUrl }) => {
-  const [transIdx, setTransIdx] = useState(0);
-  const [phase, setPhase] = useState<'entered' | 'exiting' | 'entering'>('entered');
-  const [decodeProgress, setDecodeProgress] = useState(1);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const isReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-    let rafId = 0;
-    let switchTimer = 0;
-    let enterTimer = 0;
-
-    const onScroll = () => {
-      if (window.scrollY > 30) {
-        setPhase('entered');
-        setDecodeProgress(1);
-      }
-    };
-    window.addEventListener('scroll', onScroll, { passive: true });
-
-    const interval = setInterval(() => {
-      // Pause translation cycling while visitor is actively scrolling
-      if (window.scrollY > 30) return;
-
-      // 1. Exit phase: smooth vertical drift, optical blur, and staggered fade
-      setPhase('exiting');
-
-      // 2. Switch text after exit transition
-      switchTimer = window.setTimeout(() => {
-        setTransIdx((prev) => (prev + 1) % HEADLINE_TRANSLATIONS.length);
-        setPhase('entering');
-        setDecodeProgress(isReduced ? 1 : 0);
-
-        // 3. Trigger enter transition in next tick
-        enterTimer = window.setTimeout(() => {
-          setPhase('entered');
-
-          if (!isReduced) {
-            const start = performance.now();
-            const duration = 280;
-            const animateDecode = (now: number) => {
-              const elapsed = now - start;
-              const p = Math.min(1, elapsed / duration);
-              setDecodeProgress(p);
-              if (p < 1) {
-                rafId = requestAnimationFrame(animateDecode);
-              } else {
-                setDecodeProgress(1);
-                window.dispatchEvent(new Event('resize'));
-              }
-            };
-            rafId = requestAnimationFrame(animateDecode);
-          } else {
-            window.dispatchEvent(new Event('resize'));
-          }
-        }, 25);
-      }, 320);
-    }, 3200);
-
-    return () => {
-      clearInterval(interval);
-      clearTimeout(switchTimer);
-      clearTimeout(enterTimer);
-      cancelAnimationFrame(rafId);
-      window.removeEventListener('scroll', onScroll);
-    };
-  }, []);
-
-  const current = HEADLINE_TRANSLATIONS[transIdx];
-  const isRtl = (current as { dir?: string }).dir === 'rtl';
-  const animClass = phase === 'exiting' ? 'is-exiting' : phase === 'entering' ? 'is-entering' : 'is-entered';
-
   return (
     <>
       {/* Cover: a scroll runway with a pinned stage. The headline's real letters break into the
@@ -403,21 +292,15 @@ export const ProgressiveOceanEntry: React.FC<ProgressiveOceanEntryProps> = React
         <div className="hero-stage" data-hero-stage data-ascii-preserve>
           <div className="minimal-hero ed-grid">
             {/* The cover's line is the page's epigraph; the name below is its one h1 */}
-            <p
-              className="display cover-title"
-              lang={current.lang}
-              style={{
-                direction: isRtl ? 'rtl' : 'ltr'
-              }}
-            >
-              <span className="sr-only">{current.full}</span>
-              <span className={`cover-line cover-line-anim ${animClass}`} aria-hidden="true">
-                {animatedHeroLetters(current.line1, decodeProgress, isRtl)}
+            <p className="display cover-title">
+              <span className="sr-only">A journey without horizons</span>
+              <span className="cover-line" aria-hidden="true">
+                {heroLetters('A journey without')}
                 {/* An invisible datum under the first line: it times the letters' break-up, never drawn */}
                 <span className="hero-horizon" data-hero-horizon />
               </span>
-              <span className={`cover-line cover-line--drift cover-line-anim cover-line-anim--drift ${animClass}`} aria-hidden="true">
-                {animatedHeroLetters(current.line2, decodeProgress, isRtl)}
+              <span className="cover-line cover-line--drift" aria-hidden="true">
+                {heroLetters('horizons')}
               </span>
             </p>
           </div>
@@ -428,8 +311,6 @@ export const ProgressiveOceanEntry: React.FC<ProgressiveOceanEntryProps> = React
           </p>
           {/* Colophon: who, what and the CV, readable from the first frame while the cover plays */}
           <div className="hero-colophon ed-grid">
-            <p className="colophon-name meta">{toTitleCase(CV_DATA.name)}</p>
-            <p className="colophon-role meta">International Business · {CV_DATA.education[0].institution}</p>
             <p className="colophon-cv meta">
               <a href={cvUrl} target="_blank" rel="noopener noreferrer">
                 CV <span aria-hidden="true">↗</span>

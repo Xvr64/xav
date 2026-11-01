@@ -292,7 +292,7 @@ body {
   }
 }
 
-/* Colophon: who and where, set as quietly as a chart's title block */
+/* Colophon: top right CV link */
 .hero-colophon {
   position: absolute;
   inset: 0 0 auto 0;
@@ -302,9 +302,11 @@ body {
   pointer-events: none;
 }
 .hero-colophon p { margin: 0; }
-.hero-colophon .colophon-name { grid-column: a / span 2; color: var(--ink-171717, #171717); }
-.hero-colophon .colophon-role { grid-column: b / span 6; }
-.hero-colophon .colophon-cv { grid-column: c / span 2; }
+.hero-colophon .colophon-cv {
+  grid-column: c / span 4;
+  justify-self: end;
+  text-align: right;
+}
 .hero-colophon a { pointer-events: auto; color: var(--ink-171717, #171717); }
 
 .minimal-hero {
@@ -336,45 +338,6 @@ body {
   color: #2F4858;
 }
 
-/* Atmospheric editorial translation animations for the cover headline */
-.cover-line-anim {
-  will-change: transform, opacity, filter;
-  transition: transform 0.52s cubic-bezier(0.16, 1, 0.3, 1),
-              opacity 0.48s cubic-bezier(0.16, 1, 0.3, 1),
-              filter 0.48s cubic-bezier(0.16, 1, 0.3, 1);
-}
-.cover-line-anim--drift {
-  transition-delay: 0.08s;
-}
-.cover-line-anim.is-exiting {
-  transform: translateY(-9px);
-  opacity: 0;
-  filter: blur(4px);
-  transition: transform 0.32s cubic-bezier(0.4, 0, 0.2, 1),
-              opacity 0.28s cubic-bezier(0.4, 0, 0.2, 1),
-              filter 0.28s cubic-bezier(0.4, 0, 0.2, 1);
-}
-.cover-line-anim.is-entering {
-  transform: translateY(11px);
-  opacity: 0;
-  filter: blur(4px);
-  transition: none !important;
-}
-.cover-line-anim.is-entered {
-  transform: translateY(0);
-  opacity: 1;
-  filter: blur(0);
-}
-@media (prefers-reduced-motion: reduce) {
-  .cover-line-anim,
-  .cover-line-anim.is-exiting,
-  .cover-line-anim.is-entering,
-  .cover-line-anim.is-entered {
-    transform: none !important;
-    filter: none !important;
-    transition: opacity 0.35s ease !important;
-  }
-}
 
 /* The waterline's datum: an invisible zero-height mark just under the first line's baseline.
    heroCurrent.ts measures it to time the break-up; nothing is drawn. */
@@ -757,18 +720,15 @@ body {
   .minimal-hero .cover-title > * { grid-column: 1 / -1 !important; grid-row: auto !important; }
   .minimal-hero .cover-title { grid-template-columns: minmax(0, 1fr); }
   :root { --text-name: 27vw; --text-statement: 25px; }
-  .hero-colophon { grid-template-columns: 1fr auto; }
-  .hero-colophon .colophon-name { grid-column: 1 !important; }
-  .hero-colophon .colophon-role { grid-column: 1 !important; grid-row: 2 !important; }
-  .hero-colophon .colophon-cv { grid-column: 2 !important; grid-row: 2 !important; }
+  .hero-colophon { display: flex; justify-content: flex-end; }
+  .hero-colophon .colophon-cv {
+    margin-left: auto;
+    grid-column: auto !important;
+    grid-row: auto !important;
+    text-align: right;
+  }
   .minimal-hero { padding-top: calc(50svh - 1.88 * var(--text-cover)); }
   .minimal-hero .cover-line--drift { padding-left: 1.1em; }
-  /* Chinese sets every character as a full em: the six-character line keeps to one line by
-     dropping the drift indent and, on the narrowest phones, stepping down to fit the measure */
-  .minimal-hero .cover-title:lang(zh) .cover-line--drift {
-    padding-left: 0;
-    font-size: min(1em, calc((100vw - 2 * var(--page-margin)) / 6.3));
-  }
   .hero-name { padding-top: 17svh; }
   .hero-name, .intro-name { grid-template-columns: minmax(0, 1fr); }
   .hero-name > *, .intro-name > * { grid-column: 1 / -1 !important; }
