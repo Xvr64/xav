@@ -134,10 +134,18 @@ export const LANES_INTERESTS = LANES_RIGHT;
 export const LANES_CONTACT: Lane[] = [{ x: 0.86, y: 0.44 }, { x: 0.5, y: 0.97 }];
 export const LANES_DEEP_NARROW: Lane[] = [{ x: 0.86, y: 0.95 }, { x: 0.12, y: 0.97 }];
 
+export const LANES_GLOBE: Lane[] = [
+  { x: 0.24, y: 0.82 },
+  { x: 0.8, y: 0.84 }
+];
+export const LANES_GLOBE_NARROW: Lane[] = [
+  { x: 0.86, y: 0.95 },
+  { x: 0.12, y: 0.97 }
+];
+
 /**
- * The ambient whales around the Globe: they give way as the Globe's runway rises and return as the
- * pinned stage lets go after the journey. It follows the runway's position, so scrolling back plays
- * it in reverse.
+ * The ambient whales around the Globe: they remain fully visible and swim gracefully
+ * through the deep water, framing the Globe and destination cards throughout the journey.
  */
 export const WhalesAroundGlobe: React.FC = () => {
   useEffect(() => {
@@ -148,12 +156,12 @@ export const WhalesAroundGlobe: React.FC = () => {
       frame = 0;
       const vh = window.innerHeight;
       const r = runway.getBoundingClientRect();
-      // Gone before the stage pins, back once its end rises past the middle of the screen
-      const away = Math.min(smoothStepRange(vh - r.top, vh * 0.1, vh * 0.85), smoothStepRange(r.bottom, vh * 0.35, vh * 1.0));
-      const wasGone = whaleDirection.presence < 0.002;
-      whaleDirection.presence = 1 - away;
-      // The whale loop rests while they are gone, and may have read this scroll before this update
-      if (wasGone && whaleDirection.presence >= 0.002) whaleStage.refresh?.();
+      const w = Math.min(
+        smoothStepRange(vh - r.top, vh * 0.1, vh * 0.5),
+        smoothStepRange(r.bottom, vh * 0.1, vh * 0.55)
+      );
+      whaleDirection.presence = 1;
+      directWhales('globe', w, window.innerWidth < 768 ? LANES_GLOBE_NARROW : LANES_GLOBE);
     };
     const schedule = () => {
       if (!frame) frame = requestAnimationFrame(update);
@@ -166,6 +174,7 @@ export const WhalesAroundGlobe: React.FC = () => {
       window.removeEventListener('scroll', schedule);
       window.removeEventListener('resize', schedule);
       whaleDirection.presence = 1;
+      directWhales('globe', 0, LANES_GLOBE);
     };
   }, []);
   return null;

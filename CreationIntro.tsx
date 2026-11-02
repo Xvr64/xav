@@ -2,11 +2,6 @@ import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { creation, creationStage, finishCreation, CREATION_STAGES } from './creationTimeline';
 import './creationIntro.css';
 
-const labels = {
-  EYE: 'The eye', CREATION: 'The touch', BIG_BANG: 'The beginning', GALAXY: 'A universe',
-  BLACK_HOLE: 'Beyond the horizon', SPACE_EXIT: 'An ocean of stars', EARTH_APPROACH: 'Our blue world',
-  ATMOSPHERIC_DESCENT: 'Closer to home', OCEAN_ENTRY: 'Beneath the surface', WHALE_HANDOFF: 'A living ocean', COMPLETE: ''
-};
 /** Controls only; rendering and time belong to the existing ocean's scheduler. */
 export function CreationIntro() {
   const [, refresh] = useState(0);
@@ -79,8 +74,7 @@ export function CreationIntro() {
   }, []);
   if (!creation.active) return fading ? <div className="creation-exit" aria-hidden="true" onAnimationEnd={() => setFading(false)} /> : null;
   const stage = creationStage(creation.time);
-  return <div className="creation-controls" data-water={stage === 'OCEAN_ENTRY' || stage === 'WHALE_HANDOFF' ? '' : undefined} role="dialog" aria-modal="true" aria-label="From creation to the ocean">
-    <div className="creation-caption" aria-live="polite"><span>From creation to the ocean</span><p>{labels[stage]}</p></div>
+  return <div className="creation-controls" data-water={stage === 'OCEAN_ENTRY' || stage === 'WHALE_HANDOFF' ? '' : undefined} role="dialog" aria-modal="true" aria-label="Intro controls">
     <div className="creation-actions">
       <button onClick={() => { creation.paused = !creation.paused; refresh(n => n + 1); }}>{creation.paused ? 'Resume' : 'Pause'}</button>
       <button ref={skip} onClick={skipIntro}>Skip intro <span aria-hidden="true">↗</span></button>
@@ -89,6 +83,5 @@ export function CreationIntro() {
       {CREATION_STAGES.map(([name,start]) => <button key={name} style={{background:'#07172b',color:'white',fontSize:9,padding:5}} onClick={() => { creation.time=start+.5; creation.paused=true; refresh(n=>n+1); }}>{name}</button>)}
       <label style={{background:'#07172b',padding:5,fontSize:10}}>Time <input aria-label="Preview time" type="number" min="0" max="90.9" step="0.1" defaultValue="0" style={{width:65,color:'black'}} onChange={e=>{creation.time=Math.max(0,Math.min(90.9,Number(e.target.value)));creation.paused=true;refresh(n=>n+1);}} /></label>
     </div>}
-    <a className="creation-credit" href="https://github.com/MohammdAsadi/eye-of-creation" target="_blank" rel="noreferrer" tabIndex={-1}>Eye of Creation · Mohammd Asadi</a>
   </div>;
 }
