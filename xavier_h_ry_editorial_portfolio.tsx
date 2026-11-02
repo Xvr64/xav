@@ -10,6 +10,7 @@ import { JourneyGlobe } from './JourneyGlobe';
 import { AsciiWhaleBackground } from './AsciiWhaleBackground';
 import { WhaleConvergence } from './WhaleConvergence';
 import { AsciiOceanField } from './AsciiOceanField';
+import { CreationIntro } from './CreationIntro';
 import {
   GlobeDive,
   HeroCurrentLayer,
@@ -175,6 +176,7 @@ export default function App() {
   return (
     <div className="terminal-portfolio min-h-screen w-full max-w-full bg-[var(--ocean-background)] text-[#171717] antialiased selection:bg-neutral-700 selection:text-[#EDEDED]">
       <style>{GLOBAL_PORTFOLIO_CSS}</style>
+      <CreationIntro />
 
       <ReadingZoneTracker />
       {/* The ASCII water every other layer sits in; first, so it stacks beneath the hero current */}

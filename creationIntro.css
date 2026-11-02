@@ -1,0 +1,22 @@
+html[data-creation="active"] main,
+html[data-creation="active"] nav,
+html[data-creation="active"] [aria-label="Site actions"],
+html[data-creation="active"] [data-hero-current] { opacity: 0; pointer-events: none; }
+html[data-creation="active"] [data-ocean-life] { opacity: 0; }
+/* The controls give way as the hero wakes (creation.onHero): the site's own actions sit in the same corner */
+.creation-controls { position: fixed; inset: 0; z-index: 100; pointer-events: none; color: #d8e8f2; font-family: 'IBM Plex Mono', monospace; transition: color 1.2s; }
+/* Ink once the pale water has actually reached the caption, as the surface passes (76 s to 78 s) */
+.creation-controls[data-water] { color: #0f3a63; transition-delay: 1.8s; }
+.creation-caption { position: absolute; left: max(28px, 5vw); bottom: max(55px, 7vh); text-shadow: 0 1px 15px #07172b; transition: text-shadow 1.2s; }
+.creation-controls[data-water] .creation-caption { text-shadow: none; transition-delay: 1.8s; }
+.creation-exit { position: fixed; inset: 0; z-index: 100; background: #01030a; pointer-events: none; animation: creation-exit .8s ease-out both; }
+@keyframes creation-exit { from { opacity: 1; } to { opacity: 0; } }
+#home:focus { outline: none; }
+.creation-caption > span { font-size: 9px; letter-spacing: .2em; text-transform: uppercase; opacity: .65; }
+.creation-caption p { font-size: clamp(15px, 2vw, 23px); margin: 12px 0 0; font-weight: 300; }
+.creation-actions { position: absolute; top: max(24px, env(safe-area-inset-top)); right: max(24px, 4vw); display: flex; gap: 10px; pointer-events: auto; }
+.creation-actions button { min-height: 44px; padding: 10px 16px; border: 1px solid #b3d1e144; background: #07172bd9; color: #e1edf5; border-radius: 3px; font: 11px 'IBM Plex Mono', monospace; cursor: pointer; }
+.creation-actions button:hover { background: #15324d; }
+.creation-actions button:focus-visible { outline: 2px solid #a5d8ff; outline-offset: 4px; }
+.creation-credit { position: absolute; bottom: 20px; left: max(28px, 5vw); font-size: 9px; color: inherit; opacity: .55; pointer-events: auto; text-decoration: none; }
+@media (max-width: 600px) { .creation-caption { bottom: 70px; } .creation-actions { right: 16px; } }

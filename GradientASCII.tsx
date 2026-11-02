@@ -373,6 +373,10 @@ export const link = (gl: WebGL2RenderingContext, fragmentSource: string): Progra
     gl.deleteProgram(program);
     return null;
   }
+  return { program, uniforms: activeUniforms(gl, program) };
+};
+
+const activeUniforms = (gl: WebGL2RenderingContext, program: WebGLProgram) => {
   const uniforms: Program['uniforms'] = {};
   const count = gl.getProgramParameter(program, gl.ACTIVE_UNIFORMS);
   for (let i = 0; i < count; i++) {
@@ -381,7 +385,50 @@ export const link = (gl: WebGL2RenderingContext, fragmentSource: string): Progra
     const name = info.name.replace(/\[0\]$/, '');
     uniforms[name] = gl.getUniformLocation(program, name);
   }
-  return { program, uniforms };
+  return uniforms;
+};
+
+export interface LinkInProgress {
+  /** The linked program, null if it failed, undefined while the GPU is still compiling. */
+  poll: () => Program | null | undefined;
+  cancel: () => void;
+}
+
+/**
+ * `link` without waiting: asking for a program's status blocks the main thread until the GPU has
+ * finished, which for a large shader on Direct3D can freeze the page and trip the GPU watchdog.
+ * Where the browser can say when it is done, nothing is asked until it is.
+ */
+export const beginLink = (gl: WebGL2RenderingContext, fragmentSource: string): LinkInProgress => {
+  const parallel = gl.getExtension('KHR_parallel_shader_compile');
+  const vertex = gl.createShader(gl.VERTEX_SHADER);
+  const fragment = gl.createShader(gl.FRAGMENT_SHADER);
+  const program = gl.createProgram();
+  if (!vertex || !fragment || !program) return { poll: () => null, cancel: () => {} };
+  gl.shaderSource(vertex, VERTEX);
+  gl.compileShader(vertex);
+  gl.shaderSource(fragment, fragmentSource);
+  gl.compileShader(fragment);
+  gl.attachShader(program, vertex);
+  gl.attachShader(program, fragment);
+  gl.linkProgram(program);
+  const release = () => {
+    gl.deleteShader(vertex);
+    gl.deleteShader(fragment);
+  };
+  return {
+    poll: () => {
+      if (parallel && !gl.getProgramParameter(program, parallel.COMPLETION_STATUS_KHR)) return undefined;
+      release();
+      if (gl.getProgramParameter(program, gl.LINK_STATUS)) return { program, uniforms: activeUniforms(gl, program) };
+      gl.deleteProgram(program);
+      return null;
+    },
+    cancel: () => {
+      release();
+      gl.deleteProgram(program);
+    }
+  };
 };
 
 const createTarget = (gl: WebGL2RenderingContext, count: number): Target => {

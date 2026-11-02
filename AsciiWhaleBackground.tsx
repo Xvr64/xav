@@ -3305,10 +3305,10 @@ export const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.m
         mode === 'focus' ? 'z-30 bg-[#F5F3EE]/85 backdrop-blur-[2px]' : 'z-[1]'
       }`}
     >
-      <canvas ref={canvasRef} className="w-full max-w-full h-full block" />
-      <canvas ref={glCanvasRef} className="absolute inset-0 w-full h-full block" />
+      <canvas ref={canvasRef} data-ocean-life className="w-full max-w-full h-full block" />
+      <canvas ref={glCanvasRef} data-ocean-life className="absolute inset-0 w-full h-full block" />
       <AmbientWhaleLayer />
-      <canvas ref={overCanvasRef} className="absolute inset-0 w-full h-full block" />
+      <canvas ref={overCanvasRef} data-ocean-life className="absolute inset-0 w-full h-full block" />
     </div>
   );
 });

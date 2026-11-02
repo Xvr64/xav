@@ -112,7 +112,7 @@ export const HeroCurrentLayer: React.FC = React.memo(() => {
     };
   }, []);
 
-  return <canvas ref={canvasRef} aria-hidden="true" className="fixed inset-0 z-0 pointer-events-none w-full h-full" />;
+  return <canvas ref={canvasRef} data-hero-current aria-hidden="true" className="fixed inset-0 z-0 pointer-events-none w-full h-full" />;
 });
 
 // Experience: the stations fill the reading measure, so the whales swim the lower band of the

@@ -8,6 +8,7 @@ import {
   VIEWPORT_ZONES
 } from './terminalMotion';
 import { advanceEncryptedLine, encryptedCharacterState, ENCRYPTED_CHARSET, FLIP_DELAY_MS } from './encryptedMotion';
+import { creation, HERO_WAKES_AT } from './creationTimeline';
 import { EncryptedText } from './components/ui/encrypted-text';
 import {
   disableDecodeSound,
@@ -272,6 +273,12 @@ export function useEditorialScroll() {
 
     const render = () => {
       frame = 0;
+      // The hero's decode belongs to its waking at the end of the opening, not to the hidden page
+      if (creation.active && creation.time < HERO_WAKES_AT) {
+        lastTime = 0;
+        schedule();
+        return;
+      }
       if (dirty) measure();
       const y = window.scrollY;
       const now = performance.now();

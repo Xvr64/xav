@@ -1,5 +1,7 @@
 import { buildAtlas, link, type Atlas } from './GradientASCII';
 import { globeScrollGeometry } from './abyssPalette';
+import { creation, advanceCreation, finishCreation } from './creationTimeline';
+import type { CreationRenderer } from './creationRenderer';
 import {
   applyWaterColor,
   depthAtDocument,
@@ -179,6 +181,8 @@ export function createAsciiOcean(canvas: HTMLCanvasElement): AsciiOcean {
   let frameSeed = 0;
   /** QA only: skip the WebGL passes, to measure the page without them. */
   let qaPaused = false;
+  let opening: CreationRenderer | null = null;
+  let openingWait = 0;
 
   const water = new Float32Array(SAMPLES * 3);
   const ink = new Float32Array(SAMPLES * 3);
@@ -216,9 +220,23 @@ export function createAsciiOcean(canvas: HTMLCanvasElement): AsciiOcean {
     glReady = true;
   }
 
+  if (creation.active) {
+    if (!gl || !glReady) finishCreation('webgl-unavailable');
+    else import('./creationRenderer').then(({ createCreationRenderer }) => {
+      if (disposed || !creation.active) return;
+      opening = createCreationRenderer(gl);
+      return opening.ready.then(() => {
+        if (!disposed && creation.active) { creation.ready = true; schedule(); }
+      });
+    }).catch(error => {
+      if (!disposed) { console.warn('Opening unavailable; continuing into the portfolio.', error); finishCreation('renderer-unavailable'); }
+    });
+  }
+
   const onContextLost = (event: Event) => {
     event.preventDefault();
     glReady = false;
+    finishCreation('context-lost');
   };
   canvas.addEventListener('webglcontextlost', onContextLost);
 
@@ -311,6 +329,18 @@ export function createAsciiOcean(canvas: HTMLCanvasElement): AsciiOcean {
     gl.uniform3fv(su.uWater, water);
     gl.uniform3fv(su.uInk, ink);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
+    if (creation.active && creation.ready && opening && creation.time < 81) {
+      opening.draw(creation.time, canvas.width, canvas.height, water, ink, atlas, {
+        cellW,
+        cellH,
+        startH: (view.width < 768 ? 8 : 9) * view.ratio,
+        anchorX: offsetX + Math.round(cellGrid.cols / 2) * cellW,
+        anchorY: Math.round(cellGrid.rows / 2) * cellH - (scrollPx - firstRow * cellH)
+      });
+    }
+    if (creation.active && !creation.ready) { gl.clearColor(.003,.006,.012,1); gl.clear(gl.COLOR_BUFFER_BIT); }
+    const previewing = (import.meta as any).env?.DEV && new URLSearchParams(location.search).has('creationqa');
+    if (opening && (!creation.active || (creation.time >= 81 && !previewing))) { opening.destroy(); opening = null; }
   };
 
   const frame = (now: number) => {
@@ -319,6 +349,17 @@ export function createAsciiOcean(canvas: HTMLCanvasElement): AsciiOcean {
     const dt = last ? Math.min(0.1, (now - last) / 1000) : 0;
     last = now;
     if (!reduce) time += dt;
+    if (creation.active && !creation.ready) {
+      openingWait += dt;
+      if (openingWait > 25) finishCreation('loading-timeout');
+    }
+    if (opening?.failed()) finishCreation('renderer-unavailable');
+    creation.held = !!opening && !opening.canDraw(creation.time + 0.1);
+    advanceCreation(dt);
+    if ((import.meta as any).env?.DEV && creation.active) {
+      canvas.dataset.creationTime = creation.time.toFixed(3);
+      canvas.dataset.creationReady = String(creation.ready);
+    }
     const scroll = window.scrollY;
     const moved = scroll !== lastScroll;
     // Scrolling redraws on every frame so the water moves with the page; at rest the
@@ -398,6 +439,7 @@ export function createAsciiOcean(canvas: HTMLCanvasElement): AsciiOcean {
       document.removeEventListener('visibilitychange', onVisibility);
       motionQuery.removeEventListener('change', onMotion);
       canvas.removeEventListener('webglcontextlost', onContextLost);
+      opening?.destroy();
       if (gl) {
         if (atlas) gl.deleteTexture(atlas.texture);
         gl.deleteTexture(cellTexture);
