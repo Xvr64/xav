@@ -8,11 +8,10 @@ import { ReadingZoneTracker } from './ReadingZoneTracker';
 import { SectionIndex } from './SectionIndex';
 import { JourneyGlobe } from './JourneyGlobe';
 import { AsciiWhaleBackground } from './AsciiWhaleBackground';
-import { WhaleConvergence } from './WhaleConvergence';
 import { AsciiOceanField } from './AsciiOceanField';
 import { CreationIntro } from './CreationIntro';
 import {
-  GlobeDive,
+  WhalesAroundGlobe,
   HeroCurrentLayer,
   LANES_CONTACT,
   LANES_DEEP_NARROW,
@@ -189,7 +188,7 @@ export default function App() {
       <WhaleStretch sectionId="languages" lanes={LANES_LANGUAGES} narrowLanes={LANES_DEEP_NARROW} />
       <WhaleStretch sectionId="interests" lanes={LANES_INTERESTS} narrowLanes={LANES_DEEP_NARROW} />
       <WhaleStretch sectionId="contact" lanes={LANES_CONTACT} narrowLanes={LANES_DEEP_NARROW} />
-      <GlobeDive />
+      <WhalesAroundGlobe />
       <AsciiWhaleBackground mode="ambient" />
       <SectionIndex cvUrl={ORIGINAL_CV_PDF_URL} />
 
@@ -212,10 +211,9 @@ export default function App() {
           cvUrl={ORIGINAL_CV_PDF_URL}
         />
 
-        {/* THE DESCENT: straight from the cover into the Globe's pinned runway. Its first stretch
-            (the lead) is the convergence: the two whales circle each other and become the Earth;
-            the city journey takes the rest, and the water darkens with it, reaching the deep
-            ocean as the last city's dwell ends. The scroll position IS the timeline. */}
+        {/* THE DESCENT: straight from the cover into the Globe's pinned runway. The whales give way
+            as it rises; the city journey takes the runway, and the water darkens with it, reaching
+            the deep ocean as the last city's dwell ends. The scroll position IS the timeline. */}
         <section id="journey" aria-label="Seven cities" className="relative">
           <div
             data-journey-runway
@@ -223,11 +221,8 @@ export default function App() {
             className="journey-runway relative w-full max-w-full"
           >
             <div className="sticky top-0 h-[100svh] w-full max-w-full overflow-hidden">
-              <WhaleConvergence firstCity={CV_DATA.locations[0]} />
               <JourneyGlobe locations={CV_DATA.locations} />
             </div>
-            {/* The convergence's length; after the stage, which JourneyGlobe finds as the first child */}
-            <div data-journey-lead aria-hidden="true" className="journey-lead absolute top-0 left-0 w-px pointer-events-none" />
           </div>
         </section>
 

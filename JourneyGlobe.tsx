@@ -2,9 +2,8 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { loadLandDots, type LandDots } from './glyphcssGlobe';
 import type { LocationItem } from './cvData';
 import { abyssFromProgress, globeScrollGeometry, globeScrollProgress, lerpN } from './abyssPalette';
-import { convergence, convergenceProgress, diveWake, globeRevealAt, setGlobeZone } from './oceanDirection';
+import { setGlobeZone } from './oceanDirection';
 import { CINEMATIC_SPEED, mountCinematicScroll, type CinematicStops } from './cinematicScroll';
-import { FILM_HANDOFF_SECONDS, FILM_SECONDS, FILM_STOPS } from './convergenceScene';
 
 const PlainText = ({ text }: { text: string }) => <>{text}</>;
 
@@ -109,8 +108,6 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const progressFillRef = useRef<HTMLDivElement | null>(null);
   const captionRef = useRef<HTMLDivElement | null>(null);
-  // Hidden while the convergence's whales are forming this Earth (see WhaleConvergence.tsx)
-  const veilRefs = useRef<(HTMLDivElement | null)[]>([]);
   const activeIdRef = useRef(activeId);
   activeIdRef.current = activeId;
   const goToCityRef = useRef<(id: string) => void>((id) => setActiveId(id));
@@ -259,9 +256,6 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
     const pinned = runway?.firstElementChild as HTMLElement | null;
     let runwayDocTop = 0;
     let runwayTravel = 1;
-    // The convergence's share of the runway, before the journey's own scroll (0 when absent)
-    const leadEl = runway?.querySelector<HTMLElement>('[data-journey-lead]') ?? null;
-    let leadPx = 0;
     let stickyTop = 0;
     let stageDocLeft = 0;
     let cachedDocScrollable = 1;
@@ -289,12 +283,9 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
         const rr = runway.getBoundingClientRect();
         const pr = pinned.getBoundingClientRect();
         runwayDocTop = rr.top + sy;
-        leadPx = leadEl && !prefersReduced ? leadEl.offsetHeight : 0;
-        runwayTravel = Math.max(1, rr.height - pr.height - leadPx);
+        runwayTravel = Math.max(1, rr.height - pr.height);
         stickyTop = parseFloat(getComputedStyle(pinned).top) || 0;
-        convergence.start = runwayDocTop - stickyTop;
-        convergence.length = leadPx;
-        globeScrollGeometry.start = runwayDocTop - stickyTop + leadPx;
+        globeScrollGeometry.start = runwayDocTop - stickyTop;
         globeScrollGeometry.travel = runwayTravel;
       }
       cachedDocScrollable = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
@@ -447,25 +438,6 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
         ctx.stroke();
         if (isCurrent) head = last;
       }
-      // The whales' wake lands here: a dotted line from where the lead whale's wake reaches into
-      // the stage, onto the journey's first city, while they dive into the Globe
-      if (diveWake.strength > 0.01 && vecDot(cityVecs[0], view) > 0.15) {
-        const sr = stage.getBoundingClientRect();
-        const fromX = diveWake.x - sr.left;
-        const fromY = diveWake.y - sr.top;
-        const toX = px(cityVecs[0]);
-        const toY = py(cityVecs[0]);
-        ctx.save();
-        ctx.setLineDash([1.5, 5]);
-        ctx.lineWidth = 1.3;
-        ctx.globalAlpha = Math.min(1, diveWake.strength);
-        ctx.strokeStyle = mc([31, 59, 87, 0.8], [12, 30, 72, 0.8]);
-        ctx.beginPath();
-        ctx.moveTo(fromX, fromY);
-        ctx.lineTo(fromX + (toX - fromX) * diveWake.reach, fromY + (toY - fromY) * diveWake.reach);
-        ctx.stroke();
-        ctx.restore();
-      }
 
       if (head) {
         ctx.beginPath();
@@ -557,18 +529,8 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
     const lastCityOpacities = new Float32Array(locations.length).fill(-1);
     let lastActive = Math.max(0, locations.findIndex((l) => l.id === activeIdRef.current));
 
-    let lastReveal = -1;
     const apply = (st: JourneyState) => {
       draw(st);
-      // The convergence's Earth becomes this one: canvas, washes and caption appear as it hands over
-      const reveal = prefersReduced ? 1 : globeRevealAt(convergenceProgress(window.scrollY));
-      if (Math.abs(reveal - lastReveal) > 0.002 || (reveal !== lastReveal && (reveal === 0 || reveal === 1))) {
-        lastReveal = reveal;
-        const op = reveal >= 1 ? '' : reveal.toFixed(3);
-        canvas.style.opacity = op;
-        if (captionRef.current) captionRef.current.style.opacity = op;
-        for (const v of veilRefs.current) if (v) v.style.opacity = op;
-      }
       if (progressFillRef.current) progressFillRef.current.style.transform = `scaleX(${st.p.toFixed(4)})`;
       for (let idx = 0; idx < cityStopEls.length; idx++) {
         const op = 0.4 + st.reveal[idx] * 0.6;
@@ -596,20 +558,11 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
       const { cx, cy, baseR } = globeFrame(W, H);
       const R = baseR * st.zoom;
       const rects = [{ left: sr.left + cx - R, top: sr.top + cy - R, width: R * 2, height: R * 2 }];
-      // While the convergence plays, its whales circle the whole stage: keep the water calm there
-      if (lastReveal < 1) rects.push({ left: sr.left + W * 0.04, top: sr.top + H * 0.06, width: W * 0.92, height: H * 0.88 });
       const caption = captionRef.current?.getBoundingClientRect();
       if (caption && caption.width > 0) {
         rects.push({ left: caption.left, top: caption.top, width: caption.width, height: caption.height });
       }
-      // The journey's first city on screen, while it faces the viewer: where the whales' wake lands
-      const first = cityVecs[0];
-      let origin: { x: number; y: number } | null = null;
-      if (vecDot(first, st.cam) > 0.15) {
-        const { east, north } = cameraBasis(st.cam);
-        origin = { x: sr.left + cx + R * vecDot(first, east), y: sr.top + cy - R * vecDot(first, north) };
-      }
-      setGlobeZone(rects, origin);
+      setGlobeZone(rects);
     };
 
     let raf = 0;
@@ -645,31 +598,18 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
         : null;
     if (globeIo) globeIo.observe(runway || stage);
 
-    // Two complete films. These knots only pace playback; they never require input.
-    // Base pacing (city journey already 25% shorter); CINEMATIC_SPEED then scales whales and cities alike.
-    // The whales-to-globe film's pacing lives with its scene (its stroke and tail keep that clock)
-    const WHALE_STOPS = FILM_STOPS;
-    const WHALE_SEC = FILM_SECONDS;
-    const EARTH_SEC = FILM_HANDOFF_SECONDS;
+    // Two complete films: onto Doha, then the cities. These knots only pace playback; they never
+    // require input. Base pacing (city journey already 25% shorter); CINEMATIC_SPEED then scales it.
     const cinematicStops = (): CinematicStops | null => {
-      if (prefersReduced || !runway || !pinned || runwayTravel <= 1 || !Number.isFinite(convergence.start)) return null;
-      const y: number[] = [];
-      const dur: number[] = [];
-      if (convergence.length > 0) {
-        WHALE_STOPS.forEach((p, k) => {
-          y.push(convergence.start + p * convergence.length);
-          if (k > 0) dur.push(WHALE_SEC[k - 1]);
-        });
-      } else {
-        // Without the 3D layer the Globe shows itself throughout the lead: straight to Doha
-        y.push(convergence.start);
-      }
       const g0 = globeScrollGeometry.start;
+      if (prefersReduced || !runway || !pinned || runwayTravel <= 1 || !Number.isFinite(g0)) return null;
+      const y: number[] = [g0];
+      const dur: number[] = [];
       const earth = y.length;
       segs.forEach((seg) => {
         if (seg.kind !== 'dwell') return;
         y.push(g0 + ((seg.start + seg.end) / 2) * runwayTravel);
-        dur.push(seg.i === 0 ? (y.length > 2 ? EARTH_SEC : 1.6) : 0.75 * (2.1 + 0.9 * Math.min(1, legAngleDeg[seg.i - 1] / 80)));
+        dur.push(seg.i === 0 ? 1.6 : 0.75 * (2.1 + 0.9 * Math.min(1, legAngleDeg[seg.i - 1] / 80)));
       });
       // The last city's dwell ends where the stage releases into the following section
       y.push(g0 + runwayTravel);
@@ -701,7 +641,6 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
       onResize();
     };
     motionQuery.addEventListener('change', onMotionChange);
-    convergence.listeners.add(onResize);
     resize();
     requestRender();
     window.addEventListener('scroll', onScroll, { passive: true });
@@ -721,8 +660,6 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
       disposed = true;
       cinematic.destroy();
       motionQuery.removeEventListener('change', onMotionChange);
-      convergence.listeners.delete(onResize);
-      convergence.length = 0;
       if (globeIo) globeIo.disconnect();
       window.removeEventListener('scroll', onScroll);
       window.removeEventListener('resize', onResize);
@@ -746,7 +683,6 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
 
       {/* Subtle water-matched veil softens whale glyphs directly behind the destination caption */}
       <div
-        ref={(el) => (veilRefs.current[0] = el)}
         aria-hidden="true"
         className="pointer-events-none absolute inset-0 hidden md:block"
         style={{
@@ -759,7 +695,6 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
         }}
       />
       <div
-        ref={(el) => (veilRefs.current[1] = el)}
         aria-hidden="true"
         className="pointer-events-none absolute inset-x-0 bottom-0 h-[54%] md:hidden"
         style={{

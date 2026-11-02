@@ -3,14 +3,13 @@ import { AsciiText } from './TerminalEditorial';
 import { createHeroCurrent } from './heroCurrent';
 import { CV_DATA } from './cvData';
 import {
-  convergence,
   directWhales,
-  globeZone,
   heroZone,
   migrationRunway,
   mixLane,
   smoothStepRange,
   whaleDirection,
+  whaleStage,
   type Lane
 } from './oceanDirection';
 
@@ -92,8 +91,8 @@ export const HeroCurrentLayer: React.FC = React.memo(() => {
         heroZone.version++;
       },
       onFrame: ({ t, stageTop, stageHeight }) => {
-        // Arrival → descent → name, then the stage scrolls away as the convergence's runway rises:
-        // the whales are let go to swim on into the film, which begins from wherever they are
+        // Arrival → descent → name, then the stage scrolls away as the Globe's runway rises and
+        // the whales are let go, to swim on from wherever they are
         const toDescent = smoothStepRange(t, 0.04, 0.36);
         const toName = smoothStepRange(t, 0.4, 0.72);
         const toHold = smoothStepRange(t, 0.86, 1);
@@ -136,68 +135,37 @@ export const LANES_CONTACT: Lane[] = [{ x: 0.86, y: 0.44 }, { x: 0.5, y: 0.97 }]
 export const LANES_DEEP_NARROW: Lane[] = [{ x: 0.86, y: 0.95 }, { x: 0.12, y: 0.97 }];
 
 /**
- * The ambient whales around the Globe. When the convergence can draw (WhaleConvergence.tsx), they
- * give way as the Globe's runway rises — the 3D pair takes over, circles and becomes the Earth —
- * and return as the pinned stage lets go after the journey. Without it (no WebGL2), they dive into
- * the Globe as before: steering toward the journey's first city on the disc and shrinking to a
- * third of their size, swimming deep into the planet behind it (a calm zone, so they draw faintly
- * there) for the whole city sequence, and growing back as the pinned stage lets go.
- * Every value follows the runway's position, so scrolling back plays it in reverse.
+ * The ambient whales around the Globe: they give way as the Globe's runway rises and return as the
+ * pinned stage lets go after the journey. It follows the runway's position, so scrolling back plays
+ * it in reverse.
  */
-export const GlobeDive: React.FC = () => {
+export const WhalesAroundGlobe: React.FC = () => {
   useEffect(() => {
     const runway = document.querySelector<HTMLElement>('[data-journey-runway]');
     if (!runway || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    const lanes: Lane[] = [
-      { x: 0.64, y: 0.47 },
-      { x: 0.6, y: 0.53 }
-    ];
     let frame = 0;
     const update = () => {
       frame = 0;
       const vh = window.innerHeight;
       const r = runway.getBoundingClientRect();
-      if (convergence.ready) {
-        // Gone before the stage pins, back once its end rises past the middle of the screen
-        const away = Math.min(smoothStepRange(vh - r.top, vh * 0.1, vh * 0.85), smoothStepRange(r.bottom, vh * 0.35, vh * 1.0));
-        whaleDirection.presence = 1 - away;
-        whaleDirection.size = 1;
-        directWhales('globe', 0, lanes);
-        return;
-      }
-      whaleDirection.presence = 1;
-      const dive = Math.min(
-        smoothStepRange(vh - r.top, vh * 0.15, vh * 0.95),
-        smoothStepRange(r.bottom, vh * 0.35, vh * 1.0)
-      );
-      // They dive toward the journey's first city where the Globe shows it (their wake lands there
-      // and becomes the route), else toward the disc's centre; the desktop framing until either
-      const disc = globeZone.rects[0];
-      const origin = globeZone.origin;
-      if (origin || disc) {
-        const cx = (origin ? origin.x : disc.left + disc.width / 2) / Math.max(1, window.innerWidth);
-        const cy = (origin ? origin.y : disc.top + disc.height / 2) / Math.max(1, vh);
-        lanes[0] = { x: cx, y: cy };
-        lanes[1] = { x: cx - 0.04, y: cy + 0.06 };
-      }
-      whaleDirection.size = 1 - 0.68 * dive;
-      directWhales('globe', dive, lanes);
+      // Gone before the stage pins, back once its end rises past the middle of the screen
+      const away = Math.min(smoothStepRange(vh - r.top, vh * 0.1, vh * 0.85), smoothStepRange(r.bottom, vh * 0.35, vh * 1.0));
+      const wasGone = whaleDirection.presence < 0.002;
+      whaleDirection.presence = 1 - away;
+      // The whale loop rests while they are gone, and may have read this scroll before this update
+      if (wasGone && whaleDirection.presence >= 0.002) whaleStage.refresh?.();
     };
     const schedule = () => {
       if (!frame) frame = requestAnimationFrame(update);
     };
     window.addEventListener('scroll', schedule, { passive: true });
     window.addEventListener('resize', schedule);
-    convergence.listeners.add(schedule);
     update();
     return () => {
       cancelAnimationFrame(frame);
       window.removeEventListener('scroll', schedule);
       window.removeEventListener('resize', schedule);
-      convergence.listeners.delete(schedule);
-      whaleDirection.size = 1;
       whaleDirection.presence = 1;
-      directWhales('globe', 0, lanes);
     };
   }, []);
   return null;

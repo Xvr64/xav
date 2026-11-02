@@ -56,7 +56,7 @@ export interface WhaleState {
   /** World units per body length. */
   scale: number;
   articulation: Articulation;
-  /** 0 whole … 1 fully dissolved, tail first (the convergence's unravelling). */
+  /** 0 whole … 1 fully dissolved, tail first. */
   dissolve: number;
 }
 
@@ -232,7 +232,7 @@ uniform float uOcclusion;
 uniform float uInvert;
 float hash(vec3 p) { return fract(sin(dot(p, vec3(12.9898, 78.233, 37.719))) * 43758.5453); }
 void main() {
-  // Unravel from the tail: the same key orders the particles that leave the body (convergence)
+  // Unravel from the tail: the same key orders the particles that leave the body
   if (uDissolve > 0.0) {
     float front = 1.0 - uDissolve;
     float edge = (hash(floor(vRestPos * 220.0)) - 0.5) * 0.07;

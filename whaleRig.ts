@@ -1,6 +1,6 @@
 /**
  * The two humpbacks' rig: one source of truth for their relative proportions and how their bodies
- * swim, read by the ambient scene (ambientWhaleScene.ts) and the convergence (convergenceScene.ts).
+ * swim, read by the ambient scene (ambientWhaleScene.ts).
  * Both drive the same mesh (whale3dAnatomy.ts) through the same articulation (whale3dPose.ts); with
  * these shared too, the whales that circle into the Earth are the very animals the page showed.
  */

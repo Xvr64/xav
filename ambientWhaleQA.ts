@@ -5,7 +5,6 @@ export function mountWhaleQA(api: {
   release(): void;
   reduced(value: boolean): void;
   state(): unknown;
-  cinematic(p: number): void;
 }) {
   const panel = document.createElement('details');
   panel.open = true;
@@ -32,14 +31,13 @@ export function mountWhaleQA(api: {
       timer=setInterval(() => { yaw += Math.PI / 150; api.orient(i,yaw,0.08,0.12); if(yaw>=Math.PI*2)stop(); },40);
     });
   }
-  for(const p of [-0.2,-0.1,-0.001,0,0.2,0.5,0.8,0.97,1,2,4]) button(`Cinema ${p}`,()=>api.cinematic(p));
   button('Reduce',()=>api.reduced(true)); button('Motion',()=>api.reduced(false));
   const output=document.createElement('output'); output.style.display='block';panel.appendChild(output);
   document.body.appendChild(panel);
   const update = () => {
-    const state=api.state() as { seconds:number; frameCount:number; meanMs:number; quality:number; inCinema:boolean; reduced:boolean };
+    const state=api.state() as { seconds:number; frameCount:number; meanMs:number; quality:number; reduced:boolean };
     output.dataset.whaleState=JSON.stringify(state);
-    output.textContent=`${state.inCinema?'cinematic':'ambient'} | time ${state.seconds.toFixed(2)} | frame ${state.frameCount} | submit ${state.meanMs.toFixed(1)}ms | quality ${state.quality.toFixed(2)} | reduced ${state.reduced}`;
+    output.textContent=`time${state.seconds.toFixed(2)} | frame ${state.frameCount} | submit ${state.meanMs.toFixed(1)}ms | quality ${state.quality.toFixed(2)} | reduced ${state.reduced}`;
   };
   return { update, destroy: () => { stop(); panel.remove(); } };
 }

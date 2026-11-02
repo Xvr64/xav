@@ -36,8 +36,8 @@ test('journey runway regression: data-journey-runway and .journey-runway maintai
   // Verify sticky stage exists inside data-journey-runway
   assert.match(
     portfolioTsx,
-    /<div className="sticky top-0 h-\[100svh\] w-full max-w-full overflow-hidden">[\s\S]*?<WhaleConvergence[\s\S]*?<JourneyGlobe/,
-    'Sticky container with WhaleConvergence and JourneyGlobe must be present in journey runway'
+    /<div className="sticky top-0 h-\[100svh\] w-full max-w-full overflow-hidden">\s*<JourneyGlobe/,
+    'Sticky container with JourneyGlobe must be present in journey runway'
   );
 });
 

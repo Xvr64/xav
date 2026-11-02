@@ -9,13 +9,11 @@ import {
   applyAbyssPalette,
   applyAbyssWash,
   globeScrollGeometry,
-  globeScrollProgress,
   inkMixFromAbyss
 } from './abyssPalette';
 import {
   READING_WHALE_ALPHA,
   ambientWhalesLive,
-  diveWake,
   directWhales,
   migrationRunway,
   readingZones,
@@ -531,12 +529,6 @@ export const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.m
     }));
     let ambientOffsetY = 0;
 
-    // The lead whale's wake while it dives into the Globe: its recent head path (viewport px),
-    // drawn as the route's first stroke into the journey's first city
-    const WAKE_POINTS = 80;
-    const wakeX = new Float32Array(WAKE_POINTS);
-    const wakeY = new Float32Array(WAKE_POINTS);
-    let wakeCount = 0;
     /** The sonar's ink this frame (set when a ping is drawn, reused by its echoes). */
     let sonarInk = 'rgb(47, 72, 88)';
 
@@ -2044,9 +2036,8 @@ export const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.m
           continue;
         }
         // Whales grow slightly more present as the visitor descends (up to +10%)
-        // whaleDirection.size < 1 while they dive into the Globe (GlobeDive in OceanEntry.tsx)
         const baseLen =
-          Math.min(w, h) * (isFocus ? 0.66 : 0.58 * entryDistanceScale) * wh.scale * (1 + depth * 0.1) * whaleDirection.size;
+          Math.min(w, h) * (isFocus ? 0.66 : 0.58 * entryDistanceScale) * wh.scale * (1 + depth * 0.1);
         if (wIdx === 0) mainBodyLen = baseLen;
 
         // Freeze the ambient entry pose while this scroll sequence owns the animals.
@@ -2524,25 +2515,6 @@ export const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.m
         wakeParticles.splice(0, wakeParticles.length - 60);
       }
 
-      // 4. (end) The dive's wake: record the lead whale's head while it dives into the Globe
-      if (!migActive && ambientWhalesLive.presence > 0.1 && whaleDirection.size < 0.97) {
-        const hx = whales[0].spineX[0];
-        const hy = whales[0].spineY[0];
-        const last = wakeCount - 1;
-        if (wakeCount === 0 || Math.hypot(hx - wakeX[last], hy - wakeY[last]) > 7) {
-          if (wakeCount === WAKE_POINTS) {
-            wakeX.copyWithin(0, 1);
-            wakeY.copyWithin(0, 1);
-            wakeCount--;
-          }
-          wakeX[wakeCount] = hx;
-          wakeY[wakeCount] = hy;
-          wakeCount++;
-        }
-      } else {
-        wakeCount = 0;
-      }
-
       // 4A. READING CLEARANCE — whales keep their path, but where their tiles pass behind a
       // measured line of page text (or the hero typography) they draw at reduced strength with a
       // soft one-cell falloff, so the copy stays legible without any panel behind it. Computed
@@ -2676,32 +2648,6 @@ export const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.m
           }
         }
         ctx.globalAlpha = 1;
-      }
-
-      // 2B'''. THE WAKE BECOMES THE ROUTE — while the whales dive into the Globe, the lead whale's
-      // path is drawn in the Globe's route navy, ending where it meets the journey's first city;
-      // it fades as the Globe's own route takes over
-      diveWake.strength = 0;
-      if (wakeCount > 1) {
-        const dive = Math.min(1, (1 - whaleDirection.size) / 0.68);
-        const takeover = Math.max(0, Math.min(1, (globeScrollProgress() - 0.015) / 0.045));
-        const strength = dive * (1 - takeover);
-        diveWake.x = wakeX[wakeCount - 1];
-        diveWake.y = wakeY[wakeCount - 1];
-        diveWake.strength = strength;
-        diveWake.reach = Math.min(1, dive * 1.2);
-        if (strength > 0.01) {
-          ctx.font = '500 12px "JetBrains Mono", monospace';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillStyle = 'rgb(31, 59, 87)';
-          for (let i = 0; i < wakeCount; i++) {
-            const age = (wakeCount - 1 - i) / WAKE_POINTS;
-            ctx.globalAlpha = strength * 0.85 * (1 - age) * (1 - age);
-            ctx.fillText(i % 3 === 0 ? '.' : '·', wakeX[i], wakeY[i]);
-          }
-          ctx.globalAlpha = 1;
-        }
       }
 
       // 2C. DEEP-WATER SILHOUETTE (Stage 5): a distant manta ray glides past now and then,
@@ -3122,7 +3068,7 @@ export const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.m
       const shimmerTick = (fx * 2.2) | 0;
       const fgWhaleAlpha = isFocus ? 1.0 : 0.60 + (1 - entryCalm) * 0.18;
       // Both whales share the deep-blue atlas rows (10..14) at full strength; they give way while
-      // the convergence's 3D whales swim and become the Globe (whaleDirection.presence)
+      // the Globe's stage is pinned (whaleDirection.presence)
       const whaleAlpha = (migActive ? mig.whales : 1) * whaleDirection.presence;
       let activeAlpha = 1.0;
       const batch = glyphBatch;
