@@ -71,7 +71,7 @@ test('no automatic playback: timeline stays at first frame until the visitor scr
   Object.assign(creation, { active: false });
 });
 
-test('scroll scrubbing advances, settles at current progress, and reverses deterministically', () => {
+test('scroll scrubbing advances proportionally (3-4x less sensitive), settles at current progress, and reverses deterministically', () => {
   let wokenValue = 0;
   Object.assign(creation, {
     active: true,
@@ -83,44 +83,56 @@ test('scroll scrubbing advances, settles at current progress, and reverses deter
     ambient: 0,
     onHero: w => { wokenValue = w; }
   });
-  // Scroll downward by two deliberate wheel notches
+  seekCreation(0);
+
+  // 1. One small mouse-wheel notch (100px) produces a small incremental step (~0.29 units, < 1% of intro)
   scrubCreation(100, 100, 'wheel');
-  scrubCreation(100, 300, 'wheel');
-  const targetAfterDown = creation.target;
-  assert.ok(targetAfterDown > 3 && targetAfterDown < 6);
+  assert.ok(creation.target > 0.2 && creation.target < 0.4, `expected one notch to advance ~0.29u, got ${creation.target}`);
+  assert.equal(creationStage(creation.target), 'EYE', 'one wheel notch stays well within the first EYE scene');
+
+  // 2. Very slow scrolling (10px increments) advances gradually and linearly
+  const beforeSlow = creation.target;
+  scrubCreation(10, 350, 'wheel');
+  const slowDelta = creation.target - beforeSlow;
+  assert.ok(slowDelta > 0.045 && slowDelta < 0.07, `expected 10px slow scroll to advance ~0.055u, got ${slowDelta}`);
+
   // Advance frames until settled
-  for (let i = 0; i < 90; i++) advanceCreation(1 / 60);
-  assert.ok(Math.abs(creation.time - targetAfterDown) < 0.01, 'settles smoothly at target progress');
+  const targetAfterDown = creation.target;
+  for (let i = 0; i < 60; i++) advanceCreation(1 / 60);
+  assert.ok(Math.abs(creation.time - targetAfterDown) < 0.005, 'settles smoothly at target progress');
   const settledTime = creation.time;
   // Stopping scroll holds position
   for (let i = 0; i < 60; i++) advanceCreation(1 / 60);
   assert.equal(creation.time, settledTime, 'stopping scroll holds timeline progress');
 
-  // Scroll upward reverses immediately without waiting to unwind lead
+  // 3. Scroll upward reverses immediately without waiting to unwind lead
   scrubCreation(100, 1000, 'wheel');
   assert.ok(creation.target > creation.time);
   scrubCreation(-100, 1020, 'wheel');
   assert.ok(creation.target < creation.time, 'reversal immediately moves target behind current time');
-  for (let i = 0; i < 90; i++) advanceCreation(1 / 60);
+  for (let i = 0; i < 60; i++) advanceCreation(1 / 60);
   assert.ok(creation.time < settledTime, 'timeline reversed smoothly');
 
-  // Scrubbing into HERO_WAKES_AT wakes hero, reversing back hides it again
+  // 4. Scrubbing into HERO_WAKES_AT wakes hero, reversing back hides it again
   seekCreation(HERO_WAKES_AT + 1);
   assert.ok(wokenValue > 0, 'hero wakes near the end');
-  scrubCreation(-200, 2000, 'key');
-  for (let i = 0; i < 90; i++) advanceCreation(1 / 60);
+  scrubCreation(-300, 2000, 'key');
+  for (let i = 0; i < 60; i++) advanceCreation(1 / 60);
   assert.equal(wokenValue, 0, 'reversing before HERO_WAKES_AT resets hero opacity');
   Object.assign(creation, { active: false, onHero: null });
 });
 
-test('fast scroll bursts and momentum tails are bounded and never skip major scenes', () => {
+test('fast scroll bursts and momentum tails (including plateaus) are bounded and never skip major scenes', () => {
   Object.assign(creation, { active: true, ready: true, paused: false, held: false, time: 0, target: 0, ambient: 0 });
-  // Simulate a violent trackpad flick + 40 decaying momentum events in one burst
+  seekCreation(0);
+  // Simulate a violent trackpad flick + 40 decaying momentum events with integer plateaus
   scrubCreation(500, 1000, 'wheel');
   for (let k = 1; k <= 40; k++) {
-    scrubCreation(400 * Math.exp(-k / 10), 1000 + k * 16, 'wheel');
+    const plateauDelta = Math.round(60 * Math.exp(-Math.floor(k / 2) / 8));
+    scrubCreation(plateauDelta, 1000 + k * 16, 'wheel');
   }
-  assert.ok(creation.target <= MAX_TARGET_LEAD + 0.001, 'single flick + momentum tail cannot queue the entire intro');
+  assert.ok(creation.target <= MAX_TARGET_LEAD + 0.001, 'single flick + momentum tail cannot queue past MAX_TARGET_LEAD');
+  assert.equal(creationStage(creation.target), 'EYE', 'single burst from 0 cannot skip the first scene');
   // Even with target at MAX_TARGET_LEAD, per-frame speed is bounded by MAX_SCRUB_SPEED
   advanceCreation(0.016);
   assert.ok(creation.time <= MAX_SCRUB_SPEED * 0.016 + 0.001, 'camera speed is bounded on fast scroll');

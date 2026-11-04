@@ -9,14 +9,14 @@ export const CREATION_DURATION = 30;
 export const OCEAN_HANDOFF_AT = 26;
 export const INTRO_STORAGE_KEY = 'xh-creation-seen-v1';
 
-/** Scroll distance (CSS px) corresponding to the full 0..1 intro progression (~3-4 deliberate gestures). */
-export const SCROLL_PIXELS_PER_INTRO = 1200;
+/** Scroll distance (CSS px) corresponding to the full 0..1 intro progression (~4x less sensitive). */
+export const SCROLL_PIXELS_PER_INTRO = 5400;
 /** Maximum lead (timeline units) target progress can build ahead of current progress during a burst. */
-export const MAX_TARGET_LEAD = 6.5;
+export const MAX_TARGET_LEAD = 1.6;
 /** Maximum interpolation speed (timeline units / second) so fast scrolling never skips scenes. */
-export const MAX_SCRUB_SPEED = 16;
+export const MAX_SCRUB_SPEED = 6.0;
 /** Exponential smoothing time constant (seconds) between current and target timeline progress. */
-export const SCRUB_SMOOTH_TIME = 0.085;
+export const SCRUB_SMOOTH_TIME = 0.065;
 
 export const easeRange = (t: number, a: number, b: number) => {
   const x = Math.max(0, Math.min(1, (t - a) / (b - a)));
@@ -68,7 +68,18 @@ export const creation = {
 
 let lastWheelMs = -Infinity;
 let prevWheelMag = 0;
+let peakWheelMag = 0;
+let lastWheelDir = 0;
+let wheelDecaying = false;
 let lastHeroWoken = 0;
+
+function resetWheelState() {
+  lastWheelMs = -Infinity;
+  prevWheelMag = 0;
+  peakWheelMag = 0;
+  lastWheelDir = 0;
+  wheelDecaying = false;
+}
 
 export function syncHeroWake(time = creation.time) {
   const woken = time >= HERO_WAKES_AT ? easeRange(time, HERO_WAKES_AT, CREATION_DURATION) : 0;
@@ -83,6 +94,7 @@ export function seekCreation(t: number) {
   const before = creationStage(creation.time);
   creation.time = clamped;
   creation.target = clamped;
+  resetWheelState();
   syncHeroWake(clamped);
   if (before !== creationStage(clamped)) creation.listeners.forEach(fn => fn());
 }
@@ -105,11 +117,29 @@ export function scrubCreation(deltaPx: number, nowMs = 0, source: 'wheel' | 'tou
   if (source === 'wheel') {
     const mag = Math.abs(deltaPx);
     const dtMs = nowMs - lastWheelMs;
-    const isMomentumTail = dtMs > 0 && dtMs < 140 && mag < prevWheelMag * 0.94;
+    if (dtMs < 0 || dtMs >= 180 || dir !== lastWheelDir) {
+      wheelDecaying = false;
+      peakWheelMag = mag;
+    } else {
+      if (wheelDecaying && mag > prevWheelMag * 1.6 && mag >= 14) {
+        // A clear upward jump after decay means the visitor's hand engaged again
+        wheelDecaying = false;
+        peakWheelMag = mag;
+      } else if (mag > peakWheelMag) {
+        peakWheelMag = mag;
+      } else if (mag < prevWheelMag * 0.94 || mag < peakWheelMag * 0.78) {
+        wheelDecaying = true;
+      }
+    }
+    const sameDir = dir === lastWheelDir;
     lastWheelMs = nowMs;
     prevWheelMag = mag;
-    // Soft-saturate raw wheel spikes and attenuate coasting trackpad momentum tails
-    effectivePx = dir * 180 * Math.tanh(mag / 180) * (isMomentumTail ? 0.42 : 1);
+    lastWheelDir = dir;
+    // Bound per-event scroll by inter-event elapsed time so high-frequency wheel bursts or
+    // smooth-scroll subdivisions never multiply sensitivity, while small/slow scrolls stay linear.
+    const maxStepForInterval = dtMs > 0 && dtMs < 160 && sameDir ? Math.max(10, dtMs * 0.34) : 55;
+    const cappedMag = maxStepForInterval * Math.tanh(mag / maxStepForInterval);
+    effectivePx = dir * cappedMag * (wheelDecaying ? 0.25 : 1);
   }
   const nextTarget = creation.target + effectivePx / pxPerUnit;
   const leadBounded = Math.max(
@@ -126,6 +156,7 @@ export function finishCreation(reason = 'complete') {
   creation.target = CREATION_DURATION;
   creation.reason = reason;
   lastHeroWoken = 0;
+  resetWheelState();
   try { sessionStorage.setItem(INTRO_STORAGE_KEY, '1'); } catch { /* private storage */ }
   creation.listeners.forEach(fn => fn());
 }
@@ -145,8 +176,10 @@ export function advanceCreation(dt: number) {
   const before = creationStage(creation.time);
   const alpha = 1 - Math.exp(-stepDt / SCRUB_SMOOTH_TIME);
   const maxDelta = MAX_SCRUB_SPEED * stepDt;
-  const rawStep = diff * alpha;
-  const step = Math.abs(diff) < 0.004 ? diff : Math.sign(rawStep) * Math.min(Math.abs(rawStep), maxDelta);
+  const rawStep = Math.abs(diff) * alpha;
+  const minStep = Math.min(Math.abs(diff), 0.28 * stepDt);
+  const stepMag = Math.min(Math.abs(diff), Math.max(rawStep, minStep), maxDelta);
+  const step = Math.abs(diff) < 0.008 ? diff : Math.sign(diff) * stepMag;
   creation.time = Math.max(0, Math.min(CREATION_DURATION, creation.time + step));
   syncHeroWake(creation.time);
   if (creation.target >= CREATION_DURATION && creation.time >= CREATION_DURATION - 0.015) {

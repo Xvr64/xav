@@ -53,7 +53,7 @@ export function CreationIntro() {
     const onWheel = (event: WheelEvent) => {
       if (event.ctrlKey) return;
       block(event);
-      const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? window.innerHeight : 1;
+      const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? Math.min(window.innerHeight, 360) : 1;
       const delta = event.deltaY * unit;
       if (!delta || Math.abs(event.deltaY) < Math.abs(event.deltaX)) return;
       const now = performance.now();
@@ -93,11 +93,11 @@ export function CreationIntro() {
       lastTouchMs = now;
       if (Math.abs(dy) < Math.abs(dx) * 0.8) return;
       touchVelocity = touchVelocity * 0.4 + (dy / dt) * 0.6;
-      scrubCreation(dy * 2.2, now, 'touch');
+      scrubCreation(dy * 1.15, now, 'touch');
     };
     const onTouchEnd = () => {
       if (touchActive && performance.now() - lastTouchMs < 90 && Math.abs(touchVelocity) > 0.12) {
-        const carry = Math.sign(touchVelocity) * Math.min(220, Math.abs(touchVelocity) * 135);
+        const carry = Math.sign(touchVelocity) * Math.min(90, Math.abs(touchVelocity) * 55);
         scrubCreation(carry, performance.now(), 'touch');
       }
       touchActive = false;
@@ -121,16 +121,16 @@ export function CreationIntro() {
       const now = performance.now();
       if (event.key === 'ArrowDown' || event.key === 'ArrowRight') {
         block(event);
-        scrubCreation(115, now, 'key');
+        scrubCreation(120, now, 'key');
       } else if (event.key === 'ArrowUp' || event.key === 'ArrowLeft') {
         block(event);
-        scrubCreation(-115, now, 'key');
+        scrubCreation(-120, now, 'key');
       } else if (event.key === 'PageDown' || (event.key === ' ' && !event.shiftKey)) {
         block(event);
-        scrubCreation(240, now, 'key');
+        scrubCreation(300, now, 'key');
       } else if (event.key === 'PageUp' || (event.key === ' ' && event.shiftKey)) {
         block(event);
-        scrubCreation(-240, now, 'key');
+        scrubCreation(-300, now, 'key');
       } else if (event.key === 'Home') {
         block(event);
         seekCreation(0);
