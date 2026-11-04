@@ -4,9 +4,9 @@ html[data-creation="active"] [aria-label="Site actions"],
 html[data-creation="active"] [data-hero-current] { opacity: 0; pointer-events: none; }
 html[data-creation="active"] [data-ocean-life] { opacity: 0; }
 /* The controls give way as the hero wakes (creation.onHero): the site's own actions sit in the same corner */
-.creation-controls { position: fixed; inset: 0; z-index: 100; pointer-events: none; color: #d8e8f2; font-family: 'IBM Plex Mono', monospace; transition: color 0.6s; }
-/* Ink once the pale water has actually reached the controls, as the surface passes (24 s to 26 s) */
-.creation-controls[data-water] { color: #0f3a63; transition-delay: 0.4s; }
+.creation-controls { position: fixed; inset: 0; z-index: 100; pointer-events: none; color: #d8e8f2; font-family: 'IBM Plex Mono', monospace; transition: color 1.2s; }
+/* Ink once the pale water has actually reached the controls, as the surface passes (76 s to 78 s) */
+.creation-controls[data-water] { color: #0f3a63; transition-delay: 1.8s; }
 .creation-exit { position: fixed; inset: 0; z-index: 100; background: #01030a; pointer-events: none; animation: creation-exit .8s ease-out both; }
 @keyframes creation-exit { from { opacity: 1; } to { opacity: 0; } }
 #home:focus { outline: none; }

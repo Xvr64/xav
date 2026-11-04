@@ -1,22 +1,44 @@
 /** Opening only. The later two-gesture controller never reads or writes this clock. */
 export const CREATION_STAGES = [
-  ['EYE', 0, 4], ['CREATION', 4, 8.5], ['BIG_BANG', 8.5, 11.5],
-  ['GALAXY', 11.5, 15], ['BLACK_HOLE', 15, 18.5], ['SPACE_EXIT', 18.5, 20],
-  ['EARTH_APPROACH', 20, 22], ['ATMOSPHERIC_DESCENT', 22, 24],
-  ['OCEAN_ENTRY', 24, 26], ['WHALE_HANDOFF', 26, 30]
+  ['EYE', 0, 12], ['CREATION', 12, 25], ['BIG_BANG', 25, 33],
+  ['GALAXY', 33, 43], ['BLACK_HOLE', 43, 54], ['SPACE_EXIT', 54, 60],
+  ['EARTH_APPROACH', 60, 68], ['ATMOSPHERIC_DESCENT', 68, 76],
+  ['OCEAN_ENTRY', 76, 81], ['WHALE_HANDOFF', 81, 91]
 ] as const;
-export const CREATION_DURATION = 30;
-export const OCEAN_HANDOFF_AT = 26;
+export const CREATION_DURATION = 91;
+export const OCEAN_HANDOFF_AT = 81;
 export const INTRO_STORAGE_KEY = 'xh-creation-seen-v1';
 
 export type CreationPlaybackState = 'PAUSED' | 'PLAYING_FORWARD' | 'PLAYING_REVERSE' | 'COMPLETED';
 
-/** Fixed playback speed: 30 units / 3.0 units/sec = 10.0 seconds full cinematic duration. */
-export const PLAYBACK_SPEED = 3.0;
-/** Controlled reverse playback speed. */
-export const REVERSE_PLAYBACK_SPEED = 3.0;
-/** Exponential rate easing time constant (seconds) between current and target rate for smooth direction changes. */
-export const RATE_SMOOTH_TIME = 0.15;
+/**
+ * Accelerated playback speed for the earlier Eye of Creation cosmos journey (0..48):
+ * 48 units at 3.6u/s takes ~13.3s of brisk, energetic travel.
+ */
+export const COSMIC_ACCELERATED_SPEED = 3.6;
+/**
+ * Original cinematic playback speed for the peninsula approach and CV arrival (60..91):
+ * strictly 1.0 unit/second to preserve the exact camera movement, easing, and dramatic pacing
+ * of the Earth peninsula descent, water meniscus entry, and "A Journey Without Horizons" hero reveal.
+ */
+export const ARRIVAL_NATURAL_SPEED = 1.0;
+/** Backwards-compatible aliases for legacy imports. */
+export const PLAYBACK_SPEED = COSMIC_ACCELERATED_SPEED;
+export const REVERSE_PLAYBACK_SPEED = COSMIC_ACCELERATED_SPEED;
+/** Exponential rate easing time constant (seconds) for silky-smooth direction and speed blends. */
+export const RATE_SMOOTH_TIME = 0.18;
+
+/**
+ * Target playback speed at timeline position `t`.
+ * Progresses quickly through the earlier cosmos scenes, then smoothly decelerates between
+ * t = 48 and t = 60 into the exact 1.0x natural cinematic arrival speed.
+ */
+export function targetPlaybackSpeed(t: number): number {
+  if (t <= 48) return COSMIC_ACCELERATED_SPEED;
+  if (t >= 60) return ARRIVAL_NATURAL_SPEED;
+  const blend = easeRange(t, 48, 60);
+  return COSMIC_ACCELERATED_SPEED + (ARRIVAL_NATURAL_SPEED - COSMIC_ACCELERATED_SPEED) * blend;
+}
 
 export const easeRange = (t: number, a: number, b: number) => {
   const x = Math.max(0, Math.min(1, (t - a) / (b - a)));
@@ -36,17 +58,17 @@ export function creationProgramAt(t: number) {
   return world < 0 ? 5 : world;
 }
 /** The opening's whales surface below the waterline, so never above it; the hero wakes after this. */
-export const WHALES_ARRIVE_AT = 25.2;
-export const WHALE_SETTLE_AT = 28.8;
-export const WHALE_SETTLE_STEP = 0.6;
-export const WHALE_FADE_SPAN = 1.8;
-export const HERO_WAKES_AT = 28.2;
+export const WHALES_ARRIVE_AT = 79.6;
+export const WHALE_SETTLE_AT = 88;
+export const WHALE_SETTLE_STEP = 2;
+export const WHALE_FADE_SPAN = 5;
+export const HERO_WAKES_AT = 87;
 /**
  * How far a whale still is from its real pose: behind itself along its own heading and down in the
  * deep, so it swims in head first out of the blue. Zero at the end, so the ambient pose takes over.
  */
 export function arrivalOffset(t: number, whale: number, forward: readonly [number, number, number] = [0, 0, -1]): [number, number, number] {
-  const left = 1 - easeRange(t, WHALES_ARRIVE_AT + whale * 0.5, WHALE_SETTLE_AT + whale * WHALE_SETTLE_STEP);
+  const left = 1 - easeRange(t, WHALES_ARRIVE_AT + whale * 1.5, WHALE_SETTLE_AT + whale * WHALE_SETTLE_STEP);
   const behind = left * (2.6 + whale * 0.4);
   return [-forward[0] * behind, -forward[1] * behind - left * 0.5, -forward[2] * behind - left * (2.5 + whale * 0.8)];
 }
@@ -169,15 +191,16 @@ export function advanceCreation(dt: number) {
   }
 
   let targetRate = 0;
+  const currentSpeed = targetPlaybackSpeed(creation.time);
   if (creation.state === 'PLAYING_FORWARD') {
     if (creation.held) {
       creation.rate = 0;
       targetRate = 0;
     } else {
-      targetRate = PLAYBACK_SPEED;
+      targetRate = currentSpeed;
     }
   } else if (creation.state === 'PLAYING_REVERSE') {
-    targetRate = -REVERSE_PLAYBACK_SPEED;
+    targetRate = -currentSpeed;
   }
 
   const rateAlpha = 1 - Math.exp(-stepDt / RATE_SMOOTH_TIME);
