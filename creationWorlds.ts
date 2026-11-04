@@ -35,7 +35,7 @@ vec3 stars1(vec2 p,float logz,float t,float r,float a,float N,float K,float par,
  vec2 uv=vec2((a/TAU+.5)*N,(log(r)-par*logz)*K),c=floor(uv);c.x=mod(c.x,N);
  float h=hash(c+vec2(seed*1013.,0)),h2=hash(c+vec2(77,seed*389.));
  float arc=(fract(uv.x)-(.25+.5*h2))*TAU*r/N,rad=(fract(uv.y)-.5)*r/K;
- float tw=.65+.35*sin(t*(1.5+4.*h2)+h2*60.);
+ float tw=.65+.35*sin((t+uAmbient)*(1.5+4.*h2)+h2*60.);
  return step(h,clamp(26.*TAU*r*r/(N*K),0.,.9))*exp(-(arc*arc+rad*rad)/.00022)*(.35+.9*h2)*tw*mix(vec3(.65,.78,1),vec3(1,.85,.7),h2);
 }
 vec3 stars(vec2 p,float logz,float t){
@@ -88,13 +88,13 @@ vec3 handShade(vec2 p,bool god,float d,float crease,vec2 g){
  if(god)base=mix(base,vec3(.78,.30,.50),ss(1.02,1.10,p.x+.3*p.y)*sat(.6+.6*fb3(p*vec2(9,3),0.)));
  return base*(.12+1.25*pow(diff,1.4)+fill)*(.92+.16*vn(p*45.,0.))*(1.-.7*crease)+spec*(1.-crease)*vec3(1,.95,.85);
 }
-vec2 godOffset(float t,float pt){float d=ss(7.,13.,pt);return vec2(.34*(1.-ss(-1.,6.,pt))+.006*sin(t*1.3)*(1.-d),.008*sin(t*.9)*(1.-d));}
-float adamOffset(float t,float pt){return (.010*sin(t*.7+1.)+.02*(ss(3.,6.5,pt)-1.))*(1.-ss(7.,13.,pt));}
+vec2 godOffset(float t,float pt){float d=ss(1.8,4.5,pt),a=t+uAmbient;return vec2(.34*(1.-ss(-.8,1.5,pt))+.006*sin(a*1.3)*(1.-d),.008*sin(a*.9)*(1.-d));}
+float adamOffset(float t,float pt){float d=ss(1.8,4.5,pt),a=t+uAmbient;return (.010*sin(a*.7+1.)+.02*(ss(.4,1.6,pt)-1.))*(1.-d);}
 #endif
 #if STAGE==0
 vec3 eye(vec2 p,float t,float pt){
- float d=ss(5.5,12.,pt);float op=ss(-1.5,.25,pt);
- if(d<=0.)op*=1.-exp(-sq((mod(t,5.3)-5.)/.08));
+ float d=ss(1.,4.,pt),op=ss(-.5,0.,pt),amb=t+uAmbient;
+ if(d<=0.)op*=1.-exp(-sq((mod(uAmbient+2.5,5.3)-5.)/.08));
  float xn=clamp(p.x/1.32,-1.6,1.6),lid=max(0.,1.-xn*xn),closed=-.06*lid-.02;
  float upper=mix(closed,.66*pow(lid,.7)+.04*xn,op),lower=mix(closed,-.46*pow(lid,.85)+.02*xn,min(1.,op*1.25));
  float du=upper-p.y,dl=p.y-lower,inside=ss(0.,.022,du)*ss(0.,.022,dl)*step(0.0001,lid);
@@ -102,9 +102,9 @@ vec3 eye(vec2 p,float t,float pt){
  float v=fb3(p*3.3+vec2(3.1,-1.7),0.),veins=(1.-ss(0.,.03,abs(v-.5)))*ss(.48,1.,r);
  vec3 scl=mix(vec3(.93,.88,.84)*ao*corner,vec3(.8,.12,.10)*ao,veins*.75);
  scl=mix(scl,vec3(.85,.35,.38),exp(-(sq(p.x+1.13)/.006+sq(p.y+.01)/.004))*.8);
- float rp=.115*(1.+.07*sin(t*.8))*(1.+.55*d),tt=sat((r-rp)/(.4-rp));
+ float rp=.115*(1.+.07*sin(amb*.8))*(1.+.55*d),tt=sat((r-rp)/(.4-rp));
  float a=atan(p.y,p.x),u=(a/TAU+.5)*48.;
- float f=fb3(vec2(u,r*7.-t*.03),48.),f2=fb2(vec2(u*.25,r*3.+5.),12.);
+ float f=fb3(vec2(u,r*7.-amb*.03),48.),f2=fb2(vec2(u*.25,r*3.+5.),12.);
  float fib=clamp(.22+1.15*pow(f,1.6)+.35*(f2-.5),0.,2.);
  vec3 ic=mix(vec3(1,.6,.16),vec3(.10,.52,.48),ss(.18,.85,tt+.15*(f2-.5)));
  vec3 iris=ic*(fib+.55*exp(-sq((tt-.27)/.07))*f)*(1.-.88*ss(.78,1.,tt))*ss(0.,.07,tt)*(.42+.58*ss(0.,.22,du));
@@ -118,27 +118,28 @@ vec3 eye(vec2 p,float t,float pt){
 #endif
 #if STAGE<=1&&!defined(EYE_ONLY)
 float boltLine(vec2 p,float t,float q,vec2 at,vec2 gt,float cell,float fk){
- float jy=(vn(vec2(p.x*70.+fk*13.,t*14.+fk*5.),0.)-.5)*.022*sin(PI*q);
+ float jy=(vn(vec2(p.x*70.+fk*13.,(t+uAmbient)*14.+fk*5.),0.)-.5)*.022*sin(PI*q);
  float yb=mix(at.y,gt.y,q)+jy;
  return exp(-sq((p.y-yb)/(.0025+cell*.55)))*step(at.x,p.x)*step(p.x,gt.x);
 }
 vec3 creationHands(vec2 p,float t,float pt,float zoom){
+ float amb=t+uAmbient;
  p/=1.5;zoom*=1.5;vec2 go=godOffset(t,pt),ao=vec2(0,adamOffset(t,pt));float ca,cg;
  float da=handAdam(p-ao,ca),dg=handGod(p-go,cg);
  vec2 px=dFdx(p),py=dFdy(p),ga=sdfGradient(da,px,py),gg=sdfGradient(dg,px,py);
  vec2 b=p-vec2(1.15,.85);float a=atan(b.y,b.x);
- float rays=pow(.5+.5*cos(a*14.+2.*fb2(vec2(a*3.,t*.15),0.)),6.)*exp(-length(b)/1.6)*.35;
- vec3 color=rays*vec3(1,.78,.42)+ss(.45,.85,fb4(p*1.2+vec2(t*.03,0),0.))*.22*vec3(.35,.22,.55);
+ float rays=pow(.5+.5*cos(a*14.+2.*fb2(vec2(a*3.,amb*.15),0.)),6.)*exp(-length(b)/1.6)*.35;
+ vec3 color=rays*vec3(1,.78,.42)+ss(.45,.85,fb4(p*1.2+vec2(amb*.03,0),0.))*.22*vec3(.35,.22,.55);
  float cell=max(.001,.01/zoom);float ba=ss(cell*.6,-cell*.6,da),bg=ss(cell*.6,-cell*.6,dg);
  if(da<cell)color=mix(color,handShade(p-ao,false,da,ca,ga),ba);
  if(dg<cell)color=mix(color,handShade(p-go,true,dg,cg,gg),bg);
  color+=vec3(1,.85,.55)*exp(-sq(max(da,0.)/(.014+cell)))*step(0.,da)*.35;
  color+=vec3(1,.82,.5)*exp(-sq(max(dg,0.)/(.014+cell)))*step(0.,dg)*.45;
  vec2 gt=vec2(.07,.02)+go,at=vec2(-.07,0)+ao,mid=(gt+at)*.5;
- float charge=ss(2.5,6.5,pt),q=sat((p.x-at.x)/max(.001,gt.x-at.x));
+ float charge=ss(.3,1.6,pt),q=sat((p.x-at.x)/max(.001,gt.x-at.x));
  float bolt=max(max(boltLine(p,t,q,at,gt,cell,0.),boltLine(p,t,q,at,gt,cell,1.)),boltLine(p,t,q,at,gt,cell,2.));
- float rr=length(p-mid),flash=ss(.6,1.,ss(7.,13.,pt));
- color+=bolt*charge*(.75+.25*sin(t*37.)*sin(t*23.))*1.6*vec3(.75,.9,1);
+ float rr=length(p-mid),flash=ss(.6,1.,ss(1.8,4.5,pt));
+ color+=bolt*charge*(.75+.25*sin(amb*37.)*sin(amb*23.))*1.6*vec3(.75,.9,1);
  color+=exp(-rr*zoom/(.03+.07*charge))*charge*1.3*vec3(1,.9,.7);
  return color+exp(-rr*zoom/(.25+2.*flash))*flash*1.6*vec3(1,.97,.9);
 }
@@ -152,18 +153,19 @@ vec3 bangLayer(float r,float a,float dist,float speed,float seed,float N,float K
  return star*(.5+.9*h2)*1.4*tint;
 }
 vec3 bang(vec2 p,float t,float pt){
- float r=length(p)+.0001,a=atan(p.y,p.x),age=max(pt,0.),speed=.6+2.6*age,dist=.6*pt+1.3*age*age;
+ float r=length(p)+.0001,a=atan(p.y,p.x),age=max(pt,0.)*2.5,speed=.6+2.6*age,dist=1.5*pt+1.3*age*age;
  vec3 outc=bangLayer(r,a,dist,speed,1.,90.,1.,vec3(.7,.85,1))+bangLayer(r,a,dist,speed,2.,150.,1.6,vec3(1,.75,.95))+bangLayer(r,a,dist,speed,3.,240.,2.4,vec3(.85,1,1));
  float neb=fb3(vec2((a/TAU+.5)*10.,2./(r+.08)+dist*2.),10.);
  float plasma=ss(.55,.95,neb)*ss(.05,.6,r)*(.10+.07*min(age,3.));
- float heat=exp(-max(pt+.3,0.)*1.6);
+ float heat=exp(-max(pt*2.5+.3,0.)*1.6);
  return outc+plasma*vec3(.55,.25,.85)+plasma*plasma*.8*vec3(.2,.6,1)+exp(-r/(.12+heat))*(.25+1.3*heat)*vec3(1,.92,.8);
 }
 #endif
 #if STAGE==2||STAGE==3
 vec3 galaxy(vec2 p,float t){
- vec2 q=rot(.45)*p;q.y/=.58;float r=length(q)+.0001,a=atan(q.y,q.x),spiral=a+t*.10-2.3*log(r);
- vec2 gas=r*vec2(cos(a+t*.25/(r+.35)),sin(a+t*.25/(r+.35)));
+ float amb=t+uAmbient;
+ vec2 q=rot(.45)*p;q.y/=.58;float r=length(q)+.0001,a=atan(q.y,q.x),spiral=a+amb*.16-2.3*log(r);
+ vec2 gas=r*vec2(cos(a+amb*.35/(r+.35)),sin(a+amb*.35/(r+.35)));
  float arm=pow(.5+.5*cos(2.*spiral),3.),n=fb4(gas*4.,0.),dust=pow(.5+.5*cos(2.*spiral-.55),8.)*ss(.06,.3,r),disk=exp(-r/.45);
  float dens=disk*(.18+1.25*arm*(.35+.95*n))*(1.-.65*dust*n)*1.5;
  float bulge=exp(-sq(r/.13))*1.1+exp(-r/.02)*.9,knots=ss(.80,.95,vn(gas*26.,0.))*arm*disk*2.5;
@@ -172,13 +174,14 @@ vec3 galaxy(vec2 p,float t){
 #endif
 #if STAGE==3||STAGE==4
 vec3 blackHole(vec2 p,float t){
+ float amb=t+uAmbient;
  vec2 q=rot(.1)*p;float r=length(q)+.00001,a=atan(q.y,q.x),rh=.26;
  vec2 d=q/vec2(1,.19);float rd=length(d)+.00001,ad=atan(d.y,d.x);
- float n=fb3(vec2((ad-t*.9/(pow(rd,1.5)+.1))/TAU*24.,rd*9.),24.);
+ float n=fb3(vec2((ad-amb*1.2/(pow(rd,1.5)+.1))/TAU*24.,rd*9.),24.);
  float band=ss(rh*1.25,rh*1.7,rd)*ss(1.6,.75,rd),dop=1.+.7*(-d.x/rd);
  float disk=band*(.3+1.2*n*n)*pow(.55/rd,1.2)*dop;
  if(q.y>0.&&r<rh*1.02)disk=0.;
- float lr=r-rh*1.12,hn=fb2(vec2(a/TAU*20.-t*.5,r*10.),20.);
+ float lr=r-rh*1.12,hn=fb2(vec2(a/TAU*20.-amb*.65,r*10.),20.);
  float halo=(exp(-sq(lr/.05))+.3*exp(-max(lr,0.)/.12))*step(rh,r)*(.35+.9*hn)*(1.+.5*(-q.x/r))*(.55+.45*abs(sin(a)));
  float ring=exp(-sq((r-rh*1.03)/.012))*1.4,shadow=ss(rh*.97,rh*1.02,r);
  float I=((halo*.9+ring)*shadow+disk)*.9;
@@ -211,16 +214,16 @@ vec3 thisWorld(vec2 p,float t,float pt,float zoom){return galaxy(p,t)+stars(p,0.
 vec3 nextWorld(vec2 p,float t,float pt,float zoom){return blackHole(p,t)+stars(p,0.,t)*ss(.30,.4,length(p))*.45;}
 #else
 vec3 thisWorld(vec2 p,float t,float pt,float zoom){return blackHole(p,t)+stars(p,0.,t)*ss(.30,.4,length(p))*.45;}
-vec3 nextWorld(vec2 p,float t,float pt,float zoom){return arrival(p,t);}
+vec3 nextWorld(vec2 p,float t,float pt,float zoom){return arrival(p,t)*ss(15.2,16.1,t);}
 #endif
 vec3 originalSequence(vec2 p,float t,float rho){
  const int index=STAGE;
- float start=index==0?0.:index==1?12.:index==2?25.:index==3?33.:43.;
- float dur=index==0?12.:index==1?13.:index==2?8.:index==3?10.:11.;
- float hold=index==0?5.5:index==1?7.:index==2?1.:index==3?3.:3.5;
+ float start=index==0?0.:index==1?4.:index==2?8.5:index==3?11.5:15.;
+ float dur=index==0?4.:index==1?4.5:index==2?3.:index==3?3.5:3.5;
+ float hold=index==0?1.:index==1?1.8:index==2?.35:index==3?.8:.9;
  float pt=t-start,s=sat((pt-hold)/(dur-hold)),e=s*s*(3.-2.*s);
 #if STAGE==0
- float pr=.115*(1.+.07*sin(t*.8))*(1.+.55*e);
+ float pr=.115*(1.+.07*sin((t+uAmbient)*.8))*(1.+.55*e);
 #else
  float pr=index==1?.045:index==2?.05:index==3?.035:.26*.97;
 #endif
@@ -228,7 +231,7 @@ vec3 originalSequence(vec2 p,float t,float rho){
 #if STAGE==1
  portal=(vec2(.07,.02)+godOffset(t,pt)+vec2(-.07,adamOffset(t,pt)))*.75;
 #endif
- float roll=index==0?.45:index==1?-.25:index==2?.6:index==3?-.5:.35;
+ float roll=index==0?.25:index==1?-.16:index==2?.32:index==3?-.28:.2;
  float zoom=exp(e*log(rho/pr));vec2 q=rot(roll*sin(PI*e))*p,centre=portal*(1.-pow(1.-e,3.));
  vec3 col=thisWorld(centre+q/zoom,t,pt,zoom);
  vec2 delta=q-(portal-centre)*zoom;float radius=pr*zoom;

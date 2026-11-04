@@ -1,4 +1,4 @@
-import{C as q,j as M,l as j,k as D,m as F}from"./portfolio-Berfhwk0.js";import"./utils-ld2vAeWm.js";const B=`
+import{C as q,l as M,m as B,n as L,O as j,o as F,c as H}from"./portfolio-88Q0ZP7R.js";import"./utils-ld2vAeWm.js";const Y=`
 const float PI=3.14159265359;
 const float TAU=6.28318530718;
 float sat(float x){return clamp(x,0.,1.);}
@@ -23,7 +23,7 @@ vec3 stars1(vec2 p,float logz,float t,float r,float a,float N,float K,float par,
  vec2 uv=vec2((a/TAU+.5)*N,(log(r)-par*logz)*K),c=floor(uv);c.x=mod(c.x,N);
  float h=hash(c+vec2(seed*1013.,0)),h2=hash(c+vec2(77,seed*389.));
  float arc=(fract(uv.x)-(.25+.5*h2))*TAU*r/N,rad=(fract(uv.y)-.5)*r/K;
- float tw=.65+.35*sin(t*(1.5+4.*h2)+h2*60.);
+ float tw=.65+.35*sin((t+uAmbient)*(1.5+4.*h2)+h2*60.);
  return step(h,clamp(26.*TAU*r*r/(N*K),0.,.9))*exp(-(arc*arc+rad*rad)/.00022)*(.35+.9*h2)*tw*mix(vec3(.65,.78,1),vec3(1,.85,.7),h2);
 }
 vec3 stars(vec2 p,float logz,float t){
@@ -76,13 +76,13 @@ vec3 handShade(vec2 p,bool god,float d,float crease,vec2 g){
  if(god)base=mix(base,vec3(.78,.30,.50),ss(1.02,1.10,p.x+.3*p.y)*sat(.6+.6*fb3(p*vec2(9,3),0.)));
  return base*(.12+1.25*pow(diff,1.4)+fill)*(.92+.16*vn(p*45.,0.))*(1.-.7*crease)+spec*(1.-crease)*vec3(1,.95,.85);
 }
-vec2 godOffset(float t,float pt){float d=ss(7.,13.,pt);return vec2(.34*(1.-ss(-1.,6.,pt))+.006*sin(t*1.3)*(1.-d),.008*sin(t*.9)*(1.-d));}
-float adamOffset(float t,float pt){return (.010*sin(t*.7+1.)+.02*(ss(3.,6.5,pt)-1.))*(1.-ss(7.,13.,pt));}
+vec2 godOffset(float t,float pt){float d=ss(1.8,4.5,pt),a=t+uAmbient;return vec2(.34*(1.-ss(-.8,1.5,pt))+.006*sin(a*1.3)*(1.-d),.008*sin(a*.9)*(1.-d));}
+float adamOffset(float t,float pt){float d=ss(1.8,4.5,pt),a=t+uAmbient;return (.010*sin(a*.7+1.)+.02*(ss(.4,1.6,pt)-1.))*(1.-d);}
 #endif
 #if STAGE==0
 vec3 eye(vec2 p,float t,float pt){
- float d=ss(5.5,12.,pt);float op=ss(-1.5,.25,pt);
- if(d<=0.)op*=1.-exp(-sq((mod(t,5.3)-5.)/.08));
+ float d=ss(1.,4.,pt),op=ss(-.5,0.,pt),amb=t+uAmbient;
+ if(d<=0.)op*=1.-exp(-sq((mod(uAmbient+2.5,5.3)-5.)/.08));
  float xn=clamp(p.x/1.32,-1.6,1.6),lid=max(0.,1.-xn*xn),closed=-.06*lid-.02;
  float upper=mix(closed,.66*pow(lid,.7)+.04*xn,op),lower=mix(closed,-.46*pow(lid,.85)+.02*xn,min(1.,op*1.25));
  float du=upper-p.y,dl=p.y-lower,inside=ss(0.,.022,du)*ss(0.,.022,dl)*step(0.0001,lid);
@@ -90,9 +90,9 @@ vec3 eye(vec2 p,float t,float pt){
  float v=fb3(p*3.3+vec2(3.1,-1.7),0.),veins=(1.-ss(0.,.03,abs(v-.5)))*ss(.48,1.,r);
  vec3 scl=mix(vec3(.93,.88,.84)*ao*corner,vec3(.8,.12,.10)*ao,veins*.75);
  scl=mix(scl,vec3(.85,.35,.38),exp(-(sq(p.x+1.13)/.006+sq(p.y+.01)/.004))*.8);
- float rp=.115*(1.+.07*sin(t*.8))*(1.+.55*d),tt=sat((r-rp)/(.4-rp));
+ float rp=.115*(1.+.07*sin(amb*.8))*(1.+.55*d),tt=sat((r-rp)/(.4-rp));
  float a=atan(p.y,p.x),u=(a/TAU+.5)*48.;
- float f=fb3(vec2(u,r*7.-t*.03),48.),f2=fb2(vec2(u*.25,r*3.+5.),12.);
+ float f=fb3(vec2(u,r*7.-amb*.03),48.),f2=fb2(vec2(u*.25,r*3.+5.),12.);
  float fib=clamp(.22+1.15*pow(f,1.6)+.35*(f2-.5),0.,2.);
  vec3 ic=mix(vec3(1,.6,.16),vec3(.10,.52,.48),ss(.18,.85,tt+.15*(f2-.5)));
  vec3 iris=ic*(fib+.55*exp(-sq((tt-.27)/.07))*f)*(1.-.88*ss(.78,1.,tt))*ss(0.,.07,tt)*(.42+.58*ss(0.,.22,du));
@@ -106,27 +106,28 @@ vec3 eye(vec2 p,float t,float pt){
 #endif
 #if STAGE<=1&&!defined(EYE_ONLY)
 float boltLine(vec2 p,float t,float q,vec2 at,vec2 gt,float cell,float fk){
- float jy=(vn(vec2(p.x*70.+fk*13.,t*14.+fk*5.),0.)-.5)*.022*sin(PI*q);
+ float jy=(vn(vec2(p.x*70.+fk*13.,(t+uAmbient)*14.+fk*5.),0.)-.5)*.022*sin(PI*q);
  float yb=mix(at.y,gt.y,q)+jy;
  return exp(-sq((p.y-yb)/(.0025+cell*.55)))*step(at.x,p.x)*step(p.x,gt.x);
 }
 vec3 creationHands(vec2 p,float t,float pt,float zoom){
+ float amb=t+uAmbient;
  p/=1.5;zoom*=1.5;vec2 go=godOffset(t,pt),ao=vec2(0,adamOffset(t,pt));float ca,cg;
  float da=handAdam(p-ao,ca),dg=handGod(p-go,cg);
  vec2 px=dFdx(p),py=dFdy(p),ga=sdfGradient(da,px,py),gg=sdfGradient(dg,px,py);
  vec2 b=p-vec2(1.15,.85);float a=atan(b.y,b.x);
- float rays=pow(.5+.5*cos(a*14.+2.*fb2(vec2(a*3.,t*.15),0.)),6.)*exp(-length(b)/1.6)*.35;
- vec3 color=rays*vec3(1,.78,.42)+ss(.45,.85,fb4(p*1.2+vec2(t*.03,0),0.))*.22*vec3(.35,.22,.55);
+ float rays=pow(.5+.5*cos(a*14.+2.*fb2(vec2(a*3.,amb*.15),0.)),6.)*exp(-length(b)/1.6)*.35;
+ vec3 color=rays*vec3(1,.78,.42)+ss(.45,.85,fb4(p*1.2+vec2(amb*.03,0),0.))*.22*vec3(.35,.22,.55);
  float cell=max(.001,.01/zoom);float ba=ss(cell*.6,-cell*.6,da),bg=ss(cell*.6,-cell*.6,dg);
  if(da<cell)color=mix(color,handShade(p-ao,false,da,ca,ga),ba);
  if(dg<cell)color=mix(color,handShade(p-go,true,dg,cg,gg),bg);
  color+=vec3(1,.85,.55)*exp(-sq(max(da,0.)/(.014+cell)))*step(0.,da)*.35;
  color+=vec3(1,.82,.5)*exp(-sq(max(dg,0.)/(.014+cell)))*step(0.,dg)*.45;
  vec2 gt=vec2(.07,.02)+go,at=vec2(-.07,0)+ao,mid=(gt+at)*.5;
- float charge=ss(2.5,6.5,pt),q=sat((p.x-at.x)/max(.001,gt.x-at.x));
+ float charge=ss(.3,1.6,pt),q=sat((p.x-at.x)/max(.001,gt.x-at.x));
  float bolt=max(max(boltLine(p,t,q,at,gt,cell,0.),boltLine(p,t,q,at,gt,cell,1.)),boltLine(p,t,q,at,gt,cell,2.));
- float rr=length(p-mid),flash=ss(.6,1.,ss(7.,13.,pt));
- color+=bolt*charge*(.75+.25*sin(t*37.)*sin(t*23.))*1.6*vec3(.75,.9,1);
+ float rr=length(p-mid),flash=ss(.6,1.,ss(1.8,4.5,pt));
+ color+=bolt*charge*(.75+.25*sin(amb*37.)*sin(amb*23.))*1.6*vec3(.75,.9,1);
  color+=exp(-rr*zoom/(.03+.07*charge))*charge*1.3*vec3(1,.9,.7);
  return color+exp(-rr*zoom/(.25+2.*flash))*flash*1.6*vec3(1,.97,.9);
 }
@@ -140,18 +141,19 @@ vec3 bangLayer(float r,float a,float dist,float speed,float seed,float N,float K
  return star*(.5+.9*h2)*1.4*tint;
 }
 vec3 bang(vec2 p,float t,float pt){
- float r=length(p)+.0001,a=atan(p.y,p.x),age=max(pt,0.),speed=.6+2.6*age,dist=.6*pt+1.3*age*age;
+ float r=length(p)+.0001,a=atan(p.y,p.x),age=max(pt,0.)*2.5,speed=.6+2.6*age,dist=1.5*pt+1.3*age*age;
  vec3 outc=bangLayer(r,a,dist,speed,1.,90.,1.,vec3(.7,.85,1))+bangLayer(r,a,dist,speed,2.,150.,1.6,vec3(1,.75,.95))+bangLayer(r,a,dist,speed,3.,240.,2.4,vec3(.85,1,1));
  float neb=fb3(vec2((a/TAU+.5)*10.,2./(r+.08)+dist*2.),10.);
  float plasma=ss(.55,.95,neb)*ss(.05,.6,r)*(.10+.07*min(age,3.));
- float heat=exp(-max(pt+.3,0.)*1.6);
+ float heat=exp(-max(pt*2.5+.3,0.)*1.6);
  return outc+plasma*vec3(.55,.25,.85)+plasma*plasma*.8*vec3(.2,.6,1)+exp(-r/(.12+heat))*(.25+1.3*heat)*vec3(1,.92,.8);
 }
 #endif
 #if STAGE==2||STAGE==3
 vec3 galaxy(vec2 p,float t){
- vec2 q=rot(.45)*p;q.y/=.58;float r=length(q)+.0001,a=atan(q.y,q.x),spiral=a+t*.10-2.3*log(r);
- vec2 gas=r*vec2(cos(a+t*.25/(r+.35)),sin(a+t*.25/(r+.35)));
+ float amb=t+uAmbient;
+ vec2 q=rot(.45)*p;q.y/=.58;float r=length(q)+.0001,a=atan(q.y,q.x),spiral=a+amb*.16-2.3*log(r);
+ vec2 gas=r*vec2(cos(a+amb*.35/(r+.35)),sin(a+amb*.35/(r+.35)));
  float arm=pow(.5+.5*cos(2.*spiral),3.),n=fb4(gas*4.,0.),dust=pow(.5+.5*cos(2.*spiral-.55),8.)*ss(.06,.3,r),disk=exp(-r/.45);
  float dens=disk*(.18+1.25*arm*(.35+.95*n))*(1.-.65*dust*n)*1.5;
  float bulge=exp(-sq(r/.13))*1.1+exp(-r/.02)*.9,knots=ss(.80,.95,vn(gas*26.,0.))*arm*disk*2.5;
@@ -160,20 +162,21 @@ vec3 galaxy(vec2 p,float t){
 #endif
 #if STAGE==3||STAGE==4
 vec3 blackHole(vec2 p,float t){
+ float amb=t+uAmbient;
  vec2 q=rot(.1)*p;float r=length(q)+.00001,a=atan(q.y,q.x),rh=.26;
  vec2 d=q/vec2(1,.19);float rd=length(d)+.00001,ad=atan(d.y,d.x);
- float n=fb3(vec2((ad-t*.9/(pow(rd,1.5)+.1))/TAU*24.,rd*9.),24.);
+ float n=fb3(vec2((ad-amb*1.2/(pow(rd,1.5)+.1))/TAU*24.,rd*9.),24.);
  float band=ss(rh*1.25,rh*1.7,rd)*ss(1.6,.75,rd),dop=1.+.7*(-d.x/rd);
  float disk=band*(.3+1.2*n*n)*pow(.55/rd,1.2)*dop;
  if(q.y>0.&&r<rh*1.02)disk=0.;
- float lr=r-rh*1.12,hn=fb2(vec2(a/TAU*20.-t*.5,r*10.),20.);
+ float lr=r-rh*1.12,hn=fb2(vec2(a/TAU*20.-amb*.65,r*10.),20.);
  float halo=(exp(-sq(lr/.05))+.3*exp(-max(lr,0.)/.12))*step(rh,r)*(.35+.9*hn)*(1.+.5*(-q.x/r))*(.55+.45*abs(sin(a)));
  float ring=exp(-sq((r-rh*1.03)/.012))*1.4,shadow=ss(rh*.97,rh*1.02,r);
  float I=((halo*.9+ring)*shadow+disk)*.9;
  return vec3(sat(I*1.9),pow(sat(I*1.6-.45),1.1),sat(I*2.2-1.35))+ring*shadow*.25*vec3(.6,.8,1);
 }
 #endif
-`,Y=`
+`,$=`
 #if STAGE<5
 #if STAGE==0
 // The hands are by far the slowest to compile. A cold visit opens the eye on this variant, its
@@ -196,16 +199,16 @@ vec3 thisWorld(vec2 p,float t,float pt,float zoom){return galaxy(p,t)+stars(p,0.
 vec3 nextWorld(vec2 p,float t,float pt,float zoom){return blackHole(p,t)+stars(p,0.,t)*ss(.30,.4,length(p))*.45;}
 #else
 vec3 thisWorld(vec2 p,float t,float pt,float zoom){return blackHole(p,t)+stars(p,0.,t)*ss(.30,.4,length(p))*.45;}
-vec3 nextWorld(vec2 p,float t,float pt,float zoom){return arrival(p,t);}
+vec3 nextWorld(vec2 p,float t,float pt,float zoom){return arrival(p,t)*ss(15.2,16.1,t);}
 #endif
 vec3 originalSequence(vec2 p,float t,float rho){
  const int index=STAGE;
- float start=index==0?0.:index==1?12.:index==2?25.:index==3?33.:43.;
- float dur=index==0?12.:index==1?13.:index==2?8.:index==3?10.:11.;
- float hold=index==0?5.5:index==1?7.:index==2?1.:index==3?3.:3.5;
+ float start=index==0?0.:index==1?4.:index==2?8.5:index==3?11.5:15.;
+ float dur=index==0?4.:index==1?4.5:index==2?3.:index==3?3.5:3.5;
+ float hold=index==0?1.:index==1?1.8:index==2?.35:index==3?.8:.9;
  float pt=t-start,s=sat((pt-hold)/(dur-hold)),e=s*s*(3.-2.*s);
 #if STAGE==0
- float pr=.115*(1.+.07*sin(t*.8))*(1.+.55*e);
+ float pr=.115*(1.+.07*sin((t+uAmbient)*.8))*(1.+.55*e);
 #else
  float pr=index==1?.045:index==2?.05:index==3?.035:.26*.97;
 #endif
@@ -213,7 +216,7 @@ vec3 originalSequence(vec2 p,float t,float rho){
 #if STAGE==1
  portal=(vec2(.07,.02)+godOffset(t,pt)+vec2(-.07,adamOffset(t,pt)))*.75;
 #endif
- float roll=index==0?.45:index==1?-.25:index==2?.6:index==3?-.5:.35;
+ float roll=index==0?.25:index==1?-.16:index==2?.32:index==3?-.28:.2;
  float zoom=exp(e*log(rho/pr));vec2 q=rot(roll*sin(PI*e))*p,centre=portal*(1.-pow(1.-e,3.));
  vec3 col=thisWorld(centre+q/zoom,t,pt,zoom);
  vec2 delta=q-(portal-centre)*zoom;float radius=pr*zoom;
@@ -229,22 +232,23 @@ vec3 originalSequence(vec2 p,float t,float rho){
  return col;
 }
 #endif
-`,H=5.4,W=(e,f=!1)=>`#version 300 es
+`,K=1.6,O=(e,f=!1)=>`#version 300 es
 #define STAGE ${e}
 ${f?"#define EYE_ONLY":""}
 precision highp float;
 uniform float uTime;
+uniform float uAmbient;
 uniform float uAspect;
 uniform vec3 uWater;
 uniform vec3 uInk;
 uniform sampler2D uLand;
 in vec2 vUv;
 out vec4 outColor;
-${B}
+${Y}
 #if STAGE>=4
 // The globe's spherical coordinates for a point on or above the Earth, at this moment's longitude.
 vec2 earthUv(vec3 n,float t){
- float lon=mix(-85.,-140.,ss(62.,72.,t))*PI/180.,lat=-15.*PI/180.;
+ float lon=mix(-78.,-128.,ss(18.5,22.8,t))*PI/180.,lat=-10.*PI/180.;
  vec3 forward=vec3(cos(lat)*cos(lon),cos(lat)*sin(lon),sin(lat));
  vec3 right=vec3(-sin(lon),cos(lon),0),up=cross(forward,right);
  vec3 earth=n.x*right+n.y*up+n.z*forward;
@@ -259,7 +263,7 @@ float cloudDeck(vec3 ro,vec3 rd,float h,float altitude,float t,float freq,float 
  if(hit<=0.||hit>far)return 0.;
  vec2 uv=earthUv(normalize(ro+rd*hit),t);
  float warp=fb2(vec2(uv.x*16.,uv.y*8.),16.)-.5;
- float n=fb4(vec2(uv.x*freq+t*.05+warp*3.,uv.y*freq*.55+warp*2.),freq);
+ float n=fb4(vec2(uv.x*freq+(t+uAmbient)*.05+warp*3.,uv.y*freq*.55+warp*2.),freq);
  // Weather comes in systems: whole regions clear, so the oceans and continents stay readable
  float weather=fb2(vec2(uv.x*5.,uv.y*4.)+vec2(3.7,1.3),5.);
  // Far decks melt into the haze near the horizon rather than ending in a hard band
@@ -270,17 +274,18 @@ float cloudDeck(vec3 ro,vec3 rd,float h,float altitude,float t,float freq,float 
 vec3 waveBand(vec2 at,float altitude,float t,float f){
  float g=exp(-sq(log(altitude*f/5.)/1.1));
  if(g<.01)return vec3(0);
- vec2 q=at*f*vec2(1,1.7)+vec2(t*.12,-t*.3);
+ float amb=t+uAmbient;
+ vec2 q=at*f*vec2(1,1.7)+vec2(amb*.12,-amb*.3);
  return vec3(g*fb3(q,0.),g*fb2(q+vec2(19.3,-7.1),0.),g);
 }
 // The same spherical coordinates and ETOPO land data used by the later globe.
 // One ray/sphere intersection per glyph, no second globe engine or WebGL context.
 vec3 arrival(vec2 p,float t){
- float exit=ss(54.,60.,t),approach=ss(60.,68.,t),descent=ss(68.,77.,t);
- float altitude=mix(10.,4.,exit);altitude=mix(altitude,1.4,approach);
- altitude=exp(mix(log(altitude),log(.0004),descent));
+ float exit=ss(16.5,20.2,t),dive=ss(19.0,24.1,t);
+ float altitude=mix(5.5,1.8,exit);
+ altitude=exp(mix(log(altitude),log(.0004),dive));
  // The camera pitches up from the planet's centre toward its horizon as it falls
- float tilt=ss(68.5,74.,t)*1.32,ct=cos(tilt),st=sin(tilt);
+ float tilt=ss(21.0,23.5,t)*1.32,ct=cos(tilt),st=sin(tilt);
  vec3 rd=normalize(vec3(p*.42,-1));rd=vec3(rd.x,rd.y*ct-rd.z*st,rd.y*st+rd.z*ct);
  vec3 ro=vec3(0,0,1.+altitude);
  float air=ss(.35,.015,altitude),low=ss(.015,.0008,altitude);
@@ -290,7 +295,7 @@ vec3 arrival(vec2 p,float t){
  float b=dot(ro,rd),c=dot(ro,ro)-1.,disc=b*b-c;
  vec3 color;float light=1.,far=1e6;
  if(disc<0.||b>0.){
-   vec3 space=stars(p,-exit*1.8+(t-60.)*.025,t)*(.75-.3*exit)*(1.-air);
+   vec3 space=stars(p,-exit*1.8+(t-20.)*.06,t)*(.75-.3*exit)*(1.-air);
    space+=vec3(.004,.009,.023);
    float miss=sqrt(max(0.,dot(ro,ro)-b*b))-1.;
    space+=exp(-max(miss,0.)*16.)*vec3(.10,.36,.80)*.7;
@@ -321,7 +326,7 @@ vec3 arrival(vec2 p,float t){
  return color;
 }
 #endif
-${Y}
+${$}
 void main(){
  vec2 p=(vUv-.5)*vec2(uAspect,1.)*2.;float fit=max(1.,1.45/uAspect);p*=fit;
 #if STAGE<5
@@ -331,21 +336,21 @@ void main(){
 #else
  vec3 color=arrival(p,uTime);
  float alpha=1.;
- if(uTime>=76.){
+ if(uTime>=24.){
    // The surface passes up through the camera, refracting a narrow meniscus.
    // Below it is the ACTUAL native ocean already drawn in this framebuffer.
-   float passage=ss(76.,81.,uTime);
-   float surface=mix(-.15,1.15,passage)+.025*sin(vUv.x*12.+uTime*1.6)*sin(PI*passage);
+   float passage=ss(24.,26.,uTime);
+   float surface=mix(-.15,1.15,passage)+.025*sin(vUv.x*12.+(uTime+uAmbient)*1.6)*sin(PI*passage);
    alpha=ss(surface-.055,surface+.055,vUv.y);
    float edge=exp(-sq((vUv.y-surface)/.028))*sin(PI*passage);
-   color=mix(color,uWater,ss(77.,80.5,uTime));color+=edge*vec3(.08,.13,.16);
+   color=mix(color,uWater,ss(24.3,25.8,uTime));color+=edge*vec3(.08,.13,.16);
  }
  // Retain the original exponential tone map; ease to the native ocean's linear ink.
  vec3 cosmic=1.-exp(-max(color,vec3(0))*1.6);
- color=mix(cosmic,color,ss(67.,76.,uTime));
+ color=mix(cosmic,color,ss(21.5,24.,uTime));
  outColor=vec4(clamp(color,0.,1.),alpha);
 #endif
-}`,$=`#version 300 es
+}`,Q=`#version 300 es
 precision highp float;
 uniform sampler2D uField;
 uniform sampler2D uAtlas;
@@ -375,16 +380,16 @@ void main(){
  float mx=max(max(field.r,field.g),field.b);
  vec3 hue=field.rgb/max(mx,.001);
  vec3 ink=hue*(.62+.7*mx);
- float ocean=smoothstep(71.,78.,uTime);
+ float ocean=smoothstep(22.2,25.,uTime);
  float pick=fract(sin(dot(cell,vec2(127.1,311.7)))*43758.5453);
  float tone=mix(level,fract(pick*7.31),.6);
  float nativeIndex=max(1.,floor(tone*(uNativeCount-1.)));
  vec2 nativeUv=vec2((mod(nativeIndex,uNativeGrid.x)+local.x)/uNativeGrid.x,(floor(nativeIndex/uNativeGrid.x)+local.y)/uNativeGrid.y);
  float nativeGlyph=textureGrad(uNativeAtlas,nativeUv,dFdx(coord/uNativeGrid),dFdy(coord/uNativeGrid)).a;
- glyph=mix(glyph,nativeGlyph*step(pick,.42),smoothstep(70.,78.,uTime));
+ glyph=mix(glyph,nativeGlyph*step(pick,.42),smoothstep(22.,25.,uTime));
  // The water lifts as a whole; each glyph turns from cosmic light to ocean ink at its own moment,
  // so there is never a stretch where every glyph has the water's own brightness and disappears.
  float turned=clamp(ocean*1.7-pick*.7,0.,1.);
  vec3 color=glow*mix(.21,.99,ocean)+glyph*mix(ink*.88,(uNativeInk-glow)*.5,turned);
  outColor=vec4(clamp(color,0.,1.),field.a);
-}`;function J(e){let f=null,d=null,z=!1,c=0,G=0,s=null,i=null,R=!1,U=0;const v=Array(q).fill(null);let N,_;const O=new Promise((t,a)=>{N=t,_=a}),k=()=>{if(w)return;!s&&c<=q&&(s=F(e,c===0?$:W(c-1)),c===1&&(i=F(e,W(0,!0))));const t=i==null?void 0:i.poll(),a=s==null?void 0:s.poll();if(t===null||a===null){z=!0,_(new Error("Creation shader compilation failed"));return}t&&(d=t,i=null),a&&(c===0?f=a:v[c-1]=a,c===1&&(U=performance.now()),s=null,c++),f&&(d||v[0])&&N(),(s||i||c<=q)&&(G=window.setTimeout(k,a?0:50))},m=M(e," .'`^\",:;Il!i><~+_-?][}{1)(|/tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@$","'IBM Plex Mono', monospace"),u=e.createTexture(),h=e.createTexture(),I=e.createFramebuffer();for(const t of[u,h])e.bindTexture(e.TEXTURE_2D,t),e.texParameteri(e.TEXTURE_2D,e.TEXTURE_MIN_FILTER,e.LINEAR),e.texParameteri(e.TEXTURE_2D,e.TEXTURE_MAG_FILTER,e.LINEAR),e.texParameteri(e.TEXTURE_2D,e.TEXTURE_WRAP_S,e.CLAMP_TO_EDGE),e.texParameteri(e.TEXTURE_2D,e.TEXTURE_WRAP_T,e.CLAMP_TO_EDGE);let w=!1,P=0,S=0;k();const X=j().then(t=>{if(w)return;const a=document.createElement("canvas");a.width=360,a.height=180;const l=a.getContext("2d");l.fillStyle="#000",l.fillRect(0,0,360,180);for(let n=0;n<t.xyz.length;n+=3){const b=(Math.atan2(t.xyz[n+1],t.xyz[n])/Math.PI/2+.5)*360,x=(Math.asin(t.xyz[n+2])/Math.PI+.5)*180,o=n/3<t.bands[1]?110:n/3<t.bands[2]?175:235;l.fillStyle=`rgb(${o},${o},${o})`,l.fillRect(b-1.1,x-1,2.2,2)}e.activeTexture(e.TEXTURE2),e.bindTexture(e.TEXTURE_2D,h),e.pixelStorei(e.UNPACK_FLIP_Y_WEBGL,!1),e.texImage2D(e.TEXTURE_2D,0,e.RGBA,e.RGBA,e.UNSIGNED_BYTE,a)});return{ready:Promise.all([X,O]).then(()=>{}),canDraw:t=>t>=81||!!v[D(t)]||t<H&&!!d,failed:()=>z,draw(t,a,l,n,b,x,o){const C=D(t),T=v[C]??(C===0?d:null);if(!T||!f)return;T===d&&(R=!0);const A=Math.max(0,Math.min(1,(t-70)/11)),L=A*A*(3-2*A),g=o.startH*.6,y=Math.ceil(l/o.startH),E=Math.ceil(a/g);e.activeTexture(e.TEXTURE0),e.bindTexture(e.TEXTURE_2D,u),(E!==P||y!==S)&&(P=E,S=y,e.texImage2D(e.TEXTURE_2D,0,e.RGBA8,E,y,0,e.RGBA,e.UNSIGNED_BYTE,null)),e.bindFramebuffer(e.FRAMEBUFFER,I),e.framebufferTexture2D(e.FRAMEBUFFER,e.COLOR_ATTACHMENT0,e.TEXTURE_2D,u,0),e.disable(e.BLEND),e.viewport(0,0,E,y),e.useProgram(T.program);const p=T.uniforms;e.uniform1f(p.uTime,t),e.uniform1f(p.uAspect,a/l),e.uniform1f(p.uPortal,R?Math.min(1,(performance.now()-U)/800):1),e.uniform3fv(p.uWater,n.subarray(0,3)),e.uniform3fv(p.uInk,b.subarray(0,3)),e.activeTexture(e.TEXTURE2),e.bindTexture(e.TEXTURE_2D,h),e.uniform1i(p.uLand,2),e.drawArrays(e.TRIANGLES,0,3),e.bindFramebuffer(e.FRAMEBUFFER,null),e.viewport(0,0,a,l),e.useProgram(f.program);const r=f.uniforms;e.activeTexture(e.TEXTURE0),e.bindTexture(e.TEXTURE_2D,u),e.uniform1i(r.uField,0),e.activeTexture(e.TEXTURE1),e.bindTexture(e.TEXTURE_2D,m.texture),e.uniform1i(r.uAtlas,1),e.activeTexture(e.TEXTURE3),e.bindTexture(e.TEXTURE_2D,x.texture),e.uniform1i(r.uNativeAtlas,3),e.uniform2f(r.uNativeGrid,...x.grid),e.uniform1f(r.uNativeCount,x.count),e.uniform2f(r.uCanvas,a,l),e.uniform2f(r.uAnchor,o.anchorX,o.anchorY),e.uniform2f(r.uCell,g+(o.cellW-g)*L,o.startH+(o.cellH-o.startH)*L),e.uniform3fv(r.uNativeInk,b.subarray(0,3)),e.uniform2f(r.uAtlasGrid,...m.grid),e.uniform1f(r.uCount,m.count),e.uniform1f(r.uTime,t),e.enable(e.BLEND),e.blendFunc(e.SRC_ALPHA,e.ONE_MINUS_SRC_ALPHA),e.drawArrays(e.TRIANGLES,0,3),e.disable(e.BLEND)},destroy(){w=!0,clearTimeout(G),s==null||s.cancel(),i==null||i.cancel();for(const t of[f,d,...v])t&&e.deleteProgram(t.program);e.deleteTexture(u),e.deleteTexture(h),e.deleteTexture(m.texture),e.deleteFramebuffer(I)}}}export{J as createCreationRenderer};
+}`;function V(e){let f=null,p=null,z=!1,i=0,G=0,s=null,c=null,R=!1,U=0;const v=Array(q).fill(null);let N,_;const W=new Promise((t,a)=>{N=t,_=a}),k=()=>{if(A)return;!s&&i<=q&&(s=F(e,i===0?Q:O(i-1)),i===1&&(c=F(e,O(0,!0))));const t=c==null?void 0:c.poll(),a=s==null?void 0:s.poll();if(t===null||a===null){z=!0,_(new Error("Creation shader compilation failed"));return}t&&(p=t,c=null),a&&(i===0?f=a:v[i-1]=a,i===1&&(U=performance.now()),s=null,i++),f&&(p||v[0])&&N(),(s||c||i<=q)&&(G=window.setTimeout(k,a?0:16))},x=M(e," .'`^\",:;Il!i><~+_-?][}{1)(|/tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@$","'IBM Plex Mono', monospace"),u=e.createTexture(),h=e.createTexture(),I=e.createFramebuffer();for(const t of[u,h])e.bindTexture(e.TEXTURE_2D,t),e.texParameteri(e.TEXTURE_2D,e.TEXTURE_MIN_FILTER,e.LINEAR),e.texParameteri(e.TEXTURE_2D,e.TEXTURE_MAG_FILTER,e.LINEAR),e.texParameteri(e.TEXTURE_2D,e.TEXTURE_WRAP_S,e.CLAMP_TO_EDGE),e.texParameteri(e.TEXTURE_2D,e.TEXTURE_WRAP_T,e.CLAMP_TO_EDGE);let A=!1,P=0,S=0;k();const X=B().then(t=>{if(A)return;const a=document.createElement("canvas");a.width=360,a.height=180;const l=a.getContext("2d");l.fillStyle="#000",l.fillRect(0,0,360,180);for(let n=0;n<t.xyz.length;n+=3){const b=(Math.atan2(t.xyz[n+1],t.xyz[n])/Math.PI/2+.5)*360,m=(Math.asin(t.xyz[n+2])/Math.PI+.5)*180,o=n/3<t.bands[1]?110:n/3<t.bands[2]?175:235;l.fillStyle=`rgb(${o},${o},${o})`,l.fillRect(b-1.1,m-1,2.2,2)}e.activeTexture(e.TEXTURE2),e.bindTexture(e.TEXTURE_2D,h),e.pixelStorei(e.UNPACK_FLIP_Y_WEBGL,!1),e.texImage2D(e.TEXTURE_2D,0,e.RGBA,e.RGBA,e.UNSIGNED_BYTE,a)});return{ready:Promise.all([X,W]).then(()=>{}),canDraw:t=>t>=j||!!v[L(t)]||t<K&&!!p,failed:()=>z,draw(t,a,l,n,b,m,o){const C=L(t),T=v[C]??(C===0?p:null);if(!T||!f)return;T===p&&(R=!0);const w=Math.max(0,Math.min(1,(t-22)/4)),D=w*w*(3-2*w),g=o.startH*.6,y=Math.ceil(l/o.startH),E=Math.ceil(a/g);e.activeTexture(e.TEXTURE0),e.bindTexture(e.TEXTURE_2D,u),(E!==P||y!==S)&&(P=E,S=y,e.texImage2D(e.TEXTURE_2D,0,e.RGBA8,E,y,0,e.RGBA,e.UNSIGNED_BYTE,null)),e.bindFramebuffer(e.FRAMEBUFFER,I),e.framebufferTexture2D(e.FRAMEBUFFER,e.COLOR_ATTACHMENT0,e.TEXTURE_2D,u,0),e.disable(e.BLEND),e.viewport(0,0,E,y),e.useProgram(T.program);const d=T.uniforms;e.uniform1f(d.uTime,t),e.uniform1f(d.uAmbient,H.ambient),e.uniform1f(d.uAspect,a/l),e.uniform1f(d.uPortal,R?Math.min(1,(performance.now()-U)/800):1),e.uniform3fv(d.uWater,n.subarray(0,3)),e.uniform3fv(d.uInk,b.subarray(0,3)),e.activeTexture(e.TEXTURE2),e.bindTexture(e.TEXTURE_2D,h),e.uniform1i(d.uLand,2),e.drawArrays(e.TRIANGLES,0,3),e.bindFramebuffer(e.FRAMEBUFFER,null),e.viewport(0,0,a,l),e.useProgram(f.program);const r=f.uniforms;e.activeTexture(e.TEXTURE0),e.bindTexture(e.TEXTURE_2D,u),e.uniform1i(r.uField,0),e.activeTexture(e.TEXTURE1),e.bindTexture(e.TEXTURE_2D,x.texture),e.uniform1i(r.uAtlas,1),e.activeTexture(e.TEXTURE3),e.bindTexture(e.TEXTURE_2D,m.texture),e.uniform1i(r.uNativeAtlas,3),e.uniform2f(r.uNativeGrid,...m.grid),e.uniform1f(r.uNativeCount,m.count),e.uniform2f(r.uCanvas,a,l),e.uniform2f(r.uAnchor,o.anchorX,o.anchorY),e.uniform2f(r.uCell,g+(o.cellW-g)*D,o.startH+(o.cellH-o.startH)*D),e.uniform3fv(r.uNativeInk,b.subarray(0,3)),e.uniform2f(r.uAtlasGrid,...x.grid),e.uniform1f(r.uCount,x.count),e.uniform1f(r.uTime,t),e.enable(e.BLEND),e.blendFunc(e.SRC_ALPHA,e.ONE_MINUS_SRC_ALPHA),e.drawArrays(e.TRIANGLES,0,3),e.disable(e.BLEND)},destroy(){A=!0,clearTimeout(G),s==null||s.cancel(),c==null||c.cancel();for(const t of[f,p,...v])t&&e.deleteProgram(t.program);e.deleteTexture(u),e.deleteTexture(h),e.deleteTexture(x.texture),e.deleteFramebuffer(I)}}}export{V as createCreationRenderer};

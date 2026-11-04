@@ -6,7 +6,7 @@ import { qRotate, skinFrames, type Quat } from './whale3dPose';
 import type { V3 } from './whale3dAnatomy';
 import { globeScrollGeometry, inkMixFromAbyss } from './abyssPalette';
 import { waterShade } from './terminalMotion';
-import { creation, arrivalOffset, easeRange, WHALES_ARRIVE_AT } from './creationTimeline';
+import { creation, arrivalOffset, easeRange, WHALES_ARRIVE_AT, WHALE_SETTLE_AT, WHALE_FADE_SPAN } from './creationTimeline';
 
 const mix = (a: number, b: number, t: number) => a + (b - a) * t;
 /** A finite number, or the fallback: one bad frame (a zero-height viewport) must never poison eased state. */
@@ -87,6 +87,7 @@ export function mountAmbientWhales(host: HTMLElement): () => void {
   // The scroll's direction drives the whales' travel: + down, - up (smoothed, saturating)
   const travel = newTravel(0);
   let lastScroll = scrollY;
+  let lastCreationTime = creation.time;
   let scrollVel = 0;
   const resize = (w: number, h: number) => {
     const dpr = Math.min(devicePixelRatio || 1, w < 768 ? 1 : 1.25);
@@ -140,9 +141,10 @@ export function mountAmbientWhales(host: HTMLElement): () => void {
     const live = debugTime === null && !reduced() ? travel : undefined;
     // The opening: the arrival's speed quickens the swim itself, so the flukes power the approach
     if (creation.active) [0, 1].forEach(i => {
-      const a = arrivalOffset(creation.time, i, travel.fwd[i] ?? undefined), b = arrivalOffset(creation.time + dt, i, travel.fwd[i] ?? undefined);
+      const a = arrivalOffset(lastCreationTime, i, travel.fwd[i] ?? undefined), b = arrivalOffset(creation.time, i, travel.fwd[i] ?? undefined);
       travel.swim[i] += Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]) * (creation.paused ? 0 : 0.25);
     });
+    lastCreationTime = creation.time;
     current = [0, 1].map(i => ({ ...sampleAmbientWhale(i, debugTime ?? seconds, composition, live), dissolve: 0, visible: true }));
     if (creation.active) current.forEach((w, i) => {
       const offset = arrivalOffset(creation.time, i, travel.fwd[i] ?? undefined);
@@ -158,7 +160,7 @@ export function mountAmbientWhales(host: HTMLElement): () => void {
     const sway = reduced() ? 0 : 1;
     const tx = 0.05 * Math.sin((seconds * Math.PI * 2) / 97) * sway;
     const ty = 0.035 * Math.sin((seconds * Math.PI * 2) / 131 + 1) * sway;
-    const position: V3 = [tx, ty, frame.z + (creation.active ? .8 * (1 - easeRange(creation.time, WHALES_ARRIVE_AT, 88)) : 0)];
+    const position: V3 = [tx, ty, frame.z + (creation.active ? .8 * (1 - easeRange(creation.time, WHALES_ARRIVE_AT, WHALE_SETTLE_AT)) : 0)];
     const target: V3 = [tx * 0.35, ty * 0.35, 0];
     cam.position.set(...position); cam.up.set(0, 1, 0); cam.lookAt(...target);
     cam.fov = frame.fov; cam.clearViewOffset();
@@ -169,7 +171,7 @@ export function mountAmbientWhales(host: HTMLElement): () => void {
     const presence = reduced() ? (globeZone.rects.length ? 0.5 : 1) : whaleDirection.presence;
     // Deep ocean blue on light water, a pale sea-glass on the abyss. Nothing masks or fills behind them: the glyphs are the whale.
     const near = WHALE_LOOK.ink, far = WHALE_LOOK.inkFar;
-    ascii.setStyle({ opacity: presence * (1 - 0.06 * composition.weight) * (creation.active ? easeRange(creation.time, WHALES_ARRIVE_AT, WHALES_ARRIVE_AT + 5) : 1), gamma: WHALE_LOOK.gamma, tone: WHALE_LOOK.tone, contrast: WHALE_LOOK.contrast, farFade: WHALE_LOOK.farFade, invert: ink > 0.5,
+    ascii.setStyle({ opacity: presence * (1 - 0.06 * composition.weight) * (creation.active ? easeRange(creation.time, WHALES_ARRIVE_AT, WHALES_ARRIVE_AT + WHALE_FADE_SPAN) : 1), gamma: WHALE_LOOK.gamma, tone: WHALE_LOOK.tone, contrast: WHALE_LOOK.contrast, farFade: WHALE_LOOK.farFade, invert: ink > 0.5,
       ink: [mix(near[0], 196, ink), mix(near[1], 218, ink), mix(near[2], 228, ink)], inkFar: [mix(far[0], 132, ink), mix(far[1], 168, ink), mix(far[2], 182, ink)] });
     if (debugAngles) {
       const d = debugAngles;

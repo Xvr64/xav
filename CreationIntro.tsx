@@ -1,15 +1,25 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { creation, creationStage, finishCreation, CREATION_STAGES } from './creationTimeline';
+import {
+  CREATION_DURATION,
+  CREATION_STAGES,
+  OCEAN_HANDOFF_AT,
+  creation,
+  creationProgress,
+  creationStage,
+  finishCreation,
+  scrubCreation,
+  seekCreation
+} from './creationTimeline';
 import './creationIntro.css';
 
-/** Controls only; rendering and time belong to the existing ocean's scheduler. */
+/** Controls and scroll-scrubbing input; rendering and time belong to the existing ocean's scheduler. */
 export function CreationIntro() {
   const [, refresh] = useState(0);
   const [fading, setFading] = useState(false);
   const skip = useRef<HTMLButtonElement>(null);
   const qa = (import.meta as any).env.DEV && new URLSearchParams(location.search).has('creationqa');
   /** Leaving the cosmos mid-flight dips through its dark; past the waterline the water is already there. */
-  const skipIntro = () => { if (creation.time < 81) setFading(true); finishCreation('skip'); };
+  const skipIntro = () => { if (creation.time < OCEAN_HANDOFF_AT) setFading(true); finishCreation('skip'); };
   useLayoutEffect(() => {
     const update = () => refresh(n => n + 1);
     creation.listeners.add(update);
@@ -36,18 +46,105 @@ export function CreationIntro() {
     const previousInert = content.map(el => el.inert);
     content.forEach(el => { el.inert = true; });
     skip.current?.focus({ preventScroll: true });
+
+    let lastWheelAt = -Infinity;
+    let lastWheelMag = 0;
     const block = (event: Event) => { event.preventDefault(); event.stopImmediatePropagation(); };
+    const onWheel = (event: WheelEvent) => {
+      if (event.ctrlKey) return;
+      block(event);
+      const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? window.innerHeight : 1;
+      const delta = event.deltaY * unit;
+      if (!delta || Math.abs(event.deltaY) < Math.abs(event.deltaX)) return;
+      const now = performance.now();
+      lastWheelAt = now;
+      lastWheelMag = Math.abs(delta);
+      scrubCreation(delta, now, 'wheel');
+    };
+
+    let touchActive = false;
+    let lastTouchY = 0;
+    let lastTouchX = 0;
+    let lastTouchMs = 0;
+    let touchVelocity = 0;
+    const onTouchStart = (event: TouchEvent) => {
+      if (event.touches.length !== 1 || event.target instanceof HTMLButtonElement) {
+        touchActive = false;
+        return;
+      }
+      touchActive = true;
+      lastTouchY = event.touches[0].clientY;
+      lastTouchX = event.touches[0].clientX;
+      lastTouchMs = performance.now();
+      touchVelocity = 0;
+    };
+    const onTouchMove = (event: TouchEvent) => {
+      if (event.target instanceof HTMLButtonElement) return;
+      block(event);
+      if (!touchActive || event.touches.length !== 1) return;
+      const y = event.touches[0].clientY;
+      const x = event.touches[0].clientX;
+      const dy = lastTouchY - y;
+      const dx = lastTouchX - x;
+      const now = performance.now();
+      const dt = Math.max(4, now - lastTouchMs);
+      lastTouchY = y;
+      lastTouchX = x;
+      lastTouchMs = now;
+      if (Math.abs(dy) < Math.abs(dx) * 0.8) return;
+      touchVelocity = touchVelocity * 0.4 + (dy / dt) * 0.6;
+      scrubCreation(dy * 2.2, now, 'touch');
+    };
+    const onTouchEnd = () => {
+      if (touchActive && performance.now() - lastTouchMs < 90 && Math.abs(touchVelocity) > 0.12) {
+        const carry = Math.sign(touchVelocity) * Math.min(220, Math.abs(touchVelocity) * 135);
+        scrubCreation(carry, performance.now(), 'touch');
+      }
+      touchActive = false;
+      touchVelocity = 0;
+    };
+    const onTouchCancel = () => {
+      touchActive = false;
+      touchVelocity = 0;
+    };
+
     const key = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') { block(event); skipIntro(); }
-      else if (['ArrowDown', 'ArrowUp', 'PageDown', 'PageUp', 'Home', 'End', ' '].includes(event.key) && !(event.target instanceof HTMLButtonElement)) block(event);
-      else if (event.key === 'Tab') {
+      if (event.key === 'Escape') { block(event); skipIntro(); return; }
+      if (event.key === 'Tab') {
         const buttons = [...document.querySelectorAll<HTMLButtonElement>('.creation-controls button')];
         if (event.shiftKey && document.activeElement === buttons[0]) { event.preventDefault(); buttons[buttons.length - 1]?.focus(); }
         else if (!event.shiftKey && document.activeElement === buttons[buttons.length - 1]) { event.preventDefault(); buttons[0]?.focus(); }
+        return;
+      }
+      if (event.target instanceof HTMLInputElement) return;
+      if (event.target instanceof HTMLButtonElement && (event.key === ' ' || event.key === 'Enter')) return;
+      const now = performance.now();
+      if (event.key === 'ArrowDown' || event.key === 'ArrowRight') {
+        block(event);
+        scrubCreation(115, now, 'key');
+      } else if (event.key === 'ArrowUp' || event.key === 'ArrowLeft') {
+        block(event);
+        scrubCreation(-115, now, 'key');
+      } else if (event.key === 'PageDown' || (event.key === ' ' && !event.shiftKey)) {
+        block(event);
+        scrubCreation(240, now, 'key');
+      } else if (event.key === 'PageUp' || (event.key === ' ' && event.shiftKey)) {
+        block(event);
+        scrubCreation(-240, now, 'key');
+      } else if (event.key === 'Home') {
+        block(event);
+        seekCreation(0);
+      } else if (event.key === 'End') {
+        block(event);
+        skipIntro();
       }
     };
-    window.addEventListener('wheel', block, { capture: true, passive: false });
-    window.addEventListener('touchmove', block, { capture: true, passive: false });
+
+    window.addEventListener('wheel', onWheel, { capture: true, passive: false });
+    window.addEventListener('touchstart', onTouchStart, { capture: true, passive: true });
+    window.addEventListener('touchmove', onTouchMove, { capture: true, passive: false });
+    window.addEventListener('touchend', onTouchEnd, { capture: true, passive: true });
+    window.addEventListener('touchcancel', onTouchCancel, { capture: true, passive: true });
     window.addEventListener('keydown', key, true);
     const motion = matchMedia('(prefers-reduced-motion: reduce)');
     const reduce = () => { if (motion.matches) finishCreation('reduced-motion'); };
@@ -57,8 +154,33 @@ export function CreationIntro() {
       layers.forEach(el => { el.style.removeProperty('opacity'); });
       root.style.overflow = previousOverflow; root.style.scrollbarGutter = previousGutter;
       content.forEach((el, i) => { el.inert = previousInert[i]; });
-      window.removeEventListener('wheel', block, true); window.removeEventListener('touchmove', block, true);
-      window.removeEventListener('keydown', key, true); motion.removeEventListener('change', reduce);
+      window.removeEventListener('wheel', onWheel, true);
+      window.removeEventListener('touchstart', onTouchStart, true);
+      window.removeEventListener('touchmove', onTouchMove, true);
+      window.removeEventListener('touchend', onTouchEnd, true);
+      window.removeEventListener('touchcancel', onTouchCancel, true);
+      window.removeEventListener('keydown', key, true);
+      motion.removeEventListener('change', reduce);
+      // Absorb only a continuing decaying momentum tail from the gesture that just finished the intro
+      if (creation.reason === 'complete' && performance.now() - lastWheelAt < 120) {
+        const settleEnd = performance.now() + 320;
+        let prevMag = lastWheelMag;
+        let prevAt = lastWheelAt;
+        const absorbTail = (event: WheelEvent) => {
+          const now = performance.now();
+          const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? window.innerHeight : 1;
+          const mag = Math.abs(event.deltaY * unit);
+          if (now > settleEnd || now - prevAt > 140 || event.deltaY <= 0 || mag > prevMag * 1.35) {
+            window.removeEventListener('wheel', absorbTail, true);
+            return;
+          }
+          prevMag = mag;
+          prevAt = now;
+          event.preventDefault();
+          event.stopImmediatePropagation();
+        };
+        window.addEventListener('wheel', absorbTail, { capture: true, passive: false });
+      }
       if (previousFocus?.isConnected && previousFocus !== document.body) previousFocus.focus({ preventScroll: true });
       else { const hero = document.getElementById('home'); hero?.setAttribute('tabindex', '-1'); hero?.focus({ preventScroll: true }); }
     };
@@ -66,9 +188,27 @@ export function CreationIntro() {
   useEffect(() => {
     // Dev-only visual QA uses the same renderer and clock, never an alternate scene.
     if (!(import.meta as any).env.DEV) return;
-    const api = { state: () => ({ active: creation.active, ready: creation.ready, time: creation.time, stage: creationStage(creation.time), reason: creation.reason }),
-      seek: (t: number) => { creation.time = Math.max(0, Math.min(90.99, t)); creation.listeners.forEach(fn => fn()); },
-      pause: (p: boolean) => { creation.paused = p; }, skip: () => finishCreation('skip') };
+    const api = {
+      state: () => ({
+        active: creation.active,
+        ready: creation.ready,
+        paused: creation.paused,
+        time: creation.time,
+        target: creation.target,
+        progress: creationProgress(),
+        stage: creationStage(creation.time),
+        reason: creation.reason
+      }),
+      seek: (t: number) => {
+        seekCreation(Math.max(0, Math.min(CREATION_DURATION - 0.01, t)));
+        creation.listeners.forEach(fn => fn());
+      },
+      scrub: (deltaPx: number) => {
+        scrubCreation(deltaPx, performance.now(), 'wheel');
+      },
+      pause: (p: boolean) => { creation.paused = p; },
+      skip: () => finishCreation('skip')
+    };
     (window as any).__creation = api;
     return () => { delete (window as any).__creation; };
   }, []);
@@ -80,8 +220,8 @@ export function CreationIntro() {
       <button ref={skip} onClick={skipIntro}>Skip intro <span aria-hidden="true">↗</span></button>
     </div>
     {qa && <div className="creation-qa" style={{position:'absolute',top:85,right:20,pointerEvents:'auto',display:'flex',gap:4,flexWrap:'wrap',maxWidth:380}}>
-      {CREATION_STAGES.map(([name,start]) => <button key={name} style={{background:'#07172b',color:'white',fontSize:9,padding:5}} onClick={() => { creation.time=start+.5; creation.paused=true; refresh(n=>n+1); }}>{name}</button>)}
-      <label style={{background:'#07172b',padding:5,fontSize:10}}>Time <input aria-label="Preview time" type="number" min="0" max="90.9" step="0.1" defaultValue="0" style={{width:65,color:'black'}} onChange={e=>{creation.time=Math.max(0,Math.min(90.9,Number(e.target.value)));creation.paused=true;refresh(n=>n+1);}} /></label>
+      {CREATION_STAGES.map(([name,start]) => <button key={name} style={{background:'#07172b',color:'white',fontSize:9,padding:5}} onClick={() => { seekCreation(start + 0.15); refresh(n=>n+1); }}>{name}</button>)}
+      <label style={{background:'#07172b',padding:5,fontSize:10}}>Time <input aria-label="Preview time" type="number" min="0" max="29.9" step="0.1" defaultValue="0" style={{width:65,color:'black'}} onChange={e=>{seekCreation(Math.max(0,Math.min(29.9,Number(e.target.value))));refresh(n=>n+1);}} /></label>
     </div>}
   </div>;
 }

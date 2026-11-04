@@ -1,6 +1,6 @@
 import { buildAtlas, link, type Atlas } from './GradientASCII';
 import { globeScrollGeometry } from './abyssPalette';
-import { creation, advanceCreation, finishCreation } from './creationTimeline';
+import { CREATION_DURATION, OCEAN_HANDOFF_AT, creation, advanceCreation, finishCreation } from './creationTimeline';
 import type { CreationRenderer } from './creationRenderer';
 import {
   applyWaterColor,
@@ -329,7 +329,7 @@ export function createAsciiOcean(canvas: HTMLCanvasElement): AsciiOcean {
     gl.uniform3fv(su.uWater, water);
     gl.uniform3fv(su.uInk, ink);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
-    if (creation.active && creation.ready && opening && creation.time < 81) {
+    if (creation.active && creation.ready && opening && creation.time < OCEAN_HANDOFF_AT) {
       opening.draw(creation.time, canvas.width, canvas.height, water, ink, atlas, {
         cellW,
         cellH,
@@ -340,7 +340,7 @@ export function createAsciiOcean(canvas: HTMLCanvasElement): AsciiOcean {
     }
     if (creation.active && !creation.ready) { gl.clearColor(.003,.006,.012,1); gl.clear(gl.COLOR_BUFFER_BIT); }
     const previewing = (import.meta as any).env?.DEV && new URLSearchParams(location.search).has('creationqa');
-    if (opening && (!creation.active || (creation.time >= 81 && !previewing))) { opening.destroy(); opening = null; }
+    if (opening && !creation.active && !previewing) { opening.destroy(); opening = null; }
   };
 
   const frame = (now: number) => {
@@ -354,14 +354,17 @@ export function createAsciiOcean(canvas: HTMLCanvasElement): AsciiOcean {
       if (openingWait > 25) finishCreation('loading-timeout');
     }
     if (opening?.failed()) finishCreation('renderer-unavailable');
-    creation.held = !!opening && !opening.canDraw(creation.time + 0.1);
+    const lookahead = creation.target >= creation.time ? Math.min(CREATION_DURATION, creation.time + 0.08) : Math.max(0, creation.time - 0.08);
+    creation.held = !!opening && !opening.canDraw(lookahead);
+    const prevCreationTime = creation.time;
     advanceCreation(dt);
+    const creationMoved = creation.active && Math.abs(creation.time - prevCreationTime) > 1e-5;
     if ((import.meta as any).env?.DEV && creation.active) {
       canvas.dataset.creationTime = creation.time.toFixed(3);
       canvas.dataset.creationReady = String(creation.ready);
     }
     const scroll = window.scrollY;
-    const moved = scroll !== lastScroll;
+    const moved = scroll !== lastScroll || creationMoved;
     // Scrolling redraws on every frame so the water moves with the page; at rest the
     // currents only need 30 fps
     if (moved || (!reduce && now - lastDraw >= 1000 / IDLE_FPS - 2)) {
