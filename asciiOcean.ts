@@ -226,7 +226,11 @@ export function createAsciiOcean(canvas: HTMLCanvasElement): AsciiOcean {
       if (disposed || !creation.active) return;
       opening = createCreationRenderer(gl);
       return opening.ready.then(() => {
-        if (!disposed && creation.active) { creation.ready = true; schedule(); }
+        if (!disposed && creation.active) {
+          creation.ready = true;
+          creation.listeners.forEach(fn => fn());
+          schedule();
+        }
       });
     }).catch(error => {
       if (!disposed) { console.warn('Opening unavailable; continuing into the portfolio.', error); finishCreation('renderer-unavailable'); }

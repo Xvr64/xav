@@ -92,9 +92,9 @@ export function arrivalOffset(t: number, whale: number, forward: readonly [numbe
 }
 export function shouldPlayCreation() {
   if (typeof window === 'undefined') return false;
+  if ((import.meta as any).env?.DEV && new URLSearchParams(location.search).has('creationqa')) return true;
   if (matchMedia('(prefers-reduced-motion: reduce)').matches || location.hash || scrollY > 20) return false;
   if (performance.getEntriesByType('navigation').some(e => (e as PerformanceNavigationTiming).type === 'back_forward')) return false;
-  if ((import.meta as any).env?.DEV && new URLSearchParams(location.search).has('creationqa')) return true;
   try { return sessionStorage.getItem(INTRO_STORAGE_KEY) !== '1'; } catch { return true; }
 }
 export const creation = {

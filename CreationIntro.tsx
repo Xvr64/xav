@@ -137,7 +137,7 @@ export function CreationIntro() {
     window.addEventListener('touchcancel', onTouchCancel, { capture: true, passive: true });
     window.addEventListener('keydown', key, true);
     const motion = matchMedia('(prefers-reduced-motion: reduce)');
-    const reduce = () => { if (motion.matches) finishCreation('reduced-motion'); };
+    const reduce = () => { if (motion.matches && !qa) finishCreation('reduced-motion'); };
     motion.addEventListener('change', reduce);
     return () => {
       delete root.dataset.creation; creation.onHero = null;
@@ -250,6 +250,7 @@ export function CreationIntro() {
   }, []);
   if (!creation.active) return fading ? <div className="creation-exit" aria-hidden="true" onAnimationEnd={() => setFading(false)} /> : null;
   const stage = creationStage(creation.time);
+  const showHint = creation.active && creation.state === 'PAUSED' && creation.time <= 0.05;
   return <div className="creation-controls" data-water={stage === 'OCEAN_ENTRY' || stage === 'WHALE_HANDOFF' ? '' : undefined} role="dialog" aria-modal="true" aria-label="Intro controls">
     <div className="creation-actions">
       <button onClick={() => {
@@ -263,9 +264,18 @@ export function CreationIntro() {
       }}>{creation.paused ? 'Resume' : 'Pause'}</button>
       <button ref={skip} onClick={skipIntro}>Skip intro <span aria-hidden="true">↗</span></button>
     </div>
+    <div
+      className={`creation-scroll-hint ${showHint ? 'creation-scroll-hint--visible' : ''}`}
+      data-scroll-hint
+      aria-hidden="true"
+    >
+      <span className="creation-scroll-hint-text creation-scroll-hint-text--desktop">scroll</span>
+      <span className="creation-scroll-hint-text creation-scroll-hint-text--mobile">swipe</span>
+      <div className="creation-scroll-hint-line" />
+    </div>
     {qa && <div className="creation-qa" style={{position:'absolute',top:85,right:20,pointerEvents:'auto',display:'flex',gap:4,flexWrap:'wrap',maxWidth:380}}>
       {CREATION_STAGES.map(([name,start]) => <button key={name} style={{background:'#07172b',color:'white',fontSize:9,padding:5}} onClick={() => { seekCreation(start + 0.15); refresh(n=>n+1); }}>{name}</button>)}
-      <label style={{background:'#07172b',padding:5,fontSize:10}}>Time <input aria-label="Preview time" type="number" min="0" max="29.9" step="0.1" defaultValue="0" style={{width:65,color:'black'}} onChange={e=>{seekCreation(Math.max(0,Math.min(29.9,Number(e.target.value))));refresh(n=>n+1);}} /></label>
+      <label style={{background:'#07172b',padding:5,fontSize:10}}>Time <input aria-label="Preview time" type="number" min="0" max="90.9" step="0.1" defaultValue="0" style={{width:65,color:'black'}} onChange={e=>{seekCreation(Math.max(0,Math.min(CREATION_DURATION,Number(e.target.value))));refresh(n=>n+1);}} /></label>
     </div>}
   </div>;
 }
