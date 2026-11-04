@@ -371,3 +371,112 @@ test('a fresh flick the moment a film ends is still the last gesture; after a br
   b.wheel(60);
   assert.equal(b.active, 1, 'a deliberate gesture after the settle starts the journey');
 });
+
+
+test('fast entry scroll from above produces identical animation speed and timing as slow entry', async t => {
+  let slowFrames, fastWheelFrames, trackpadFrames;
+
+  // 1. Slow arrival from above
+  await t.test('slow arrival', st => {
+    const b = browser(st, 0);
+    // Slow small steps crossing at 100
+    b.wheel(30); b.advance(50);
+    b.wheel(30); b.advance(50);
+    b.wheel(30); b.advance(50); // reaches 90
+    b.wheel(30); // crosses 100 -> starts film 1
+    slowFrames = filmFrames(b);
+  });
+
+  // 2. Fast mouse-wheel flick from above
+  await t.test('fast mouse-wheel gesture arrival', st => {
+    const b = browser(st, 0);
+    b.wheel(500); // large burst crossing from 0 directly into section
+    fastWheelFrames = filmFrames(b);
+  });
+
+  // 3. Strong trackpad momentum arriving from above with long tail
+  await t.test('strong trackpad momentum arrival with long tail', st => {
+    const b = browser(st, 0);
+    b.wheel(300);
+    trackpadFrames = [];
+    for (let i = 0; i < 1200 && (b.active || trackpadFrames.length === 0); i++) {
+      trackpadFrames.push(b.win.scrollY);
+      // Continuous tail of momentum
+      b.wheel(Math.max(1, 150 * Math.exp(-i / 20)));
+      b.advance(16);
+    }
+    trackpadFrames.push(b.win.scrollY);
+  });
+
+  assert.equal(slowFrames.at(-1), 1150);
+  assert.equal(fastWheelFrames.at(-1), 1150);
+  assert.equal(trackpadFrames.at(-1), 1150);
+  assert.deepEqual(fastWheelFrames, slowFrames, 'fast wheel entry matches slow entry frame by frame');
+  assert.deepEqual(trackpadFrames, slowFrames, 'trackpad momentum entry matches slow entry frame by frame');
+});
+
+test('city journey plays at identical fixed predefined speed under calm and violent input', async t => {
+  let calmJourney, violentJourney;
+
+  await t.test('calm city journey', st => {
+    const b = browser(st, 1150);
+    b.wheel(100);
+    calmJourney = [];
+    for (let i = 0; i < 1500 && (b.active || calmJourney.length === 0); i++) {
+      calmJourney.push(b.win.scrollY);
+      b.advance(16);
+    }
+    calmJourney.push(b.win.scrollY);
+  });
+
+  await t.test('violent city journey with continuous aggressive downward scrolling', st => {
+    const b = browser(st, 1150);
+    b.wheel(600); // huge downward flick
+    violentJourney = [];
+    for (let i = 0; i < 1500 && (b.active || violentJourney.length === 0); i++) {
+      violentJourney.push(b.win.scrollY);
+      // violent downward spam
+      b.wheel(i % 20 < 10 ? 300 : 20);
+      b.advance(16);
+    }
+    violentJourney.push(b.win.scrollY);
+  });
+
+  assert.equal(calmJourney.at(-1), 4300);
+  assert.equal(violentJourney.at(-1), 4300);
+  assert.deepEqual(violentJourney, calmJourney, 'violent downward input never accelerates city journey');
+
+  // Verify all 7 cities traversed in order
+  const visitedCities = new Set();
+  for (const y of violentJourney) {
+    for (let c = 5; c <= 11; c++) {
+      if (Math.abs(y - stops.y[c]) < 10) visitedCities.add(c);
+    }
+  }
+  assert.equal(visitedCities.size, 7, 'all 7 cities traversed without skipping');
+});
+
+test('mid-journey upward gesture reverses smoothly and downward gesture resumes forward without skipping', t => {
+  const b = browser(t, 1150);
+  b.wheel(100); // start city journey
+  b.advance(3000); // advance partway into journey
+  const midY = b.win.scrollY;
+  assert.ok(midY > 1150 && midY < 4300, `mid-journey position: ${midY}`);
+
+  // Upward gesture reverses
+  b.wheel(-100);
+  b.advance(16);
+  assert.ok(b.win.scrollY >= midY, 'velocity eases before turning around');
+  b.advance(2000);
+  const reversedY = b.win.scrollY;
+  assert.ok(reversedY < midY, 'reversed toward Doha');
+
+  // Downward gesture resumes forward
+  b.wheel(100);
+  b.advance(500);
+  assert.ok(b.win.scrollY > reversedY, 'resumed forward toward Shanghai');
+
+  // Continues to completion
+  b.advance(15000);
+  assert.equal(b.win.scrollY, 4300, 'completed at Shanghai release');
+});

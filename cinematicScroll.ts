@@ -171,21 +171,64 @@ export function mountCinematicScroll(stops: () => CinematicStops | null): Cinema
     const st = geometry();
     if (!st) return;
     const target = Math.max(0, Math.min(st.y.length - 1, index));
-    const time = play?.time ?? timelineTime(st, window.scrollY);
-    const end = timelineTimes(st)[target];
+    const times = timelineTimes(st);
+    const last = st.y.length - 1;
+
+    let time: number;
+    let lo: number;
+    let hi: number;
+
+    if (play) {
+      time = play.time;
+      lo = play.lo;
+      hi = play.hi;
+    } else {
+      // Clear accumulated momentum on fresh film start so incoming scroll speed never accelerates playback
+      gestures = createWheelGestures();
+      if (target === st.earth) {
+        if (window.scrollY > st.y[st.earth] + 2) {
+          lo = st.earth;
+          hi = last;
+          time = times[hi];
+        } else {
+          lo = 0;
+          hi = st.earth;
+          time = times[0];
+        }
+      } else if (target === last) {
+        lo = st.earth;
+        hi = last;
+        time = times[st.earth];
+      } else if (target === 0) {
+        lo = 0;
+        hi = st.earth;
+        time = times[st.earth];
+      } else {
+        time = timelineTime(st, window.scrollY);
+        lo = Math.min(target, window.scrollY >= st.y[st.earth] - 2 ? st.earth : 0);
+        hi = Math.max(target, window.scrollY <= st.y[st.earth] + 2 ? st.earth : last);
+      }
+    }
+
+    const end = times[target];
     if (Math.abs(end - time) < 0.0001) return;
     const direction = end > time ? 1 : -1;
     lastDirection = direction;
-    const times = timelineTimes(st);
     // From rest at a film's start or end the timeline itself eases in, so playback runs at full
     // rate at once and every film keeps its exact length; anywhere else it gathers its pace
     const resting = times.some((t, k) => (k === 0 || k >= st.earth) && Math.abs(t - time) < 1e-6);
-    play = { time, target, direction, rate: play?.rate ?? (resting ? direction : 0), last: performance.now(),
-      lo: Math.min(target, window.scrollY >= st.y[st.earth] - 2 ? st.earth : 0),
-      hi: Math.max(target, window.scrollY <= st.y[st.earth] + 2 ? st.earth : st.y.length - 1) };
-    // Take the scroll now: a programmatic scroll ends any smooth scroll the browser is still
-    // animating, so it can neither carry the page on into the film nor cancel it
-    scrollTo(timelineY(st, time));
+    play = {
+      time,
+      target,
+      direction,
+      rate: play?.rate ?? (resting ? direction : 0),
+      last: performance.now(),
+      lo,
+      hi
+    };
+    // Take the scroll now: programmatic scroll pins position to the start of this film
+    const outY = timelineY(st, time);
+    scrollTo(outY);
     if (!raf) raf = requestAnimationFrame(frame);
   };
   const step = (dir: -1 | 1) => {
@@ -253,12 +296,24 @@ export function mountCinematicScroll(stops: () => CinematicStops | null): Cinema
     }
     e.preventDefault();
     const g = gestures.feed(delta, now);
-    const entering = window.scrollY < st.y[0] - 2 || window.scrollY > st.y[st.y.length - 1] + 2;
+    const enteringFromAbove = heading < st.y[0] - 2 || window.scrollY < st.y[0] - 2;
+    const enteringFromBelow = heading > st.y[st.y.length - 1] + 2 || window.scrollY > st.y[st.y.length - 1] + 2;
+    const entering = enteringFromAbove || enteringFromBelow;
     if (g || (entering && entryGesture === dir) || (entering && native)) {
-      step(g || dir);
+      if (enteringFromAbove && dir > 0) {
+        goTo(st.earth);
+      } else if (enteringFromBelow && dir < 0) {
+        goTo(st.earth);
+      } else {
+        step(g || dir);
+      }
       entryGesture = 0;
     }
-    native = null;
+    if (entering) {
+      native = { target: expectedY ?? window.scrollY, until: now + NATIVE_GLIDE_MS };
+    } else if (!play) {
+      native = null;
+    }
   };
   const onKey = (e: KeyboardEvent) => {
     if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey || editable(e.target) || nestedScroller(e.target)) return;
@@ -308,10 +363,26 @@ export function mountCinematicScroll(stops: () => CinematicStops | null): Cinema
     touchEligible = false;
   };
   const onTouchCancel = () => { touchCaptured = false; touchEligible = false; };
-  // Scrollbar drags, anchors and assistive navigation always override playback; the last of a
-  // smooth scroll the browser was animating as a film began does not, the film's frames keep the page
+  // Scrollbar drags, anchors and assistive navigation always override playback; incoming
+  // smooth scrolls or trackpad momentum from before entering do not: the film's frames keep the page
   const onScroll = () => {
-    if (play && expectedY !== null && Math.abs(window.scrollY - expectedY) > 2 && !(native && performance.now() < native.until)) cancel();
+    if (!play || expectedY === null) return;
+    const diff = Math.abs(window.scrollY - expectedY);
+    if (diff <= 2) return;
+    const st = geometry();
+    if (st) {
+      const first = st.y[0];
+      const last = st.y[st.y.length - 1];
+      // Jumps far outside the section (e.g. anchor navigation) override playback
+      if (window.scrollY < first - 100 || window.scrollY > last + 100) {
+        cancel();
+        return;
+      }
+    }
+    // Inside or near the section, scroll events that diverge from expectedY are residual native
+    // momentum from entry or trackpad inertia. Pin back to expectedY so the cinematic timeline
+    // is never accelerated or skipped by scroll velocity.
+    scrollTo(expectedY);
   };
   const onPointerDown = (e: PointerEvent) => {
     if (e.pointerType === 'mouse' && e.clientX >= document.documentElement.clientWidth) cancel();
