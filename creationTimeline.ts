@@ -12,32 +12,50 @@ export const INTRO_STORAGE_KEY = 'xh-creation-seen-v1';
 export type CreationPlaybackState = 'PAUSED' | 'PLAYING_FORWARD' | 'PLAYING_REVERSE' | 'COMPLETED';
 
 /**
- * Accelerated playback speed for the earlier Eye of Creation cosmos journey (0..48):
- * 48 units at 3.6u/s takes ~13.3s of brisk, energetic travel.
+ * PART A — FAST INTRO (0 <= t < HERO_WAKES_AT):
+ * Fast, energetic progression (~3.5x speed) through the entire intro:
+ * Eye of Creation worlds, black hole, space, Earth approach, atmospheric descent,
+ * ocean surface, underwater entry, and whales swimming into position.
+ * Approximately 3.5x faster than original speed.
  */
-export const COSMIC_ACCELERATED_SPEED = 3.6;
+export const INTRO_FAST_SPEED = 3.5;
+
 /**
- * Original cinematic playback speed for the peninsula approach and CV arrival (60..91):
- * strictly 1.0 unit/second to preserve the exact camera movement, easing, and dramatic pacing
- * of the Earth peninsula descent, water meniscus entry, and "A Journey Without Horizons" hero reveal.
+ * PART B — ORIGINAL-SPEED HERO (HERO_WAKES_AT <= t <= CREATION_DURATION):
+ * Strictly 1.0 unit/second to preserve the exact camera movement, easing, and dramatic pacing
+ * of the CV Hero reveal and "A Journey Without Horizon" epigraph typography animation.
  */
-export const ARRIVAL_NATURAL_SPEED = 1.0;
+export const HERO_NATURAL_SPEED = 1.0;
+
+/** Blend boundary immediately before the actual CV Hero reveal (85.0s to 87.0s). */
+export const HERO_BLEND_START = 85.0;
+
 /** Backwards-compatible aliases for legacy imports. */
-export const PLAYBACK_SPEED = COSMIC_ACCELERATED_SPEED;
-export const REVERSE_PLAYBACK_SPEED = COSMIC_ACCELERATED_SPEED;
+export const COSMIC_ACCELERATED_SPEED = INTRO_FAST_SPEED;
+export const ARRIVAL_NATURAL_SPEED = HERO_NATURAL_SPEED;
+export const PLAYBACK_SPEED = INTRO_FAST_SPEED;
+export const REVERSE_PLAYBACK_SPEED = INTRO_FAST_SPEED;
+
 /** Exponential rate easing time constant (seconds) for silky-smooth direction and speed blends. */
 export const RATE_SMOOTH_TIME = 0.18;
 
 /**
  * Target playback speed at timeline position `t`.
- * Progresses quickly through the earlier cosmos scenes, then smoothly decelerates between
- * t = 48 and t = 60 into the exact 1.0x natural cinematic arrival speed.
+ * 
+ * PART A: All pre-hero sequences (Eye, black hole, space, Earth approach, atmospheric descent,
+ * ocean surface, underwater entry, and whales) remain FAST (3.5x speed).
+ * 
+ * PART B: Only at the exact moment the CV Hero begins waking (HERO_WAKES_AT = 87) does the speed
+ * settle strictly at original natural cinematic speed (1.0x).
+ * 
+ * Eased smoothly between HERO_BLEND_START (85.0) and HERO_WAKES_AT (87.0) to eliminate
+ * any velocity step or camera jump.
  */
 export function targetPlaybackSpeed(t: number): number {
-  if (t <= 48) return COSMIC_ACCELERATED_SPEED;
-  if (t >= 60) return ARRIVAL_NATURAL_SPEED;
-  const blend = easeRange(t, 48, 60);
-  return COSMIC_ACCELERATED_SPEED + (ARRIVAL_NATURAL_SPEED - COSMIC_ACCELERATED_SPEED) * blend;
+  if (t <= HERO_BLEND_START) return INTRO_FAST_SPEED;
+  if (t >= HERO_WAKES_AT) return HERO_NATURAL_SPEED;
+  const blend = easeRange(t, HERO_BLEND_START, HERO_WAKES_AT);
+  return INTRO_FAST_SPEED + (HERO_NATURAL_SPEED - INTRO_FAST_SPEED) * blend;
 }
 
 export const easeRange = (t: number, a: number, b: number) => {
