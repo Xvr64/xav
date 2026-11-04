@@ -339,8 +339,6 @@ export function createAsciiOcean(canvas: HTMLCanvasElement): AsciiOcean {
       });
     }
     if (creation.active && !creation.ready) { gl.clearColor(.003,.006,.012,1); gl.clear(gl.COLOR_BUFFER_BIT); }
-    const previewing = (import.meta as any).env?.DEV && new URLSearchParams(location.search).has('creationqa');
-    if (opening && !creation.active && !previewing) { opening.destroy(); opening = null; }
   };
 
   const frame = (now: number) => {

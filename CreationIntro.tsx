@@ -7,9 +7,12 @@ import {
   creationProgress,
   creationStage,
   finishCreation,
+  reopenCreationInReverse,
   scrubCreation,
-  seekCreation
+  seekCreation,
+  triggerCreationGesture
 } from './creationTimeline';
+import { createWheelGestures } from './cinematicScroll';
 import './creationIntro.css';
 
 /** Controls and scroll-scrubbing input; rendering and time belong to the existing ocean's scheduler. */
@@ -47,6 +50,7 @@ export function CreationIntro() {
     content.forEach(el => { el.inert = true; });
     skip.current?.focus({ preventScroll: true });
 
+    const gestures = createWheelGestures();
     let lastWheelAt = -Infinity;
     let lastWheelMag = 0;
     const block = (event: Event) => { event.preventDefault(); event.stopImmediatePropagation(); };
@@ -59,53 +63,46 @@ export function CreationIntro() {
       const now = performance.now();
       lastWheelAt = now;
       lastWheelMag = Math.abs(delta);
-      scrubCreation(delta, now, 'wheel');
+      const gesture = gestures.feed(delta, now);
+      if (gesture !== 0) {
+        triggerCreationGesture(gesture as 1 | -1, 'wheel');
+      }
     };
 
-    let touchActive = false;
-    let lastTouchY = 0;
-    let lastTouchX = 0;
-    let lastTouchMs = 0;
-    let touchVelocity = 0;
+    let touchStartY = 0;
+    let touchStartX = 0;
+    let touchFiredDir: 0 | 1 | -1 = 0;
     const onTouchStart = (event: TouchEvent) => {
       if (event.touches.length !== 1 || event.target instanceof HTMLButtonElement) {
-        touchActive = false;
+        touchFiredDir = 0;
         return;
       }
-      touchActive = true;
-      lastTouchY = event.touches[0].clientY;
-      lastTouchX = event.touches[0].clientX;
-      lastTouchMs = performance.now();
-      touchVelocity = 0;
+      touchStartY = event.touches[0].clientY;
+      touchStartX = event.touches[0].clientX;
+      touchFiredDir = 0;
     };
     const onTouchMove = (event: TouchEvent) => {
       if (event.target instanceof HTMLButtonElement) return;
       block(event);
-      if (!touchActive || event.touches.length !== 1) return;
+      if (event.touches.length !== 1) return;
       const y = event.touches[0].clientY;
       const x = event.touches[0].clientX;
-      const dy = lastTouchY - y;
-      const dx = lastTouchX - x;
-      const now = performance.now();
-      const dt = Math.max(4, now - lastTouchMs);
-      lastTouchY = y;
-      lastTouchX = x;
-      lastTouchMs = now;
+      const dy = touchStartY - y;
+      const dx = touchStartX - x;
       if (Math.abs(dy) < Math.abs(dx) * 0.8) return;
-      touchVelocity = touchVelocity * 0.4 + (dy / dt) * 0.6;
-      scrubCreation(dy * 1.15, now, 'touch');
+      if (dy > 28 && touchFiredDir !== 1) {
+        touchFiredDir = 1;
+        triggerCreationGesture(1, 'touch');
+      } else if (dy < -28 && touchFiredDir !== -1) {
+        touchFiredDir = -1;
+        triggerCreationGesture(-1, 'touch');
+      }
     };
     const onTouchEnd = () => {
-      if (touchActive && performance.now() - lastTouchMs < 90 && Math.abs(touchVelocity) > 0.12) {
-        const carry = Math.sign(touchVelocity) * Math.min(90, Math.abs(touchVelocity) * 55);
-        scrubCreation(carry, performance.now(), 'touch');
-      }
-      touchActive = false;
-      touchVelocity = 0;
+      touchFiredDir = 0;
     };
     const onTouchCancel = () => {
-      touchActive = false;
-      touchVelocity = 0;
+      touchFiredDir = 0;
     };
 
     const key = (event: KeyboardEvent) => {
@@ -118,19 +115,12 @@ export function CreationIntro() {
       }
       if (event.target instanceof HTMLInputElement) return;
       if (event.target instanceof HTMLButtonElement && (event.key === ' ' || event.key === 'Enter')) return;
-      const now = performance.now();
-      if (event.key === 'ArrowDown' || event.key === 'ArrowRight') {
+      if (event.key === 'ArrowDown' || event.key === 'ArrowRight' || event.key === 'PageDown' || (event.key === ' ' && !event.shiftKey)) {
         block(event);
-        scrubCreation(120, now, 'key');
-      } else if (event.key === 'ArrowUp' || event.key === 'ArrowLeft') {
+        triggerCreationGesture(1, 'key');
+      } else if (event.key === 'ArrowUp' || event.key === 'ArrowLeft' || event.key === 'PageUp' || (event.key === ' ' && event.shiftKey)) {
         block(event);
-        scrubCreation(-120, now, 'key');
-      } else if (event.key === 'PageDown' || (event.key === ' ' && !event.shiftKey)) {
-        block(event);
-        scrubCreation(300, now, 'key');
-      } else if (event.key === 'PageUp' || (event.key === ' ' && event.shiftKey)) {
-        block(event);
-        scrubCreation(-300, now, 'key');
+        triggerCreationGesture(-1, 'key');
       } else if (event.key === 'Home') {
         block(event);
         seekCreation(0);
@@ -185,6 +175,47 @@ export function CreationIntro() {
       else { const hero = document.getElementById('home'); hero?.setAttribute('tabindex', '-1'); hero?.focus({ preventScroll: true }); }
     };
   }, [creation.active]);
+
+  // When the intro has completed and the visitor is at the top of the page, allow an upward gesture to reverse into the intro naturally
+  useEffect(() => {
+    if (creation.active) return;
+    const gestures = createWheelGestures();
+    let touchStartY = 0;
+    const onWheelReopen = (event: WheelEvent) => {
+      if (window.scrollY > 2 || creation.reason === 'skip') return;
+      if (event.ctrlKey) return;
+      const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? Math.min(window.innerHeight, 360) : 1;
+      const delta = event.deltaY * unit;
+      if (delta >= 0) return;
+      const gesture = gestures.feed(delta, performance.now());
+      if (gesture === -1) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        reopenCreationInReverse();
+      }
+    };
+    const onTouchStartReopen = (event: TouchEvent) => {
+      if (window.scrollY <= 2 && event.touches.length === 1 && creation.reason !== 'skip') {
+        touchStartY = event.touches[0].clientY;
+      }
+    };
+    const onTouchMoveReopen = (event: TouchEvent) => {
+      if (window.scrollY > 2 || event.touches.length !== 1 || creation.reason === 'skip') return;
+      const dy = touchStartY - event.touches[0].clientY;
+      if (dy < -32) {
+        reopenCreationInReverse();
+      }
+    };
+    window.addEventListener('wheel', onWheelReopen, { capture: true, passive: false });
+    window.addEventListener('touchstart', onTouchStartReopen, { passive: true });
+    window.addEventListener('touchmove', onTouchMoveReopen, { passive: true });
+    return () => {
+      window.removeEventListener('wheel', onWheelReopen, true);
+      window.removeEventListener('touchstart', onTouchStartReopen);
+      window.removeEventListener('touchmove', onTouchMoveReopen);
+    };
+  }, [creation.active]);
+
   useEffect(() => {
     // Dev-only visual QA uses the same renderer and clock, never an alternate scene.
     if (!(import.meta as any).env.DEV) return;
@@ -193,6 +224,8 @@ export function CreationIntro() {
         active: creation.active,
         ready: creation.ready,
         paused: creation.paused,
+        playbackState: creation.state,
+        rate: creation.rate,
         time: creation.time,
         target: creation.target,
         progress: creationProgress(),
@@ -203,8 +236,11 @@ export function CreationIntro() {
         seekCreation(Math.max(0, Math.min(CREATION_DURATION - 0.01, t)));
         creation.listeners.forEach(fn => fn());
       },
+      playForward: () => triggerCreationGesture(1, 'wheel'),
+      playReverse: () => triggerCreationGesture(-1, 'wheel'),
+      reopen: () => reopenCreationInReverse(),
       scrub: (deltaPx: number) => {
-        scrubCreation(deltaPx, performance.now(), 'wheel');
+        triggerCreationGesture(Math.sign(deltaPx) as 1 | -1, 'wheel');
       },
       pause: (p: boolean) => { creation.paused = p; },
       skip: () => finishCreation('skip')
@@ -216,7 +252,15 @@ export function CreationIntro() {
   const stage = creationStage(creation.time);
   return <div className="creation-controls" data-water={stage === 'OCEAN_ENTRY' || stage === 'WHALE_HANDOFF' ? '' : undefined} role="dialog" aria-modal="true" aria-label="Intro controls">
     <div className="creation-actions">
-      <button onClick={() => { creation.paused = !creation.paused; refresh(n => n + 1); }}>{creation.paused ? 'Resume' : 'Pause'}</button>
+      <button onClick={() => {
+        if (creation.paused) {
+          creation.paused = false;
+          if (creation.state === 'PAUSED') triggerCreationGesture(1, 'key');
+        } else {
+          creation.paused = true;
+        }
+        refresh(n => n + 1);
+      }}>{creation.paused ? 'Resume' : 'Pause'}</button>
       <button ref={skip} onClick={skipIntro}>Skip intro <span aria-hidden="true">↗</span></button>
     </div>
     {qa && <div className="creation-qa" style={{position:'absolute',top:85,right:20,pointerEvents:'auto',display:'flex',gap:4,flexWrap:'wrap',maxWidth:380}}>

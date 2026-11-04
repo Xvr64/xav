@@ -9,14 +9,16 @@ import {
   WHALE_SETTLE_AT,
   WHALE_SETTLE_STEP,
   HERO_WAKES_AT,
-  MAX_TARGET_LEAD,
-  MAX_SCRUB_SPEED,
+  PLAYBACK_SPEED,
+  REVERSE_PLAYBACK_SPEED,
   creationProgramAt,
   creationProgress,
   creationStage,
   arrivalOffset,
   creation,
   advanceCreation,
+  triggerCreationGesture,
+  reopenCreationInReverse,
   scrubCreation,
   seekCreation,
   finishCreation,
@@ -71,86 +73,149 @@ test('no automatic playback: timeline stays at first frame until the visitor scr
   Object.assign(creation, { active: false });
 });
 
-test('scroll scrubbing advances proportionally (3-4x less sensitive), settles at current progress, and reverses deterministically', () => {
+test('one downward scroll gesture triggers complete animation forward at fixed speed; repeated scrolling does not change speed', () => {
   let wokenValue = 0;
   Object.assign(creation, {
     active: true,
     ready: true,
     paused: false,
     held: false,
+    state: 'PAUSED',
     time: 0,
     target: 0,
+    rate: 0,
     ambient: 0,
     onHero: w => { wokenValue = w; }
   });
-  seekCreation(0);
 
-  // 1. One small mouse-wheel notch (100px) produces a small incremental step (~0.29 units, < 1% of intro)
-  scrubCreation(100, 100, 'wheel');
-  assert.ok(creation.target > 0.2 && creation.target < 0.4, `expected one notch to advance ~0.29u, got ${creation.target}`);
-  assert.equal(creationStage(creation.target), 'EYE', 'one wheel notch stays well within the first EYE scene');
+  // At start, intro is paused on first frame
+  advanceCreation(0.1);
+  assert.equal(creation.time, 0, 'remains paused on first frame until gesture');
 
-  // 2. Very slow scrolling (10px increments) advances gradually and linearly
-  const beforeSlow = creation.target;
-  scrubCreation(10, 350, 'wheel');
-  const slowDelta = creation.target - beforeSlow;
-  assert.ok(slowDelta > 0.045 && slowDelta < 0.07, `expected 10px slow scroll to advance ~0.055u, got ${slowDelta}`);
+  // ONE downward gesture triggers playback
+  triggerCreationGesture(1, 'wheel');
+  assert.equal(creation.state, 'PLAYING_FORWARD');
+  assert.equal(creation.target, CREATION_DURATION);
 
-  // Advance frames until settled
-  const targetAfterDown = creation.target;
+  // Advance 1 second
   for (let i = 0; i < 60; i++) advanceCreation(1 / 60);
-  assert.ok(Math.abs(creation.time - targetAfterDown) < 0.005, 'settles smoothly at target progress');
-  const settledTime = creation.time;
-  // Stopping scroll holds position
-  for (let i = 0; i < 60; i++) advanceCreation(1 / 60);
-  assert.equal(creation.time, settledTime, 'stopping scroll holds timeline progress');
+  const timeAfterOneSec = creation.time;
+  assert.ok(timeAfterOneSec > 2.2 && timeAfterOneSec < 3.2, `expected ~2.8 units after 1s at rate ${PLAYBACK_SPEED}, got ${timeAfterOneSec}`);
 
-  // 3. Scroll upward reverses immediately without waiting to unwind lead
-  scrubCreation(100, 1000, 'wheel');
-  assert.ok(creation.target > creation.time);
-  scrubCreation(-100, 1020, 'wheel');
-  assert.ok(creation.target < creation.time, 'reversal immediately moves target behind current time');
+  // Repeated downward scrolling 10 times in a row MUST NOT accelerate, restart, or skip
+  for (let i = 0; i < 10; i++) triggerCreationGesture(1, 'wheel');
   for (let i = 0; i < 60; i++) advanceCreation(1 / 60);
-  assert.ok(creation.time < settledTime, 'timeline reversed smoothly');
+  const timeAfterTwoSec = creation.time;
+  const deltaSec2 = timeAfterTwoSec - timeAfterOneSec;
+  // Speed during second second should be exactly PLAYBACK_SPEED (~3.0 units/sec)
+  assert.ok(Math.abs(deltaSec2 - PLAYBACK_SPEED) < 0.15, `expected fixed progression rate ${PLAYBACK_SPEED}, got ${deltaSec2}`);
 
-  // 4. Scrubbing into HERO_WAKES_AT wakes hero, reversing back hides it again
-  seekCreation(HERO_WAKES_AT + 1);
-  assert.ok(wokenValue > 0, 'hero wakes near the end');
-  scrubCreation(-300, 2000, 'key');
-  for (let i = 0; i < 60; i++) advanceCreation(1 / 60);
-  assert.equal(wokenValue, 0, 'reversing before HERO_WAKES_AT resets hero opacity');
   Object.assign(creation, { active: false, onHero: null });
 });
 
-test('fast scroll bursts and momentum tails (including plateaus) are bounded and never skip major scenes', () => {
-  Object.assign(creation, { active: true, ready: true, paused: false, held: false, time: 0, target: 0, ambient: 0 });
-  seekCreation(0);
-  // Simulate a violent trackpad flick + 40 decaying momentum events with integer plateaus
-  scrubCreation(500, 1000, 'wheel');
-  for (let k = 1; k <= 40; k++) {
-    const plateauDelta = Math.round(60 * Math.exp(-Math.floor(k / 2) / 8));
-    scrubCreation(plateauDelta, 1000 + k * 16, 'wheel');
-  }
-  assert.ok(creation.target <= MAX_TARGET_LEAD + 0.001, 'single flick + momentum tail cannot queue past MAX_TARGET_LEAD');
-  assert.equal(creationStage(creation.target), 'EYE', 'single burst from 0 cannot skip the first scene');
-  // Even with target at MAX_TARGET_LEAD, per-frame speed is bounded by MAX_SCRUB_SPEED
-  advanceCreation(0.016);
-  assert.ok(creation.time <= MAX_SCRUB_SPEED * 0.016 + 0.001, 'camera speed is bounded on fast scroll');
+test('scrolling upward reverses animation smoothly from current position; scrolling downward resumes forward', () => {
+  let wokenValue = 0;
+  Object.assign(creation, {
+    active: true,
+    ready: true,
+    paused: false,
+    held: false,
+    state: 'PLAYING_FORWARD',
+    time: 14.0,
+    target: CREATION_DURATION,
+    rate: PLAYBACK_SPEED,
+    ambient: 0,
+    onHero: w => { wokenValue = w; }
+  });
+
+  // Scrolling upward switches immediately to PLAYING_REVERSE from current position
+  triggerCreationGesture(-1, 'wheel');
+  assert.equal(creation.state, 'PLAYING_REVERSE');
+  assert.equal(creation.target, 0);
+
+  // Reverses smoothly
+  for (let i = 0; i < 60; i++) advanceCreation(1 / 60);
+  assert.ok(creation.time < 14.0, 'time decreases smoothly in reverse');
+  const timeWhileReversing = creation.time;
+
+  // Multiple repeated upward scrolls do not accelerate reverse playback
+  for (let i = 0; i < 5; i++) triggerCreationGesture(-1, 'wheel');
+  for (let i = 0; i < 60; i++) advanceCreation(1 / 60);
+  const deltaRev = timeWhileReversing - creation.time;
+  assert.ok(Math.abs(deltaRev - REVERSE_PLAYBACK_SPEED) < 0.15, `expected fixed reverse rate ${REVERSE_PLAYBACK_SPEED}, got ${deltaRev}`);
+
+  // Scrolling downward again resumes forward from current position without restarting
+  const resumeFrom = creation.time;
+  triggerCreationGesture(1, 'wheel');
+  assert.equal(creation.state, 'PLAYING_FORWARD');
+  for (let i = 0; i < 60; i++) advanceCreation(1 / 60);
+  assert.ok(creation.time > resumeFrom, 'resumed forward from current position');
+
+  Object.assign(creation, { active: false, onHero: null });
+});
+
+test('reversing all the way to start settles in paused state on first frame; completing forward hands off naturally', () => {
+  Object.assign(creation, {
+    active: true,
+    ready: true,
+    paused: false,
+    held: false,
+    state: 'PLAYING_REVERSE',
+    time: 0.8,
+    target: 0,
+    rate: -REVERSE_PLAYBACK_SPEED,
+    ambient: 0
+  });
+
+  // Reverse runs into 0
+  for (let i = 0; i < 60; i++) advanceCreation(1 / 60);
+  assert.equal(creation.time, 0, 'settles at 0');
+  assert.equal(creation.state, 'PAUSED', 'switches to PAUSED state');
+  assert.equal(creation.rate, 0);
+
+  // Test completing forward
+  Object.assign(creation, {
+    active: true,
+    ready: true,
+    paused: false,
+    held: false,
+    state: 'PLAYING_FORWARD',
+    time: 29.5,
+    target: CREATION_DURATION,
+    rate: PLAYBACK_SPEED,
+    ambient: 0
+  });
+  for (let i = 0; i < 60; i++) advanceCreation(1 / 60);
+  assert.equal(creation.active, false, 'intro completed');
+  assert.equal(creation.state, 'COMPLETED');
+  assert.equal(creation.time, CREATION_DURATION);
+
+  // Test re-entering in reverse at top of page
+  reopenCreationInReverse();
+  assert.equal(creation.active, true, 'reopened in reverse');
+  assert.equal(creation.state, 'PLAYING_REVERSE');
+  assert.equal(creation.time, CREATION_DURATION);
+  assert.equal(creation.target, 0);
+
   Object.assign(creation, { active: false });
 });
 
 test('a transition still compiling holds forward progress without blocking reverse scrubbing', () => {
-  Object.assign(creation, { active: true, ready: true, paused: false, held: true, time: 8.4, target: 10.0 });
+  Object.assign(creation, { active: true, ready: true, paused: false, held: true, state: 'PLAYING_FORWARD', time: 8.4, target: CREATION_DURATION, rate: PLAYBACK_SPEED });
   advanceCreation(0.05);
-  assert.equal(creation.time, 8.4, 'holds forward progress at uncompiled seam');
+  assert.ok(Math.abs(creation.time - 8.4) < 0.05, 'holds forward progress at uncompiled seam');
   // Reverse scrubbing still works while held
-  creation.target = 7.0;
+  triggerCreationGesture(-1, 'wheel');
+  assert.equal(creation.state, 'PLAYING_REVERSE');
   advanceCreation(0.05);
-  assert.ok(creation.time < 8.4, 'reverse scrubbing is never trapped by held state');
+  advanceCreation(0.05);
+  assert.ok(creation.time < 8.4, 'reverse playback is never trapped by held state');
   creation.held = false;
-  creation.target = 10.0;
+  triggerCreationGesture(1, 'wheel');
   advanceCreation(0.05);
-  assert.ok(creation.time > 7.0);
+  advanceCreation(0.05);
+  advanceCreation(0.05);
+  assert.ok(creation.time > 8.2);
   Object.assign(creation, { active: false });
 });
 
