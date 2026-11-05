@@ -108,6 +108,8 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const progressFillRef = useRef<HTMLDivElement | null>(null);
   const captionRef = useRef<HTMLDivElement | null>(null);
+  const scrollHintRef = useRef<HTMLDivElement | null>(null);
+  const cinematicPlayingRef = useRef(false);
   const activeIdRef = useRef(activeId);
   activeIdRef.current = activeId;
   const goToCityRef = useRef<(id: string) => void>((id) => setActiveId(id));
@@ -571,6 +573,7 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
       const st = prefersReduced ? reducedState() : stateAt(measureProgress());
       apply(st);
       publishZone(st);
+      syncScrollHint();
     };
     const requestRender = () => {
       if (!raf) raf = requestAnimationFrame(frame);
@@ -617,8 +620,22 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
       // Scale every phase equally, including city holds and the final release.
       return { y, dur: dur.map(seconds => seconds / CINEMATIC_SPEED), earth };
     };
-    const cinematic = mountCinematicScroll(cinematicStops, (y) => {
+    const syncScrollHint = () => {
+      const hintEl = scrollHintRef.current;
+      if (!hintEl) return;
+      const st = cinematicStops();
+      const y = globeScrollGeometry.controlledY ?? window.scrollY;
+      const waitingAtStart =
+        !prefersReduced &&
+        !cinematicPlayingRef.current &&
+        st !== null &&
+        Math.abs(y - st.y[st.earth]) <= 2;
+      hintEl.classList.toggle('creation-scroll-hint--visible', waitingAtStart);
+    };
+    const cinematic = mountCinematicScroll(cinematicStops, (y, playing = false) => {
       globeScrollGeometry.controlledY = y;
+      cinematicPlayingRef.current = playing;
+      syncScrollHint();
       if (globeInView) requestRender();
     });
     // Travel to a city = glide to that city's checkpoint
@@ -663,6 +680,7 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
       disposed = true;
       cinematic.destroy();
       globeScrollGeometry.controlledY = null;
+      cinematicPlayingRef.current = false;
       motionQuery.removeEventListener('change', onMotionChange);
       if (globeIo) globeIo.disconnect();
       window.removeEventListener('scroll', onScroll);
@@ -748,6 +766,16 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
             </div>
           );
         })}
+      </div>
+
+      <div
+        ref={scrollHintRef}
+        className="creation-scroll-hint creation-scroll-hint--globe"
+        data-globe-scroll-hint
+        aria-hidden="true"
+      >
+        <span className="creation-scroll-hint-text">Scroll once to explore</span>
+        <div className="creation-scroll-hint-line" />
       </div>
 
     </div>

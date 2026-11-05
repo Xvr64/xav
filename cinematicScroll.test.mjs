@@ -524,7 +524,11 @@ function prodBrowser(t, initialY = 0) {
     Object.defineProperty(globalThis, key, {value, configurable:true, writable:true});
   }
   t.mock.method(performance, 'now', () => now);
-  const controller = mountCinematicScroll(() => prodStops, y => { lockedY = y; });
+  let isPlaying = false;
+  const controller = mountCinematicScroll(() => prodStops, (y, playing = false) => {
+    lockedY = y;
+    isPlaying = playing;
+  });
   t.after(() => {
     controller.destroy();
     for (const [key, descriptor] of originals) {
@@ -536,6 +540,11 @@ function prodBrowser(t, initialY = 0) {
     win, controller, emit,
     get active() { return frames.size; },
     get lockedY() { return lockedY; },
+    get isPlaying() { return isPlaying; },
+    get waitingForExplore() {
+      const y = lockedY ?? win.scrollY;
+      return !isPlaying && Math.abs(y - prodStops.y[prodStops.earth]) <= 2;
+    },
     advance(ms) {
       const end = now + ms;
       while (now < end) {
@@ -613,4 +622,58 @@ test('production geometry: 3.5s trackpad momentum with 1-vs-2 packet coalescing 
   const actualDuration = journeyFrames.length * 0.016;
   assert.ok(Math.abs(actualDuration - expectedDuration) <= 0.05, `${actualDuration}s vs ${expectedDuration}s`);
 });
+
+test('second scroll-once indicator ("Scroll once to explore") shows only while waiting at Globe start, never during convergence or city playback, and reappears on full reversal', t => {
+  const b = prodBrowser(t, 2600);
+
+  // 1. Before reaching Globe section: indicator is hidden
+  assert.equal(b.waitingForExplore, false, 'hidden before reaching Globe section');
+
+  // 2. Scroll into Globe section -> convergence animation (0 -> earth) plays
+  b.wheel(180);
+  assert.equal(b.isPlaying, true, 'convergence animation started');
+  assert.equal(b.waitingForExplore, false, 'hidden at start of convergence');
+
+  while (b.active) {
+    assert.equal(b.waitingForExplore, false, 'never visible during whale-to-Earth convergence');
+    b.advance(16);
+  }
+
+  // 3. Convergence finished at Doha (st.earth): indicator is now visible waiting for trigger
+  assert.equal(b.win.scrollY, prodStops.y[prodStops.earth]);
+  assert.equal(b.isPlaying, false);
+  assert.equal(b.waitingForExplore, true, 'visible when waiting at beginning of 7-city Globe journey');
+
+  // 4. Trigger 7-city journey -> immediately hides on the triggering scroll
+  b.advance(SETTLE_MS + GESTURE_GAP_MS);
+  assert.equal(b.waitingForExplore, true, 'still visible while waiting');
+  b.wheel(100);
+  assert.equal(b.isPlaying, true, 'city journey started');
+  assert.equal(b.waitingForExplore, false, 'immediately hides when visitor scrolls down to start Globe animation');
+
+  // 5. Hidden throughout all 7 cities
+  while (b.active) {
+    assert.equal(b.waitingForExplore, false, 'never visible while cities are animating');
+    b.advance(16);
+  }
+  assert.equal(b.win.scrollY, 7200);
+  assert.equal(b.waitingForExplore, false, 'hidden after city journey completes');
+
+  // 6. Reverse the Globe journey all the way back to initial waiting state -> reappears only upon arrival
+  b.advance(SETTLE_MS + GESTURE_GAP_MS);
+  b.wheel(-100);
+  assert.equal(b.isPlaying, true);
+  while (b.active) {
+    assert.equal(b.waitingForExplore, false, 'hidden while reversing through cities');
+    b.advance(16);
+  }
+  assert.equal(b.win.scrollY, prodStops.y[prodStops.earth]);
+  assert.equal(b.waitingForExplore, true, 'reappears when reversed all the way to initial Globe waiting state');
+
+  // 7. Trigger again -> hides immediately
+  b.advance(SETTLE_MS + GESTURE_GAP_MS);
+  b.wheel(100);
+  assert.equal(b.waitingForExplore, false, 'hides immediately when triggered again');
+});
+
 

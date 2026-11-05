@@ -147,7 +147,7 @@ export function sequenceTarget(st: CinematicStops, y: number, dir: -1 | 1): numb
 
 export function mountCinematicScroll(
   stops: () => CinematicStops | null,
-  onLockY?: (y: number | null) => void
+  onLockY?: (y: number | null, playing?: boolean) => void
 ): CinematicScroll {
   let gestures = createWheelGestures();
   let raf = 0;
@@ -177,12 +177,12 @@ export function mountCinematicScroll(
     window.scrollTo({ top: y, behavior: 'instant' as ScrollBehavior });
     expectedY = window.scrollY;
     lastScrollY = expectedY;
-    onLockY?.(expectedY);
+    onLockY?.(expectedY, play !== null);
   };
   const releaseLock = () => {
     wheelLocked = false;
     expectedY = null;
-    onLockY?.(null);
+    onLockY?.(null, play !== null);
   };
   const cancel = () => {
     cancelAnimationFrame(raf);
@@ -198,7 +198,7 @@ export function mountCinematicScroll(
     // Events seen during playback never queue the next film, including momentum at its end.
     wheelLocked = true;
     expectedY = lockedY;
-    onLockY?.(expectedY);
+    onLockY?.(expectedY, false);
     settleUntil = performance.now() + SETTLE_MS;
     gestures.disarm?.(lastDirection, performance.now());
   };
