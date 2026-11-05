@@ -182,7 +182,7 @@ export function CreationIntro() {
     const gestures = createWheelGestures();
     let touchStartY = 0;
     const onWheelReopen = (event: WheelEvent) => {
-      if (window.scrollY > 2 || creation.reason === 'skip') return;
+      if (window.scrollY > 2) return;
       if (event.ctrlKey) return;
       const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? Math.min(window.innerHeight, 360) : 1;
       const delta = event.deltaY * unit;
@@ -195,12 +195,12 @@ export function CreationIntro() {
       }
     };
     const onTouchStartReopen = (event: TouchEvent) => {
-      if (window.scrollY <= 2 && event.touches.length === 1 && creation.reason !== 'skip') {
+      if (window.scrollY <= 2 && event.touches.length === 1) {
         touchStartY = event.touches[0].clientY;
       }
     };
     const onTouchMoveReopen = (event: TouchEvent) => {
-      if (window.scrollY > 2 || event.touches.length !== 1 || creation.reason === 'skip') return;
+      if (window.scrollY > 2 || event.touches.length !== 1) return;
       const dy = touchStartY - event.touches[0].clientY;
       if (dy < -32) {
         reopenCreationInReverse();
