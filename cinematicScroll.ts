@@ -6,6 +6,10 @@
 export interface WheelGestures {
   /** Feed one wheel event (px, + down) at time `now` (ms); returns ±1 when a new gesture is recognised. */
   feed(delta: number, now: number): -1 | 0 | 1;
+  /** Mark the current uninterrupted stream in `direction` as already consumed so leftover momentum cannot refire. */
+  disarm?(direction: -1 | 1, now?: number): void;
+  /** True when an uninterrupted wheel stream has already fired a gesture in `direction`. */
+  activeIn?(direction: -1 | 1, now: number): boolean;
 }
 
 /** Pixels of travel that make an intentional gesture: one mouse-wheel notch, a short trackpad stroke. */
@@ -19,21 +23,30 @@ export function createWheelGestures(): WheelGestures {
   let armed = true;
   let acc = 0;
   let dir = 0;
+  let firedDir = 0;
   let last = -Infinity;
   let fired = -Infinity;
   let prev = 0;
+  let env = 0;
   let decaying = false;
   return {
     feed(delta, now) {
       const d = Math.sign(delta);
       if (d === 0) return 0;
       const mag = Math.abs(delta);
-      // A pause, or a reversal, always begins a new gesture
-      if (now - last >= GESTURE_GAP_MS || d !== dir) {
+      if (now - last >= GESTURE_GAP_MS) {
         armed = true;
         acc = 0;
+        firedDir = 0;
+        env = 0;
         decaying = false;
-      } else if (!armed && decaying && now - fired >= GESTURE_REFIRE_MS && mag > prev * 1.8 && mag >= 12) {
+      } else if (d !== dir) {
+        // Reversal vs unconfirmed sign bounce: only arm if opposite to the direction that already fired
+        armed = d !== firedDir;
+        acc = 0;
+        env = 0;
+        decaying = false;
+      } else if (!armed && decaying && now - fired >= GESTURE_REFIRE_MS && mag > Math.max(prev, env) * 1.8 && mag >= 18) {
         // Momentum only ever fades; a delta that jumps back up after fading is the hand again
         armed = true;
         acc = 0;
@@ -42,14 +55,27 @@ export function createWheelGestures(): WheelGestures {
       dir = d;
       last = now;
       prev = mag;
+      env = Math.max(mag, env * 0.82);
       if (!armed) return 0;
       acc += mag;
       if (acc < GESTURE_PX) return 0;
       armed = false;
       acc = 0;
       fired = now;
+      firedDir = d;
       decaying = false;
       return d as -1 | 1;
+    },
+    disarm(direction, now = last) {
+      armed = false;
+      acc = 0;
+      dir = direction;
+      firedDir = direction;
+      if (Number.isFinite(now)) fired = now;
+      decaying = false;
+    },
+    activeIn(direction, now) {
+      return now - last < GESTURE_GAP_MS && firedDir === direction;
     }
   };
 }
@@ -119,15 +145,29 @@ export function sequenceTarget(st: CinematicStops, y: number, dir: -1 | 1): numb
   return y > st.y[st.earth] + 2 ? st.earth : y > st.y[0] + 2 ? 0 : null;
 }
 
-export function mountCinematicScroll(stops: () => CinematicStops | null): CinematicScroll {
+export function mountCinematicScroll(
+  stops: () => CinematicStops | null,
+  onLockY?: (y: number | null) => void
+): CinematicScroll {
   let gestures = createWheelGestures();
   let raf = 0;
-  let play: { time: number; target: number; direction: -1 | 1; rate: number; last: number; lo: number; hi: number } | null = null;
+  let play: {
+    time: number;
+    target: number;
+    direction: -1 | 1;
+    rate: number;
+    last: number;
+    lo: number;
+    hi: number;
+    entryY: number;
+  } | null = null;
   let lastWheel = -Infinity;
   let wheelLocked = false;
   let entryGesture: -1 | 0 | 1 = 0;
   let lastDirection: -1 | 1 = 1;
   let expectedY: number | null = null;
+  let lastScrollY = window.scrollY;
+  let scrollbarDrag = false;
   let settleUntil = -Infinity;
   /** Where the browser's own smooth scrolling of recent, uncaptured wheel events is heading. */
   let native: { target: number; until: number } | null = null;
@@ -136,18 +176,31 @@ export function mountCinematicScroll(stops: () => CinematicStops | null): Cinema
   const scrollTo = (y: number) => {
     window.scrollTo({ top: y, behavior: 'instant' as ScrollBehavior });
     expectedY = window.scrollY;
+    lastScrollY = expectedY;
+    onLockY?.(expectedY);
+  };
+  const releaseLock = () => {
+    wheelLocked = false;
+    expectedY = null;
+    onLockY?.(null);
   };
   const cancel = () => {
     cancelAnimationFrame(raf);
     raf = 0;
     play = null;
+    releaseLock();
   };
   const finish = () => {
-    cancel();
+    const lockedY = expectedY;
+    cancelAnimationFrame(raf);
+    raf = 0;
+    play = null;
     // Events seen during playback never queue the next film, including momentum at its end.
     wheelLocked = true;
+    expectedY = lockedY;
+    onLockY?.(expectedY);
     settleUntil = performance.now() + SETTLE_MS;
-    gestures = createWheelGestures();
+    gestures.disarm?.(lastDirection, performance.now());
   };
   const frame = (now: number) => {
     raf = 0;
@@ -173,6 +226,7 @@ export function mountCinematicScroll(stops: () => CinematicStops | null): Cinema
     const target = Math.max(0, Math.min(st.y.length - 1, index));
     const times = timelineTimes(st);
     const last = st.y.length - 1;
+    const preEntryY = window.scrollY;
 
     let time: number;
     let lo: number;
@@ -183,13 +237,11 @@ export function mountCinematicScroll(stops: () => CinematicStops | null): Cinema
       lo = play.lo;
       hi = play.hi;
     } else {
-      // Clear accumulated momentum on fresh film start so incoming scroll speed never accelerates playback
-      gestures = createWheelGestures();
       if (target === st.earth) {
         if (window.scrollY > st.y[st.earth] + 2) {
           lo = st.earth;
           hi = last;
-          time = times[hi];
+          time = window.scrollY >= st.y[last] - 10 ? times[hi] : timelineTime(st, window.scrollY);
         } else {
           lo = 0;
           hi = st.earth;
@@ -198,11 +250,11 @@ export function mountCinematicScroll(stops: () => CinematicStops | null): Cinema
       } else if (target === last) {
         lo = st.earth;
         hi = last;
-        time = times[st.earth];
+        time = window.scrollY <= st.y[st.earth] + 10 ? times[st.earth] : timelineTime(st, window.scrollY);
       } else if (target === 0) {
         lo = 0;
         hi = st.earth;
-        time = times[st.earth];
+        time = window.scrollY >= st.y[st.earth] - 10 ? times[st.earth] : timelineTime(st, window.scrollY);
       } else {
         time = timelineTime(st, window.scrollY);
         lo = Math.min(target, window.scrollY >= st.y[st.earth] - 2 ? st.earth : 0);
@@ -214,6 +266,10 @@ export function mountCinematicScroll(stops: () => CinematicStops | null): Cinema
     if (Math.abs(end - time) < 0.0001) return;
     const direction = end > time ? 1 : -1;
     lastDirection = direction;
+    if (!play) {
+      // Mark any ongoing wheel stream as consumed so incoming scroll speed never accelerates or queues playback
+      gestures.disarm?.(direction, performance.now());
+    }
     // From rest at a film's start or end the timeline itself eases in, so playback runs at full
     // rate at once and every film keeps its exact length; anywhere else it gathers its pace
     const resting = times.some((t, k) => (k === 0 || k >= st.earth) && Math.abs(t - time) < 1e-6);
@@ -224,7 +280,8 @@ export function mountCinematicScroll(stops: () => CinematicStops | null): Cinema
       rate: play?.rate ?? (resting ? direction : 0),
       last: performance.now(),
       lo,
-      hi
+      hi,
+      entryY: play?.entryY ?? preEntryY
     };
     // Take the scroll now: programmatic scroll pins position to the start of this film
     const outY = timelineY(st, time);
@@ -267,7 +324,10 @@ export function mountCinematicScroll(stops: () => CinematicStops | null): Cinema
     if (!st) return;
     const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? window.innerHeight : 1;
     const delta = e.deltaY * unit;
-    if (Math.abs(e.deltaY) < Math.abs(e.deltaX) || !delta) return;
+    if (Math.abs(e.deltaY) < Math.abs(e.deltaX) || !delta) {
+      if (delta && (play || wheelLocked)) e.preventDefault();
+      return;
+    }
     const now = performance.now();
     const quiet = now - lastWheel >= GESTURE_GAP_MS;
     if (quiet) entryGesture = 0;
@@ -279,15 +339,19 @@ export function mountCinematicScroll(stops: () => CinematicStops | null): Cinema
       const g = gestures.feed(delta, now);
       if (!g || g === lastDirection) { e.preventDefault(); return; }
       // A reversal needs the full intent threshold too: tiny trackpad sign bounces cannot unlock.
-      wheelLocked = false;
+      releaseLock();
       if (captures(st, window.scrollY, g, delta)) { e.preventDefault(); step(g); }
       return;
     }
-    if (wheelLocked) { wheelLocked = false; gestures = createWheelGestures(); }
+    if (wheelLocked) { releaseLock(); gestures = createWheelGestures(); }
     // Outside the films, judge where the page is heading, not where it is: the browser may still
     // be gliding toward the targets of earlier notches, and would carry the page into a film
     if (native && (now > native.until || Math.sign(native.target - window.scrollY) !== dir)) native = null;
-    const heading = native ? native.target : window.scrollY;
+    const rawHeading = native ? native.target : window.scrollY;
+    const maxLead = 120;
+    const heading = dir > 0
+      ? Math.min(rawHeading, window.scrollY + maxLead)
+      : Math.max(rawHeading, window.scrollY - maxLead);
     if (!captures(st, heading, dir, delta)) {
       const g = gestures.feed(delta, now);
       if (g) entryGesture = g;
@@ -296,14 +360,27 @@ export function mountCinematicScroll(stops: () => CinematicStops | null): Cinema
     }
     e.preventDefault();
     const g = gestures.feed(delta, now);
-    const enteringFromAbove = heading < st.y[0] - 2 || window.scrollY < st.y[0] - 2;
-    const enteringFromBelow = heading > st.y[st.y.length - 1] + 2 || window.scrollY > st.y[st.y.length - 1] + 2;
+    const activeStream = gestures.activeIn?.(dir, now) ?? false;
+    const enteringFromAbove =
+      heading < st.y[0] - 2 ||
+      window.scrollY < st.y[0] - 2 ||
+      ((entryGesture > 0 || activeStream) && !play && window.scrollY < st.y[st.earth] - 2);
+    const enteringFromBelow =
+      heading > st.y[st.y.length - 1] + 2 ||
+      window.scrollY > st.y[st.y.length - 1] + 2 ||
+      ((entryGesture < 0 || activeStream) && !play && window.scrollY > st.y[st.earth] + 2);
     const entering = enteringFromAbove || enteringFromBelow;
-    if (g || (entering && entryGesture === dir) || (entering && native)) {
+    if (g || (entering && (entryGesture === dir || activeStream)) || (entering && native)) {
       if (enteringFromAbove && dir > 0) {
+        const entryY = window.scrollY;
+        scrollTo(st.y[0]);
         goTo(st.earth);
+        if (play) play.entryY = Math.min(play.entryY, entryY);
       } else if (enteringFromBelow && dir < 0) {
+        const entryY = window.scrollY;
+        scrollTo(st.y[st.y.length - 1]);
         goTo(st.earth);
+        if (play) play.entryY = Math.max(play.entryY, entryY);
       } else {
         step(g || dir);
       }
@@ -333,7 +410,10 @@ export function mountCinematicScroll(stops: () => CinematicStops | null): Cinema
     if (e.key === ' ' && e.target instanceof HTMLElement && e.target.closest('button, a, summary, [role="button"]')) return;
     const st = geometry();
     const distance = dir * (e.key.startsWith('Arrow') ? 40 : window.innerHeight * 0.85);
-    if (!st || !captures(st, window.scrollY, dir, distance)) return;
+    if (!st || !captures(st, window.scrollY, dir, distance)) {
+      releaseLock();
+      return;
+    }
     e.preventDefault();
     if (!e.repeat) step(dir);
   };
@@ -366,26 +446,72 @@ export function mountCinematicScroll(stops: () => CinematicStops | null): Cinema
   // Scrollbar drags, anchors and assistive navigation always override playback; incoming
   // smooth scrolls or trackpad momentum from before entering do not: the film's frames keep the page
   const onScroll = () => {
-    if (!play || expectedY === null) return;
-    const diff = Math.abs(window.scrollY - expectedY);
-    if (diff <= 2) return;
     const st = geometry();
-    if (st) {
-      const first = st.y[0];
-      const last = st.y[st.y.length - 1];
+    const prevY = lastScrollY;
+    const curY = window.scrollY;
+    lastScrollY = curY;
+    if (!st) return;
+    const first = st.y[0];
+    const last = st.y[st.y.length - 1];
+
+    if (play && expectedY !== null) {
+      const diff = Math.abs(curY - expectedY);
+      if (diff <= 2) return;
+      const minAllowed = Math.min(first, play.entryY) - 100;
+      const maxAllowed = Math.max(last, play.entryY) + 100;
       // Jumps far outside the section (e.g. anchor navigation) override playback
-      if (window.scrollY < first - 100 || window.scrollY > last + 100) {
+      if (curY < minAllowed || curY > maxAllowed) {
         cancel();
         return;
       }
+      // Inside or near the section, scroll events that diverge from expectedY are residual native
+      // momentum from entry or trackpad inertia. Pin back to expectedY so the cinematic timeline
+      // is never accelerated or skipped by scroll velocity.
+      scrollTo(expectedY);
+      return;
     }
-    // Inside or near the section, scroll events that diverge from expectedY are residual native
-    // momentum from entry or trackpad inertia. Pin back to expectedY so the cinematic timeline
-    // is never accelerated or skipped by scroll velocity.
-    scrollTo(expectedY);
+
+    if (wheelLocked && expectedY !== null && !scrollbarDrag) {
+      const now = performance.now();
+      const quiet = now - lastWheel >= GESTURE_GAP_MS;
+      if (!quiet || now < settleUntil || (expectedY > first + 2 && expectedY < last - 2)) {
+        if (Math.abs(curY - expectedY) > 2 && curY >= first - 100 && curY <= last + 100) {
+          scrollTo(expectedY);
+        }
+        return;
+      }
+      if (curY < first - 2 || curY > last + 2) {
+        releaseLock();
+        return;
+      }
+    }
+
+    // If native scrolling / inertia from outside crosses into the section while idle,
+    // immediately hand ownership to the Doha entry film so momentum never coasts through cities.
+    if (!play && !wheelLocked && !scrollbarDrag) {
+      if (prevY <= first + 2 && curY > first + 2 && curY < last - 2) {
+        entryGesture = 0;
+        native = null;
+        scrollTo(first);
+        goTo(st.earth);
+        if (play) play.entryY = Math.min(play.entryY, prevY);
+      } else if (prevY >= last - 2 && curY < last - 2 && curY > first + 2) {
+        entryGesture = 0;
+        native = null;
+        scrollTo(last);
+        goTo(st.earth);
+        if (play) play.entryY = Math.max(play.entryY, prevY);
+      }
+    }
   };
   const onPointerDown = (e: PointerEvent) => {
-    if (e.pointerType === 'mouse' && e.clientX >= document.documentElement.clientWidth) cancel();
+    if (e.pointerType === 'mouse' && e.clientX >= document.documentElement.clientWidth) {
+      scrollbarDrag = true;
+      cancel();
+    }
+  };
+  const onPointerUp = () => {
+    scrollbarDrag = false;
   };
   const onReduced = () => { if (reduced.matches) cancel(); };
   window.addEventListener('wheel', onWheel, { passive: false });
@@ -396,6 +522,8 @@ export function mountCinematicScroll(stops: () => CinematicStops | null): Cinema
   window.addEventListener('touchcancel', onTouchCancel, { passive: true });
   window.addEventListener('scroll', onScroll, { passive: true });
   window.addEventListener('pointerdown', onPointerDown, { passive: true });
+  window.addEventListener('pointerup', onPointerUp, { passive: true });
+  window.addEventListener('pointercancel', onPointerUp, { passive: true });
   reduced.addEventListener('change', onReduced);
   return {
     goTo,
@@ -410,6 +538,8 @@ export function mountCinematicScroll(stops: () => CinematicStops | null): Cinema
       window.removeEventListener('touchcancel', onTouchCancel);
       window.removeEventListener('scroll', onScroll);
       window.removeEventListener('pointerdown', onPointerDown);
+      window.removeEventListener('pointerup', onPointerUp);
+      window.removeEventListener('pointercancel', onPointerUp);
       reduced.removeEventListener('change', onReduced);
     }
   };

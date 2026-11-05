@@ -25,11 +25,11 @@ html[data-creation="active"] [data-ocean-life] { opacity: 0; }
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   pointer-events: none;
   opacity: 0;
   visibility: hidden;
-  transition: opacity 0.5s cubic-bezier(0.16, 1, 0.3, 1), transform 0.5s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.5s;
+  transition: opacity 0.55s cubic-bezier(0.16, 1, 0.3, 1), transform 0.55s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.55s;
   z-index: 10;
   user-select: none;
 }
@@ -38,18 +38,47 @@ html[data-creation="active"] [data-ocean-life] { opacity: 0; }
   opacity: 1;
   visibility: visible;
   transform: translateX(-50%) translateY(0);
-  transition-delay: 0.15s;
+  transition-delay: 0.1s;
+}
+
+.creation-scroll-hint-labels {
+  display: grid;
+  place-items: center;
+  text-align: center;
 }
 
 .creation-scroll-hint-text {
+  grid-area: 1 / 1;
   font-family: 'IBM Plex Mono', monospace;
-  font-size: 9px;
+  font-size: 9.5px;
   font-weight: 400;
   letter-spacing: 0.22em;
   text-transform: uppercase;
-  color: #d8e8f2;
-  opacity: 0.55;
+  color: currentColor;
   line-height: 1;
+  white-space: nowrap;
+  transition: opacity 0.5s cubic-bezier(0.16, 1, 0.3, 1), transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.creation-scroll-hint-label--initial {
+  opacity: 0;
+  transform: translateY(-4px);
+}
+
+.creation-scroll-hint--initial .creation-scroll-hint-label--initial {
+  opacity: 0.78;
+  transform: translateY(0);
+}
+
+.creation-scroll-hint-label--regular {
+  font-size: 9px;
+  opacity: 0;
+  transform: translateY(4px);
+}
+
+.creation-scroll-hint--active .creation-scroll-hint-label--regular {
+  opacity: 0.42;
+  transform: translateY(0);
 }
 
 .creation-scroll-hint-text--desktop {
@@ -60,22 +89,76 @@ html[data-creation="active"] [data-ocean-life] { opacity: 0; }
   display: none;
 }
 
+.creation-scroll-hint-indicator {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
 .creation-scroll-hint-line {
   position: relative;
   width: 1px;
-  height: 28px;
-  background: rgba(216, 232, 242, 0.15);
+  height: 32px;
+  background: rgba(216, 232, 242, 0.16);
   overflow: hidden;
+  transition: height 0.55s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.55s ease;
+}
+
+.creation-scroll-hint--active .creation-scroll-hint-line {
+  height: 24px;
+}
+
+.creation-controls[data-water] .creation-scroll-hint-line {
+  background: rgba(15, 58, 99, 0.18);
 }
 
 .creation-scroll-hint-line::after {
   content: '';
   position: absolute;
   inset: 0;
-  background: #d8e8f2;
+  background: currentColor;
   transform: scaleY(0);
   transform-origin: top;
   animation: creation-scroll-stretch-down 2.4s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+}
+
+.creation-scroll-hint-chevron {
+  display: block;
+  width: 5px;
+  height: 5px;
+  margin-top: -2px;
+  border-right: 1px solid currentColor;
+  border-bottom: 1px solid currentColor;
+  transform: rotate(45deg);
+  opacity: 0.65;
+  animation: creation-scroll-chevron-down 2.4s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+  transition: opacity 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.creation-scroll-hint--active .creation-scroll-hint-chevron {
+  opacity: 0.35;
+}
+
+@keyframes creation-scroll-chevron-down {
+  0%, 100% {
+    transform: translateY(-2px) rotate(45deg);
+    opacity: 0.25;
+  }
+  50% {
+    transform: translateY(2px) rotate(45deg);
+    opacity: 0.78;
+  }
+}
+
+@keyframes creation-scroll-chevron-up {
+  0%, 100% {
+    transform: translateY(2px) rotate(-135deg);
+    opacity: 0.25;
+  }
+  50% {
+    transform: translateY(-2px) rotate(-135deg);
+    opacity: 0.78;
+  }
 }
 
 @keyframes creation-scroll-stretch-down {
@@ -151,16 +234,29 @@ html[data-creation="active"] [data-ocean-life] { opacity: 0; }
     transform-origin: bottom;
     animation-name: creation-scroll-stretch-up;
   }
+  .creation-scroll-hint-chevron {
+    order: -1;
+    margin-top: 0;
+    margin-bottom: -2px;
+    transform: rotate(-135deg);
+    animation-name: creation-scroll-chevron-up;
+  }
 }
 
 /* Reduced motion */
 @media (prefers-reduced-motion: reduce) {
-  .creation-scroll-hint {
+  .creation-scroll-hint,
+  .creation-scroll-hint-text,
+  .creation-scroll-hint-line,
+  .creation-scroll-hint-chevron {
     transition: none;
   }
   .creation-scroll-hint-line::after {
     animation: none;
     transform: scaleY(0.65);
     opacity: 0.6;
+  }
+  .creation-scroll-hint-chevron {
+    animation: none;
   }
 }

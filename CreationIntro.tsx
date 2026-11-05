@@ -2,6 +2,7 @@ import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
   CREATION_DURATION,
   CREATION_STAGES,
+  HERO_WAKES_AT,
   OCEAN_HANDOFF_AT,
   creation,
   creationProgress,
@@ -250,7 +251,8 @@ export function CreationIntro() {
   }, []);
   if (!creation.active) return fading ? <div className="creation-exit" aria-hidden="true" onAnimationEnd={() => setFading(false)} /> : null;
   const stage = creationStage(creation.time);
-  const showHint = creation.active && creation.state === 'PAUSED' && creation.time <= 0.05;
+  const isInitialCue = creation.active && creation.state === 'PAUSED' && creation.time <= 0.05;
+  const showCue = creation.active && creation.time < HERO_WAKES_AT;
   return <div className="creation-controls" data-water={stage === 'OCEAN_ENTRY' || stage === 'WHALE_HANDOFF' ? '' : undefined} role="dialog" aria-modal="true" aria-label="Intro controls">
     <div className="creation-actions">
       <button onClick={() => {
@@ -265,13 +267,25 @@ export function CreationIntro() {
       <button ref={skip} onClick={skipIntro}>Skip intro <span aria-hidden="true">↗</span></button>
     </div>
     <div
-      className={`creation-scroll-hint ${showHint ? 'creation-scroll-hint--visible' : ''}`}
+      className={`creation-scroll-hint ${showCue ? 'creation-scroll-hint--visible' : ''} ${isInitialCue ? 'creation-scroll-hint--initial' : 'creation-scroll-hint--active'}`}
       data-scroll-hint
+      data-scroll-state={isInitialCue ? 'initial' : 'active'}
       aria-hidden="true"
     >
-      <span className="creation-scroll-hint-text creation-scroll-hint-text--desktop">scroll</span>
-      <span className="creation-scroll-hint-text creation-scroll-hint-text--mobile">swipe</span>
-      <div className="creation-scroll-hint-line" />
+      <div className="creation-scroll-hint-labels">
+        <span className="creation-scroll-hint-text creation-scroll-hint-label--initial">
+          <span className="creation-scroll-hint-text--desktop">Scroll once to begin</span>
+          <span className="creation-scroll-hint-text--mobile">Swipe once to begin</span>
+        </span>
+        <span className="creation-scroll-hint-text creation-scroll-hint-label--regular">
+          <span className="creation-scroll-hint-text--desktop">Scroll</span>
+          <span className="creation-scroll-hint-text--mobile">Swipe</span>
+        </span>
+      </div>
+      <div className="creation-scroll-hint-indicator">
+        <div className="creation-scroll-hint-line" />
+        <span className="creation-scroll-hint-chevron" />
+      </div>
     </div>
     {qa && <div className="creation-qa" style={{position:'absolute',top:85,right:20,pointerEvents:'auto',display:'flex',gap:4,flexWrap:'wrap',maxWidth:380}}>
       {CREATION_STAGES.map(([name,start]) => <button key={name} style={{background:'#07172b',color:'white',fontSize:9,padding:5}} onClick={() => { seekCreation(start + 0.15); refresh(n=>n+1); }}>{name}</button>)}

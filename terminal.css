@@ -359,6 +359,101 @@ body {
   .hero-name, .hero-horizon { display: none; }
 }
 
+/* Regular scroll cue on the cover stage after the initial intro unlocks */
+.hero-scroll-cue {
+  position: absolute;
+  bottom: max(32px, env(safe-area-inset-bottom, 24px));
+  left: 50%;
+  transform: translateX(-50%) translateY(6px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  pointer-events: none;
+  color: var(--ink-2F4858, #2F4858);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.5s cubic-bezier(0.16, 1, 0.3, 1), transform 0.5s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.5s;
+  z-index: 10;
+  user-select: none;
+}
+.hero-scroll-cue--visible {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(0);
+}
+.hero-scroll-cue-text {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 400;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: currentColor;
+  opacity: 0.52;
+  line-height: 1;
+}
+.hero-scroll-cue-text--desktop { display: block; }
+.hero-scroll-cue-text--mobile { display: none; }
+.hero-scroll-cue-indicator {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.hero-scroll-cue-line {
+  position: relative;
+  width: 1px;
+  height: 24px;
+  background: rgba(36, 66, 98, 0.16);
+  overflow: hidden;
+}
+.hero-scroll-cue-line::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: currentColor;
+  transform: scaleY(0);
+  transform-origin: top;
+  animation: creation-scroll-stretch-down 2.4s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+}
+.hero-scroll-cue-chevron {
+  display: block;
+  width: 5px;
+  height: 5px;
+  margin-top: -2px;
+  border-right: 1px solid currentColor;
+  border-bottom: 1px solid currentColor;
+  transform: rotate(45deg);
+  opacity: 0.45;
+  animation: creation-scroll-chevron-down 2.4s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+}
+@media (hover: none) and (pointer: coarse), (max-width: 600px) {
+  .hero-scroll-cue {
+    bottom: max(26px, env(safe-area-inset-bottom, 20px));
+  }
+  .hero-scroll-cue-text--desktop { display: none; }
+  .hero-scroll-cue-text--mobile { display: block; }
+  .hero-scroll-cue-line::after {
+    transform-origin: bottom;
+    animation-name: creation-scroll-stretch-up;
+  }
+  .hero-scroll-cue-chevron {
+    order: -1;
+    margin-top: 0;
+    margin-bottom: -2px;
+    transform: rotate(-135deg);
+    animation-name: creation-scroll-chevron-up;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hero-scroll-cue { transition: none; }
+  .hero-scroll-cue-line::after {
+    animation: none;
+    transform: scaleY(0.65);
+    opacity: 0.55;
+  }
+  .hero-scroll-cue-chevron { animation: none; }
+}
+
 /* Migration: an empty runway whose scroll is the journey's timeline (drawn by the whale
    canvas). Without motion there is no journey, and no runway. */
 .migration-runway { height: 0; }

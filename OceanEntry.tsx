@@ -260,6 +260,19 @@ export const MigrationRunway: React.FC = React.memo(() => {
 });
 
 export const ProgressiveOceanEntry: React.FC<ProgressiveOceanEntryProps> = React.memo(({ cvUrl }) => {
+  const cueRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const el = cueRef.current;
+    if (!el) return;
+    const sync = () => {
+      const visible = window.scrollY <= 30;
+      el.classList.toggle('hero-scroll-cue--visible', visible);
+    };
+    sync();
+    window.addEventListener('scroll', sync, { passive: true });
+    return () => window.removeEventListener('scroll', sync);
+  }, []);
+
   return (
     <>
       {/* Cover: a scroll runway with a pinned stage. The headline's real letters break into the
@@ -286,6 +299,20 @@ export const ProgressiveOceanEntry: React.FC<ProgressiveOceanEntryProps> = React
             <span className="hero-name-first" data-hero-name-line>Xavier</span>
             <span className="hero-name-last" data-hero-name-line>Hery</span>
           </p>
+          <div
+            ref={cueRef}
+            className="hero-scroll-cue hero-scroll-cue--visible"
+            data-hero-scroll-cue
+            data-ascii-preserve
+            aria-hidden="true"
+          >
+            <span className="hero-scroll-cue-text hero-scroll-cue-text--desktop">Scroll</span>
+            <span className="hero-scroll-cue-text hero-scroll-cue-text--mobile">Swipe</span>
+            <div className="hero-scroll-cue-indicator">
+              <div className="hero-scroll-cue-line" />
+              <span className="hero-scroll-cue-chevron" />
+            </div>
+          </div>
         </div>
         {/* The page's one h1. With motion the name resolved on the stage carries it visually, so it
             is clipped (and kept out of the word system); without motion it is set as type here. */}

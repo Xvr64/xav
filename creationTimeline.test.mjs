@@ -354,3 +354,52 @@ test('clock waits for resources, pauses, completes once on reaching end, and nev
 });
 
 test('server/non-browser imports have a static fallback', () => assert.equal(shouldPlayCreation(), false));
+
+test('initial scroll-once cue state transitions on first trigger and reappears on full reversal to start', () => {
+  const isInitialCue = () => creation.active && creation.state === 'PAUSED' && creation.time <= 0.05;
+  let notifications = 0;
+  const onUpdate = () => { notifications++; };
+  creation.listeners.add(onUpdate);
+
+  Object.assign(creation, {
+    active: true,
+    ready: true,
+    paused: false,
+    held: false,
+    state: 'PAUSED',
+    time: 0,
+    target: 0,
+    rate: 0,
+    ambient: 0
+  });
+
+  assert.equal(isInitialCue(), true, 'initial landing screen shows scroll-once cue');
+
+  // First downward scroll gesture immediately transitions out of initial state and notifies UI
+  triggerCreationGesture(1, 'wheel');
+  assert.equal(isInitialCue(), false, 'scroll-once cue transitions out immediately on first trigger');
+  assert.ok(notifications > 0, 'listeners notified on first trigger');
+
+  // Advance forward slightly, then reverse all the way back to t = 0
+  for (let i = 0; i < 30; i++) advanceCreation(1 / 60);
+  assert.ok(creation.time > 0.5);
+  triggerCreationGesture(-1, 'wheel');
+  assert.equal(isInitialCue(), false, 'still in active reverse playback');
+
+  for (let i = 0; i < 120; i++) advanceCreation(1 / 60);
+  assert.equal(creation.time, 0);
+  assert.equal(creation.state, 'PAUSED');
+  assert.equal(isInitialCue(), true, 'scroll-once cue reappears when reversed all the way back to initial state');
+
+  // Trigger again, advance slightly, then seekCreation(0) (Home key)
+  triggerCreationGesture(1, 'wheel');
+  advanceCreation(1 / 60);
+  assert.equal(isInitialCue(), false);
+  const beforeSeekNotifs = notifications;
+  seekCreation(0);
+  assert.equal(isInitialCue(), true, 'seekCreation(0) restores initial scroll-once cue state');
+  assert.ok(notifications > beforeSeekNotifs, 'listeners notified on seekCreation(0)');
+
+  creation.listeners.delete(onUpdate);
+  Object.assign(creation, { active: false });
+});

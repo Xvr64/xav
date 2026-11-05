@@ -617,7 +617,10 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
       // Scale every phase equally, including city holds and the final release.
       return { y, dur: dur.map(seconds => seconds / CINEMATIC_SPEED), earth };
     };
-    const cinematic = mountCinematicScroll(cinematicStops);
+    const cinematic = mountCinematicScroll(cinematicStops, (y) => {
+      globeScrollGeometry.controlledY = y;
+      if (globeInView) requestRender();
+    });
     // Travel to a city = glide to that city's checkpoint
     goToCityRef.current = (id: string) => {
       const idx = locations.findIndex((l) => l.id === id);
@@ -659,6 +662,7 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
     return () => {
       disposed = true;
       cinematic.destroy();
+      globeScrollGeometry.controlledY = null;
       motionQuery.removeEventListener('change', onMotionChange);
       if (globeIo) globeIo.disconnect();
       window.removeEventListener('scroll', onScroll);

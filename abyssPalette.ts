@@ -49,9 +49,11 @@ export const ABYSS_FILLS: { token: string; name: string; light: number[]; dark: 
 export const lerpN = (a: number, b: number, t: number) => a + (b - a) * t;
 
 // Geometry is owned by JourneyGlobe's existing resize/scroll sequence.
-export const globeScrollGeometry = { start: Infinity, travel: 1 };
-export const globeScrollProgress = () => Math.max(0, Math.min(1,
-  (window.scrollY - globeScrollGeometry.start) / globeScrollGeometry.travel));
+export const globeScrollGeometry = { start: Infinity, travel: 1, controlledY: null as number | null };
+export const globeScrollProgress = () => {
+  const y = globeScrollGeometry.controlledY ?? window.scrollY;
+  return Math.max(0, Math.min(1, (y - globeScrollGeometry.start) / globeScrollGeometry.travel));
+};
 /** Progressive descent across the complete pinned city sequence. */
 export const abyssFromProgress = (progress: number) => {
   const t = Math.max(0, Math.min(1, progress));

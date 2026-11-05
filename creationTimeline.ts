@@ -127,13 +127,18 @@ export function syncHeroWake(time = creation.time) {
 export function seekCreation(t: number) {
   const clamped = Math.max(0, Math.min(CREATION_DURATION, Number.isFinite(t) ? t : 0));
   const before = creationStage(creation.time);
+  const wasInitial = creation.state === 'PAUSED' && creation.time <= 0.05;
   creation.time = clamped;
   creation.rate = 0;
-  if (creation.state === 'PLAYING_FORWARD') creation.target = CREATION_DURATION;
+  if (clamped === 0) {
+    creation.state = 'PAUSED';
+    creation.target = 0;
+  } else if (creation.state === 'PLAYING_FORWARD') creation.target = CREATION_DURATION;
   else if (creation.state === 'PLAYING_REVERSE') creation.target = 0;
   else creation.target = clamped;
   syncHeroWake(clamped);
-  if (before !== creationStage(clamped)) creation.listeners.forEach(fn => fn());
+  const isInitial = creation.state === 'PAUSED' && creation.time <= 0.05;
+  if (before !== creationStage(clamped) || wasInitial !== isInitial) creation.listeners.forEach(fn => fn());
 }
 
 /**

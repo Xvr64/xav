@@ -480,3 +480,137 @@ test('mid-journey upward gesture reverses smoothly and downward gesture resumes 
   b.advance(15000);
   assert.equal(b.win.scrollY, 4300, 'completed at Shanghai release');
 });
+
+// Production JourneyGlobe geometry: 300svh hero above (g0 = 2766), earth = 1 only 95px below g0 (dur[0] = 1.067s),
+// followed by the 7 city dwells (Doha, Paris, Jakarta, Moscow, Singapore, Pau, Shanghai) and release.
+const prodStops = {
+  y: [2766, 2861, 3480, 4120, 4760, 5400, 6040, 6680, 7200],
+  dur: [1.6 / 1.5, 1.8, 1.9, 1.85, 1.9, 1.85, 1.9, 0.7],
+  earth: 1,
+};
+
+function prodBrowser(t, initialY = 0) {
+  let now = 1000, next = 0, lockedY = null;
+  const frames = new Map(), listeners = new Map(), mediaListeners = new Set();
+  let glide = null;
+  class Element {
+    tagName = 'DIV'; scrollHeight = 0; clientHeight = 0; parentElement = null;
+    isContentEditable = false;
+    closest() { return null; }
+  }
+  const body = new Element();
+  const media = { matches: false,
+    addEventListener: (_, fn) => mediaListeners.add(fn),
+    removeEventListener: (_, fn) => mediaListeners.delete(fn) };
+  const emit = (kind, fields = {}) => {
+    const e = { target: body, defaultPrevented: false, cancelable: true,
+      preventDefault() { this.defaultPrevented = true; }, ...fields };
+    for (const fn of listeners.get(kind) ?? []) fn(e);
+    return e;
+  };
+  const win = {
+    scrollY: initialY, innerHeight: 922,
+    matchMedia: () => media,
+    scrollTo({top}) { glide = null; this.scrollY = Math.max(0, Math.round(top)); },
+    addEventListener(kind, fn) { if (!listeners.has(kind)) listeners.set(kind, new Set()); listeners.get(kind).add(fn); },
+    removeEventListener(kind, fn) { listeners.get(kind)?.delete(fn); },
+  };
+  const originals = new Map();
+  for (const [key, value] of Object.entries({ window: win, document: { body, documentElement: {clientWidth:1200} },
+    HTMLElement: Element, getComputedStyle: () => ({overflowY:'visible'}),
+    requestAnimationFrame: fn => { frames.set(++next, fn); return next; },
+    cancelAnimationFrame: id => frames.delete(id) })) {
+    originals.set(key, Object.getOwnPropertyDescriptor(globalThis, key));
+    Object.defineProperty(globalThis, key, {value, configurable:true, writable:true});
+  }
+  t.mock.method(performance, 'now', () => now);
+  const controller = mountCinematicScroll(() => prodStops, y => { lockedY = y; });
+  t.after(() => {
+    controller.destroy();
+    for (const [key, descriptor] of originals) {
+      if (descriptor) Object.defineProperty(globalThis, key, descriptor);
+      else delete globalThis[key];
+    }
+  });
+  return {
+    win, controller, emit,
+    get active() { return frames.size; },
+    get lockedY() { return lockedY; },
+    advance(ms) {
+      const end = now + ms;
+      while (now < end) {
+        now = Math.min(end, now + 16);
+        if (glide) {
+          const step = Math.abs(glide.target - win.scrollY) < 2 ? glide.target - win.scrollY : (glide.target - win.scrollY) * 0.25;
+          win.scrollY = Math.round(win.scrollY + step);
+          if (win.scrollY === glide.target) glide = null;
+          emit('scroll');
+        }
+        const queued = [...frames.values()]; frames.clear();
+        for (const fn of queued) fn(now);
+        emit('scroll');
+      }
+    },
+    wheel(delta, extra = {}) {
+      const e = emit('wheel', {deltaY:delta, deltaX:0, deltaMode:0, ...extra});
+      if (!e.defaultPrevented) { win.scrollY += delta; emit('scroll'); }
+      return e;
+    },
+    notch(delta) {
+      const e = emit('wheel', {deltaY:delta, deltaX:0, deltaMode:0});
+      if (!e.defaultPrevented) glide = { target: (glide ? glide.target : win.scrollY) + delta };
+      return e;
+    },
+  };
+}
+
+test('production geometry: native momentum gliding across section start is intercepted at Doha and never skips cities', t => {
+  const b = prodBrowser(t, 2400);
+  // Strong native smooth-scroll impulse started in #home that would coast to 3600 (past Doha and Paris)
+  b.notch(120);
+  b.advance(16);
+  // Simulate compositor inertia continuing past 2766 without further wheel events
+  b.win.scrollY = 2950;
+  b.emit('scroll');
+  assert.ok(b.active, 'onScroll intercepted native momentum crossing into section');
+  assert.equal(b.win.scrollY, 2766, 'pinned back to section start');
+  b.advance(2000);
+  assert.equal(b.win.scrollY, 2861, 'landed cleanly on Doha without coasting into Paris');
+  assert.equal(b.lockedY, 2861, 'authoritative controlledY remains locked on Doha');
+});
+
+test('production geometry: 3.5s trackpad momentum with 1-vs-2 packet coalescing and sign bounces never auto-starts cities', t => {
+  const b = prodBrowser(t, 2600);
+  // Enter from #home with a long 3.5s trackpad fling (220 frames * 16ms = 3520ms > 1067ms + 700ms)
+  b.wheel(180);
+  for (let i = 0; i < 220; i++) {
+    b.advance(16);
+    // Simulate 1-vs-2 packet coalescing (7px vs 14px) and occasional -1px sign bounce
+    const jitter = i % 17 === 0 ? -1 : (i % 2 === 0 ? 7 : 14);
+    b.wheel(jitter);
+  }
+  assert.equal(b.win.scrollY, 2861, 'remained at Doha despite 3.5s momentum with coalescing jitter');
+  assert.equal(b.active, 0);
+
+  // After a genuine pause, one deliberate downward gesture starts the 7-city journey at exact predefined speed
+  b.advance(GESTURE_GAP_MS + 20);
+  b.wheel(80);
+  assert.ok(b.active, 'deliberate gesture after pause starts city journey');
+  const journeyFrames = [];
+  const visitedCities = [];
+  for (let i = 0; i < 1000 && b.active; i++) {
+    journeyFrames.push(b.win.scrollY);
+    for (let c = 1; c <= 7; c++) {
+      if (Math.abs(b.win.scrollY - prodStops.y[c]) < 15 && visitedCities.at(-1) !== c) {
+        visitedCities.push(c);
+      }
+    }
+    b.advance(16);
+  }
+  assert.equal(b.win.scrollY, 7200, 'completed at Shanghai release');
+  assert.deepEqual(visitedCities, [1, 2, 3, 4, 5, 6, 7], 'visited all 7 cities in exact order');
+  const expectedDuration = prodStops.dur.slice(1).reduce((a, d) => a + d, 0);
+  const actualDuration = journeyFrames.length * 0.016;
+  assert.ok(Math.abs(actualDuration - expectedDuration) <= 0.05, `${actualDuration}s vs ${expectedDuration}s`);
+});
+
