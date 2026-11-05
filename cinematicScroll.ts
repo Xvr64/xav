@@ -373,9 +373,15 @@ export function mountCinematicScroll(
     if (g || (entering && (entryGesture === dir || activeStream)) || (entering && native)) {
       if (enteringFromAbove && dir > 0) {
         const entryY = window.scrollY;
-        scrollTo(st.y[0]);
-        goTo(st.earth);
-        if (play) play.entryY = Math.min(play.entryY, entryY);
+        scrollTo(st.y[st.earth]);
+        if (st.earth > 0) {
+          goTo(st.earth);
+          if (play) play.entryY = Math.min(play.entryY, entryY);
+        } else {
+          wheelLocked = true;
+          settleUntil = performance.now() + SETTLE_MS;
+          gestures.disarm?.(dir, performance.now());
+        }
       } else if (enteringFromBelow && dir < 0) {
         const entryY = window.scrollY;
         scrollTo(st.y[st.y.length - 1]);
@@ -493,8 +499,14 @@ export function mountCinematicScroll(
         entryGesture = 0;
         native = null;
         scrollTo(first);
-        goTo(st.earth);
-        if (play) play.entryY = Math.min(play.entryY, prevY);
+        if (st.earth > 0) {
+          goTo(st.earth);
+          if (play) play.entryY = Math.min(play.entryY, prevY);
+        } else {
+          wheelLocked = true;
+          settleUntil = performance.now() + SETTLE_MS;
+          gestures.disarm?.(1, performance.now());
+        }
       } else if (prevY >= last - 2 && curY < last - 2 && curY > first + 2) {
         entryGesture = 0;
         native = null;

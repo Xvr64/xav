@@ -70,16 +70,56 @@ html[data-creation="active"] [data-ocean-life] { opacity: 0; }
   animation: creation-scroll-stretch-down 2.4s cubic-bezier(0.65, 0, 0.35, 1) infinite;
 }
 
-.creation-scroll-hint--globe .creation-scroll-hint-text {
+/* Minimal animated scroll indicator integrated under Doha text */
+.globe-scroll-hint {
+  margin-top: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(6px);
+  transition: opacity 0.45s cubic-bezier(0.16, 1, 0.3, 1), transform 0.45s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.45s;
+  user-select: none;
+}
+
+.globe-scroll-hint--visible {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+
+.globe-scroll-hint-text {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 9px;
+  font-weight: 400;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
   color: var(--ink-162633, #162633);
+  opacity: 0.65;
+  line-height: 1;
+  white-space: nowrap;
 }
 
-.creation-scroll-hint--globe .creation-scroll-hint-line {
+.globe-scroll-hint-line {
+  position: relative;
+  width: 1px;
+  height: 24px;
   background: rgba(22, 38, 51, 0.18);
+  overflow: hidden;
+  margin-left: 1px;
 }
 
-.creation-scroll-hint--globe .creation-scroll-hint-line::after {
+.globe-scroll-hint-line::after {
+  content: '';
+  position: absolute;
+  inset: 0;
   background: var(--ink-162633, #162633);
+  transform: scaleY(0);
+  transform-origin: top;
+  animation: creation-scroll-stretch-down 2.4s cubic-bezier(0.65, 0, 0.35, 1) infinite;
 }
 
 @keyframes creation-scroll-stretch-down {
@@ -153,10 +193,12 @@ html[data-creation="active"] [data-ocean-life] { opacity: 0; }
 
 /* Reduced motion */
 @media (prefers-reduced-motion: reduce) {
-  .creation-scroll-hint {
+  .creation-scroll-hint,
+  .globe-scroll-hint {
     transition: none;
   }
-  .creation-scroll-hint-line::after {
+  .creation-scroll-hint-line::after,
+  .globe-scroll-hint-line::after {
     animation: none;
     transform: scaleY(0.65);
     opacity: 0.6;

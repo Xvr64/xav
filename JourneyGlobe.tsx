@@ -601,18 +601,18 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
         : null;
     if (globeIo) globeIo.observe(runway || stage);
 
-    // Two complete films: onto Doha, then the cities. These knots only pace playback; they never
-    // require input. Base pacing (city journey already 25% shorter); CINEMATIC_SPEED then scales it.
+    // Choreography knots for the 7 cities and final release. Knot 0 is Doha at g0,
+    // where the globe rests and waits for the visitor to explore.
     const cinematicStops = (): CinematicStops | null => {
       const g0 = globeScrollGeometry.start;
       if (prefersReduced || !runway || !pinned || runwayTravel <= 1 || !Number.isFinite(g0)) return null;
       const y: number[] = [g0];
       const dur: number[] = [];
-      const earth = y.length;
+      const earth = 0;
       segs.forEach((seg) => {
-        if (seg.kind !== 'dwell') return;
+        if (seg.kind !== 'dwell' || seg.i === 0) return;
         y.push(g0 + ((seg.start + seg.end) / 2) * runwayTravel);
-        dur.push(seg.i === 0 ? 1.6 : 0.75 * (2.1 + 0.9 * Math.min(1, legAngleDeg[seg.i - 1] / 80)));
+        dur.push(0.75 * (2.1 + 0.9 * Math.min(1, legAngleDeg[seg.i - 1] / 80)));
       });
       // The last city's dwell ends where the stage releases into the following section
       y.push(g0 + runwayTravel);
@@ -625,12 +625,12 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
       if (!hintEl) return;
       const st = cinematicStops();
       const y = globeScrollGeometry.controlledY ?? window.scrollY;
-      const waitingAtStart =
+      const isAtDohaWaiting =
         !prefersReduced &&
         !cinematicPlayingRef.current &&
         st !== null &&
-        Math.abs(y - st.y[st.earth]) <= 2;
-      hintEl.classList.toggle('creation-scroll-hint--visible', waitingAtStart);
+        Math.abs(y - st.y[st.earth]) <= 6;
+      hintEl.classList.toggle('globe-scroll-hint--visible', isAtDohaWaiting);
     };
     const cinematic = mountCinematicScroll(cinematicStops, (y, playing = false) => {
       globeScrollGeometry.controlledY = y;
@@ -648,7 +648,7 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
       }
       const st = cinematicStops();
       if (!st) return;
-      cinematic.goTo(st.y.length - 1 - locations.length + idx);
+      cinematic.goTo(idx);
     };
 
     const onResize = () => {
@@ -763,19 +763,21 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
               <p className="globe-period meta mt-1 text-[#162633]">
                 <PlainText text={city.period} />
               </p>
+
+              {cIdx === 0 && (
+                <div
+                  ref={scrollHintRef}
+                  className="globe-scroll-hint"
+                  data-globe-scroll-hint
+                  aria-hidden="true"
+                >
+                  <span className="globe-scroll-hint-text">Scroll once to explore</span>
+                  <div className="globe-scroll-hint-line" />
+                </div>
+              )}
             </div>
           );
         })}
-      </div>
-
-      <div
-        ref={scrollHintRef}
-        className="creation-scroll-hint creation-scroll-hint--globe"
-        data-globe-scroll-hint
-        aria-hidden="true"
-      >
-        <span className="creation-scroll-hint-text">Scroll once to explore</span>
-        <div className="creation-scroll-hint-line" />
       </div>
 
     </div>
