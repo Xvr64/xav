@@ -56,16 +56,21 @@
         background: transparent;
       }
       /* The opening begins in the dark: no pale page before its first frame */
-      html[data-creation] body, html[data-creation] .terminal-portfolio {
+      html[data-creation] body, html[data-creation] .terminal-portfolio,
+      html[data-arrival] body {
         background-color: #01030a !important;
       }
     </style>
     <script>
-      // Mirrors shouldPlayCreation (creationTimeline.ts), before the first paint.
+      // Mirrors shouldPlayCreation (creationTimeline.ts) and shouldOfferJourneys (journeyEntry.ts),
+      // before the first paint.
       try {
-        if (!matchMedia('(prefers-reduced-motion: reduce)').matches && !location.hash && scrollY <= 20 &&
+        if (!location.hash && scrollY <= 20 &&
             !performance.getEntriesByType('navigation').some(function (e) { return e.type === 'back_forward'; }) &&
-            sessionStorage.getItem('xh-creation-seen-v1') !== '1') document.documentElement.dataset.creation = 'pending';
+            sessionStorage.getItem('xh-creation-seen-v1') !== '1') {
+          document.documentElement.dataset.arrival = 'pending';
+          if (!matchMedia('(prefers-reduced-motion: reduce)').matches) document.documentElement.dataset.creation = 'pending';
+        }
       } catch (e) { /* private storage: the page's own water until the app decides */ }
     </script>
   </head>
