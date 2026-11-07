@@ -1,14 +1,23 @@
 import { beginLink, buildAtlas, type Atlas, type LinkInProgress, type Program } from './GradientASCII';
 import { loadLandDots } from './glyphcssGlobe';
 import { CREATION_SEQUENCE, CREATION_WORLDS } from './creationWorlds';
-import { CREATION_PROGRAMS, creationProgramAt } from './creationTimeline';
+import {
+  PASSAGE_END, PASSAGE_EYE_END, PASSAGE_PROGRAM, PASSAGE_RESUME,
+  creation, journeyProgramAt, journeyPrograms, journeyStart, type JourneyProgram
+} from './creationTimeline';
 
 /** How long the eye can hold with a dark pupil: its portal starts opening just after (hold 5.5 s). */
 const EYE_ONLY_UNTIL = 5.4;
-/** One program per transition: STAGE 0-4 play a world and the next through its portal, 5 the arrival. */
-const field = (stage: number, eyeOnly = false) => `#version 300 es
+const f = (n: number) => n.toFixed(1);
+/**
+ * One program per transition: STAGE 0-4 play a world and the next through its portal, 5 the arrival.
+ * The Passage's program (PASSAGE) is the eye's (STAGE 0) without the hands: its pupil opens on
+ * hyperspace instead, and the tunnel drops out of it onto the arrival's own frame at PASSAGE_RESUME.
+ */
+const field = (stage: number, eyeOnly = false, passage = false) => `#version 300 es
 #define STAGE ${stage}
 ${eyeOnly ? '#define EYE_ONLY' : ''}
+${passage ? '#define PASSAGE' : ''}
 precision highp float;
 uniform float uTime;
 uniform float uAspect;
@@ -18,7 +27,29 @@ uniform sampler2D uLand;
 in vec2 vUv;
 out vec4 outColor;
 ${CREATION_WORLDS}
-#if STAGE>=4
+#if STAGE>=4||defined(PASSAGE)
+#ifdef PASSAGE
+// Set by passageTunnel for the arrival it draws: how much further out the planet still is, and how
+// far the hyperspace stars have still to fall back to the arrival's own (both identity at the seam).
+float passageFar=1.,passageWarp=0.,passageStreak=0.;
+// The arrival's stars1, its cells stretched along their own radius into streaks while warping.
+vec3 streak1(vec2 p,float logz,float t,float r,float a,float N,float K,float par,float seed){
+ vec2 uv=vec2((a/TAU+.5)*N,(log(r)-par*logz)*K),c=floor(uv);c.x=mod(c.x,N);
+ float h=hash(c+vec2(seed*1013.,0)),h2=hash(c+vec2(77,seed*389.));
+ float along=fract(uv.y)-.5;
+ float arc=(fract(uv.x)-(.25+.5*h2))*TAU*r/N,rad=along*r/K/(1.+passageStreak);
+ float tw=.65+.35*sin(t*(1.5+4.*h2)+h2*60.);
+ // A long streak thins toward its cell's ends instead of stopping at the edge
+ float tail=mix(1.,sat(1.-4.*along*along),sat(passageStreak*.5));
+ return step(h,clamp(26.*TAU*r*r/(N*K),0.,.9))*exp(-(arc*arc+rad*rad)/.00022)*tail*(.35+.9*h2)*tw*mix(vec3(.65,.78,1),vec3(1,.85,.7),h2);
+}
+// At rest (no warp, no streak) exactly the arrival's own stars once its exit is complete.
+vec3 passageStars(vec2 p,float t){
+ float r=length(p)+.00001,a=atan(p.y,p.x),logz=-1.8+(t-60.)*.025+passageWarp;
+ vec3 s=streak1(p,logz,t,r,a,120.,8.,.22,1.)+streak1(p,logz,t,r,a,220.,14.,.45,5.);
+ return s*.45*(1.+sat(passageStreak*.25));
+}
+#endif
 // The globe's spherical coordinates for a point on or above the Earth, at this moment's longitude.
 vec2 earthUv(vec3 n,float t){
  float lon=mix(-85.,-140.,ss(62.,72.,t))*PI/180.,lat=-15.*PI/180.;
@@ -56,6 +87,10 @@ vec3 arrival(vec2 p,float t){
  float exit=ss(54.,60.,t),approach=ss(60.,68.,t),descent=ss(68.,77.,t);
  float altitude=mix(10.,4.,exit);altitude=mix(altitude,1.4,approach);
  altitude=exp(mix(log(altitude),log(.0004),descent));
+#ifdef PASSAGE
+ // From hyperspace, not the black hole: the same approach, further out (descent is still 0 here)
+ altitude=mix(4.,1.4,approach)*passageFar;
+#endif
  // The camera pitches up from the planet's centre toward its horizon as it falls
  float tilt=ss(68.5,74.,t)*1.32,ct=cos(tilt),st=sin(tilt);
  vec3 rd=normalize(vec3(p*.42,-1));rd=vec3(rd.x,rd.y*ct-rd.z*st,rd.y*st+rd.z*ct);
@@ -67,7 +102,11 @@ vec3 arrival(vec2 p,float t){
  float b=dot(ro,rd),c=dot(ro,ro)-1.,disc=b*b-c;
  vec3 color;float light=1.,far=1e6;
  if(disc<0.||b>0.){
+#ifdef PASSAGE
+   vec3 space=passageStars(p,t)*(1.-air);
+#else
    vec3 space=stars(p,-exit*1.8+(t-60.)*.025,t)*(.75-.3*exit)*(1.-air);
+#endif
    space+=vec3(.004,.009,.023);
    float miss=sqrt(max(0.,dot(ro,ro)-b*b))-1.;
    space+=exp(-max(miss,0.)*16.)*vec3(.10,.36,.80)*.7;
@@ -97,12 +136,32 @@ vec3 arrival(vec2 p,float t){
  color=mix(color,vec3(.6,.77,.9),exp(-sq((altitude-.06)/.03))*.22+exp(-sq((altitude-.012)/.006))*.22);
  return color;
 }
+#ifdef PASSAGE
+/**
+ * The Passage's star tunnel, on its own clock t (0..${f(PASSAGE_END)}). The stars stream out of
+ * the centre, accelerating as the pupil opens and stretching into streaks, then fall back to rest
+ * while the planet grows out of a point ahead; at ${f(PASSAGE_END)} this is arrival(p,${f(PASSAGE_RESUME)})
+ * exactly, the frame the arrival program picks up from.
+ */
+vec3 passageTunnel(vec2 p,float t){
+ float x=sat((t-3.)/(${f(PASSAGE_END)}-3.));
+ passageWarp=-40.*(1.-x*x*x*(x*(x*6.-15.)+10.));
+ passageStreak=6.5*16.*x*x*(1.-x)*(1.-x);
+ passageFar=exp(log(60.)*(1.-ss(13.,${f(PASSAGE_END)},t)));
+ return arrival(p,t+${f(PASSAGE_RESUME - PASSAGE_END)});
+}
+#endif
 #endif
 ${CREATION_SEQUENCE}
 void main(){
  vec2 p=(vUv-.5)*vec2(uAspect,1.)*2.;float fit=max(1.,1.45/uAspect);p*=fit;
 #if STAGE<5
+#ifdef PASSAGE
+ // Once the pupil has taken the whole screen the eye is gone: only the tunnel is left to draw
+ vec3 color=uTime<${f(PASSAGE_EYE_END)}?originalSequence(p,uTime,length(vec2(uAspect*fit,fit))*1.06):passageTunnel(p,uTime)*uPortal;
+#else
  vec3 color=originalSequence(p,uTime,length(vec2(uAspect*fit,fit))*1.06);
+#endif
  // The original exponential tone map
  outColor=vec4(clamp(1.-exp(-max(color,vec3(0))*1.6),0.,1.),1.);
 #else
@@ -181,32 +240,48 @@ export interface CreationRenderer {
   destroy(): void;
 }
 export function createCreationRenderer(gl: WebGL2RenderingContext): CreationRenderer {
-  // Compiled in playing order, without ever waiting on the GPU on the main thread: a cold Direct3D
-  // compile takes seconds, and each transition is ahead of the next by a world's length. If one is
-  // not there in time, the clock holds at the seam (canDraw). The eye-only variant runs alongside.
-  let screen:Program|null=null,eyeOnly:Program|null=null,broken=false,next=0,timer=0;
-  let linking:LinkInProgress|null=null,eyeLink:LinkInProgress|null=null;
-  let drewEyeOnly=false,handsAt=0;
-  const worlds:(Program|null)[]=Array(CREATION_PROGRAMS).fill(null);
+  // Compiled in the chosen journey's playing order (creationTimeline's journeyPrograms), without
+  // ever waiting on the GPU on the main thread: a cold Direct3D compile takes seconds, and each
+  // transition is ahead of the next by a world's length. If one is not there in time, the clock
+  // holds at the seam (canDraw). The eye-only variant runs alongside. Programs a journey never
+  // draws are never compiled; while the visitor is still choosing, the likeliest go first.
+  type Key=JourneyProgram;
+  let screen:Program|null=null,screenLink:LinkInProgress|null=null,broken=false,timer=0;
+  let main:{key:Key;link:LinkInProgress}|null=null,eyeLink:LinkInProgress|null=null;
+  let drewEyeOnly=false;
+  const programs=new Map<Key,Program>(),linkedAt=new Map<Key,number>();
+  const source=(key:Key)=>key==='eye'?field(0,true):key===PASSAGE_PROGRAM?field(0,true,true):field(key);
+  /** An eye can open on its eye-only variant (pupil dark) while its full program compiles. */
+  const opensOnEye=(program:number)=>program===0||program===PASSAGE_PROGRAM;
+  const drawable=(t:number)=>{
+    if(t>=81)return true;
+    const program=journeyProgramAt(t);
+    return programs.has(program)||(opensOnEye(program)&&t<EYE_ONLY_UNTIL&&programs.has('eye'));
+  };
   let compiled:()=>void,refuse:(error:Error)=>void;
   const shadersReady=new Promise<void>((resolve,reject)=>{compiled=resolve;refuse=reject;});
   const pump=()=>{
+    timer=0;
     if(disposed)return;
-    if(!linking&&next<=CREATION_PROGRAMS){
-      linking=beginLink(gl,next===0?SCREEN:field(next-1));
-      if(next===1)eyeLink=beginLink(gl,field(0,true));
+    if(!screen&&!screenLink)screenLink=beginLink(gl,SCREEN);
+    const order=journeyPrograms();
+    if(screen){
+      if(!eyeLink&&order.includes('eye')&&!programs.has('eye'))eyeLink=beginLink(gl,source('eye'));
+      const key=main?undefined:order.find(k=>k!=='eye'&&!programs.has(k));
+      if(key!==undefined)main={key,link:beginLink(gl,source(key))};
     }
-    const eye=eyeLink?.poll(),result=linking?.poll();
-    if(eye===null||result===null){broken=true;refuse(new Error('Creation shader compilation failed'));return;}
-    if(eye){eyeOnly=eye;eyeLink=null;}
-    if(result){
-      if(next===0)screen=result;else worlds[next-1]=result;
-      if(next===1)handsAt=performance.now();
-      linking=null;next++;
-    }
-    if(screen&&(eyeOnly||worlds[0]))compiled();
-    if(linking||eyeLink||next<=CREATION_PROGRAMS)timer=window.setTimeout(pump,result?0:50);
+    const s=screenLink?.poll(),eye=eyeLink?.poll(),result=main?.link.poll();
+    if(s===null||eye===null||result===null){broken=true;refuse(new Error('Creation shader compilation failed'));return;}
+    const now=performance.now();
+    if(s){screen=s;screenLink=null;}
+    if(eye){programs.set('eye',eye);linkedAt.set('eye',now);eyeLink=null;}
+    if(result&&main){programs.set(main.key,result);linkedAt.set(main.key,now);main=null;}
+    if(screen&&drawable(journeyStart()))compiled();
+    // Idle once the route is compiled; a journey chosen later wakes it (see wake)
+    if(screenLink||eyeLink||main||order.some(k=>!programs.has(k)))timer=window.setTimeout(pump,s||eye||result?0:50);
   };
+  const wake=()=>{if(!timer&&!disposed&&!broken)pump();};
+  creation.listeners.add(wake);
   const atlas=buildAtlas(gl, ' .\'\x60^",:;Il!i><~+_-?][}{1)(|/tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@$', "'IBM Plex Mono', monospace");
   const texture=gl.createTexture()!,landTexture=gl.createTexture()!,fbo=gl.createFramebuffer()!;
   for(const tex of [texture,landTexture]){
@@ -232,12 +307,17 @@ export function createCreationRenderer(gl: WebGL2RenderingContext): CreationRend
     gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,map);
   });
   return {ready:Promise.all([land,shadersReady]).then(()=>undefined),
-    canDraw:t=>t>=81||!!worlds[creationProgramAt(t)]||(t<EYE_ONLY_UNTIL&&!!eyeOnly),
+    canDraw:drawable,
     failed:()=>broken,
     draw(t,width,height,water,ink,native,lattice){
-      const program=creationProgramAt(t);
-      const world=worlds[program]??(program===0?eyeOnly:null);
-      if(!world||!screen)return;
+      const program=journeyProgramAt(t);
+      const eyeOnly=programs.get('eye');
+      const world=programs.get(program)??(opensOnEye(program)?eyeOnly:undefined);
+      if(!world||!screen){
+        // A journey's first program still compiling: hold the dark of space, never the water behind
+        if(t<76){gl.clearColor(.003,.006,.012,1);gl.clear(gl.COLOR_BUFFER_BIT);}
+        return;
+      }
       if(world===eyeOnly)drewEyeOnly=true;
       // The field keeps the finest grid; only the glyph cells grow, continuously, from the anchor,
       // closing on the ocean's lattice. Eased, so the final cell size arrives at rest.
@@ -249,7 +329,7 @@ export function createCreationRenderer(gl: WebGL2RenderingContext): CreationRend
       gl.bindFramebuffer(gl.FRAMEBUFFER,fbo);gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,texture,0);
       gl.disable(gl.BLEND);gl.viewport(0,0,c,r);gl.useProgram(world.program);
       const u=world.uniforms;gl.uniform1f(u.uTime,t);gl.uniform1f(u.uAspect,width/height);
-      gl.uniform1f(u.uPortal,drewEyeOnly?Math.min(1,(performance.now()-handsAt)/800):1);
+      gl.uniform1f(u.uPortal,drewEyeOnly?Math.min(1,(performance.now()-(linkedAt.get(program)??0))/800):1);
       gl.uniform3fv(u.uWater,water.subarray(0,3));gl.uniform3fv(u.uInk,ink.subarray(0,3));
       gl.activeTexture(gl.TEXTURE2);gl.bindTexture(gl.TEXTURE_2D,landTexture);gl.uniform1i(u.uLand,2);
       gl.drawArrays(gl.TRIANGLES,0,3);
@@ -265,9 +345,9 @@ export function createCreationRenderer(gl: WebGL2RenderingContext): CreationRend
       gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);gl.drawArrays(gl.TRIANGLES,0,3);gl.disable(gl.BLEND);
     },
     destroy(){
-      disposed=true;clearTimeout(timer);linking?.cancel();
-      eyeLink?.cancel();
-      for(const p of [screen,eyeOnly,...worlds])if(p)gl.deleteProgram(p.program);
+      disposed=true;clearTimeout(timer);creation.listeners.delete(wake);
+      screenLink?.cancel();main?.link.cancel();eyeLink?.cancel();
+      for(const p of [screen,...programs.values()])if(p)gl.deleteProgram(p.program);
       gl.deleteTexture(texture);gl.deleteTexture(landTexture);gl.deleteTexture(atlas.texture);gl.deleteFramebuffer(fbo);
     }
   };

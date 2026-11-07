@@ -1,6 +1,6 @@
 import { buildAtlas, link, type Atlas } from './GradientASCII';
 import { globeScrollGeometry } from './abyssPalette';
-import { CREATION_DURATION, OCEAN_HANDOFF_AT, creation, advanceCreation, finishCreation } from './creationTimeline';
+import { OCEAN_HANDOFF_AT, creation, advanceCreation, creationLookahead, finishCreation } from './creationTimeline';
 import type { CreationRenderer } from './creationRenderer';
 import {
   applyWaterColor,
@@ -356,8 +356,8 @@ export function createAsciiOcean(canvas: HTMLCanvasElement): AsciiOcean {
       if (openingWait > 25) finishCreation('loading-timeout');
     }
     if (opening?.failed()) finishCreation('renderer-unavailable');
-    const lookahead = creation.target >= creation.time ? Math.min(CREATION_DURATION, creation.time + 0.08) : Math.max(0, creation.time - 0.08);
-    creation.held = !!opening && !opening.canDraw(lookahead);
+    // A moment ahead along the chosen journey's own route, so a seam between its scenes is checked too
+    creation.held = !!opening && !opening.canDraw(creationLookahead(0.08));
     const prevCreationTime = creation.time;
     advanceCreation(dt);
     const creationMoved = creation.active && Math.abs(creation.time - prevCreationTime) > 1e-5;

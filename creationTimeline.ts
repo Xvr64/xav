@@ -8,6 +8,7 @@ export const CREATION_STAGES = [
 export const CREATION_DURATION = 91;
 export const OCEAN_HANDOFF_AT = 81;
 export const INTRO_STORAGE_KEY = 'xh-creation-seen-v1';
+export const JOURNEY_STORAGE_KEY = 'xh-journey-v1';
 
 export type CreationPlaybackState = 'PAUSED' | 'PLAYING_FORWARD' | 'PLAYING_REVERSE' | 'COMPLETED';
 
@@ -67,7 +68,7 @@ export function creationStage(t: number) {
 }
 /** Normalized timeline progress in [0, 1]. */
 export function creationProgress(t = creation.time) {
-  return Math.max(0, Math.min(1, t / CREATION_DURATION));
+  return Math.max(0, Math.min(1, clockAtScene(t) / journeyLength()));
 }
 /** The renderer's programs: one per original world's transition into the next, then the arrival. */
 export const CREATION_PROGRAMS = 6;
@@ -90,6 +91,123 @@ export function arrivalOffset(t: number, whale: number, forward: readonly [numbe
   const behind = left * (2.6 + whale * 0.4);
   return [-forward[0] * behind, -forward[1] * behind - left * 0.5, -forward[2] * behind - left * (2.5 + whale * 0.8)];
 }
+/* ------------------------------------------------------------------------------------------------
+ * JOURNEYS — three routes through the one clock.
+ *
+ * Every consumer (renderer, whales, hero, ocean) still reads creation.time as the opening's own
+ * scene time, 0..91. A journey is an ordered list of spans of that scene time, played back to back
+ * on its own playhead (the journey clock). The Odyssey is the single span 0..91, so its clock IS
+ * the scene time and it plays exactly as before. Reversing walks the same spans backwards, so a
+ * journey never enters a scene it left out. Speed still comes from the scene time
+ * (targetPlaybackSpeed), so every journey is fast up to the hero and natural through it.
+ * ---------------------------------------------------------------------------------------------- */
+export type JourneyId = 'direct' | 'passage' | 'odyssey';
+export const JOURNEY_IDS: readonly JourneyId[] = ['direct', 'passage', 'odyssey'];
+/** The renderer's program for the Passage: the eye, its pupil opening on hyperspace, then Earth. */
+export const PASSAGE_PROGRAM = 6;
+/** The Passage's eye keeps the original eye's timing: its pupil has swallowed the screen by here. */
+export const PASSAGE_EYE_END = 12;
+/** The Passage's tunnel lands exactly on the arrival's own frame at PASSAGE_RESUME, already approaching. */
+export const PASSAGE_END = 22;
+export const PASSAGE_RESUME = 62;
+/** Direct opens on the planet already in view (altitude 4), the approach about to begin. */
+export const DIRECT_START = 60;
+
+/** A span of scene time; `program` overrides the renderer's program for scene times inside it. */
+export interface JourneySegment { readonly from: number; readonly to: number; readonly program?: number }
+/** 'eye' is the eye-only variant: the quick first frame of an eye while its full program compiles. */
+export type JourneyProgram = number | 'eye';
+export interface JourneyRoute {
+  readonly id: JourneyId;
+  readonly segments: readonly JourneySegment[];
+  /** The renderer programs this route draws, in the order they are first needed. */
+  readonly programs: readonly JourneyProgram[];
+}
+export const JOURNEY_ROUTES: Readonly<Record<JourneyId, JourneyRoute>> = {
+  // EARTH -> OCEAN -> HERO
+  direct: { id: 'direct', segments: [{ from: DIRECT_START, to: CREATION_DURATION }], programs: [5] },
+  // EYE -> STAR TUNNEL -> EARTH -> OCEAN -> HERO
+  passage: {
+    id: 'passage',
+    segments: [{ from: 0, to: PASSAGE_END, program: PASSAGE_PROGRAM }, { from: PASSAGE_RESUME, to: CREATION_DURATION }],
+    programs: ['eye', PASSAGE_PROGRAM, 5]
+  },
+  // The complete original opening
+  odyssey: { id: 'odyssey', segments: [{ from: 0, to: CREATION_DURATION }], programs: ['eye', 0, 1, 2, 3, 4, 5] }
+};
+/** While the visitor is still choosing: the recommended route first, then the rest of the Odyssey. */
+const CHOOSING_PROGRAMS: readonly JourneyProgram[] = ['eye', PASSAGE_PROGRAM, 5, 0, 1, 2, 3, 4];
+
+const isJourneyId = (v: unknown): v is JourneyId => JOURNEY_IDS.includes(v as JourneyId);
+function storedJourney(): JourneyId | null {
+  try {
+    const v = typeof sessionStorage === 'undefined' ? null : sessionStorage.getItem(JOURNEY_STORAGE_KEY);
+    return isJourneyId(v) ? v : null;
+  } catch { return null; }
+}
+
+/** The route being played; with no journey chosen (QA, an opening without the arrival), the Odyssey. */
+export function journeyRoute(id: JourneyId | null = creation.journey): JourneyRoute {
+  return JOURNEY_ROUTES[id ?? 'odyssey'];
+}
+export function journeyLength(route = journeyRoute()) {
+  return route.segments.reduce((sum, g) => sum + g.to - g.from, 0);
+}
+export function journeyStart(route = journeyRoute()) {
+  return route.segments[0].from;
+}
+/** Scene time at a point of the journey clock. A seam belongs to the span after it. */
+export function sceneAtClock(clock: number, route = journeyRoute()) {
+  let c = Math.max(0, clock);
+  const segments = route.segments;
+  for (let i = 0; i < segments.length; i++) {
+    const g = segments[i], span = g.to - g.from;
+    if (c < span || i === segments.length - 1) return Math.min(g.to, g.from + c);
+    c -= span;
+  }
+  return CREATION_DURATION;
+}
+/** The journey clock at a scene time; a scene the route leaves out reads as its nearest edge. */
+export function clockAtScene(t: number, route = journeyRoute()) {
+  let offset = 0, best = 0, bestDistance = Infinity;
+  for (const g of route.segments) {
+    if (t >= g.from && t <= g.to) return offset + t - g.from;
+    const edge = t < g.from ? g.from : g.to;
+    if (Math.abs(t - edge) < bestDistance) { bestDistance = Math.abs(t - edge); best = offset + edge - g.from; }
+    offset += g.to - g.from;
+  }
+  return best;
+}
+/** Which renderer program draws scene time `t` on this route. */
+export function journeyProgramAt(t: number, route = journeyRoute()) {
+  for (const g of route.segments) if (g.program !== undefined && t >= g.from && t <= g.to) return g.program;
+  return creationProgramAt(t);
+}
+export type JourneyStage = ReturnType<typeof creationStage> | 'STAR_TUNNEL';
+/** The stage on screen, by the route: the Passage's tunnel is its own. */
+export function journeyStage(t: number, route = journeyRoute()): JourneyStage {
+  if (journeyProgramAt(t, route) === PASSAGE_PROGRAM) return t < PASSAGE_EYE_END ? 'EYE' : 'STAR_TUNNEL';
+  return creationStage(t);
+}
+/** Programs the renderer should compile, in order. */
+export function journeyPrograms(): readonly JourneyProgram[] {
+  return creation.choosing ? CHOOSING_PROGRAMS : journeyRoute().programs;
+}
+/** The journey's playhead. */
+export function journeyClock(t = creation.time) {
+  return clockAtScene(t);
+}
+/** Resting on the chosen journey's first frame: where "Scroll once to enter" shows. */
+export function atJourneyStart() {
+  return creation.active && creation.state === 'PAUSED' && journeyClock() <= 0.05;
+}
+/** Where playback will be in a moment, along the route (for the compiling-ahead check). */
+export function creationLookahead(span = 0.08) {
+  const route = journeyRoute(), clock = clockAtScene(creation.time, route);
+  const ahead = creation.target >= creation.time ? clock + span : clock - span;
+  return sceneAtClock(Math.max(0, Math.min(journeyLength(route), ahead)), route);
+}
+
 export function shouldPlayCreation() {
   if (typeof window === 'undefined') return false;
   if ((import.meta as any).env?.DEV && new URLSearchParams(location.search).has('creationqa')) return true;
@@ -107,6 +225,10 @@ export const creation = {
   rate: 0,
   ambient: 0,
   reason: '',
+  /** The chosen journey; null plays the full opening (the Odyssey's route). */
+  journey: storedJourney() as JourneyId | null,
+  /** The arrival is still open: no journey yet, so the renderer compiles the likeliest first. */
+  choosing: false,
   /** The next transition's shader is still compiling: the clock waits at the seam. */
   held: false,
   /** How far the hero has woken, 0 to 1, for the layers that fade in with it. */
@@ -125,20 +247,40 @@ export function syncHeroWake(time = creation.time) {
 }
 
 export function seekCreation(t: number) {
-  const clamped = Math.max(0, Math.min(CREATION_DURATION, Number.isFinite(t) ? t : 0));
-  const before = creationStage(creation.time);
-  const wasInitial = creation.state === 'PAUSED' && creation.time <= 0.05;
+  const route = journeyRoute();
+  // Only scenes on the chosen route can be shown: anything else lands on its nearest edge
+  const clamped = sceneAtClock(clockAtScene(Math.max(0, Math.min(CREATION_DURATION, Number.isFinite(t) ? t : 0)), route), route);
+  const before = journeyStage(creation.time, route);
+  const wasInitial = creation.state === 'PAUSED' && clockAtScene(creation.time, route) <= 0.05;
   creation.time = clamped;
   creation.rate = 0;
-  if (clamped === 0) {
+  if (clockAtScene(clamped, route) === 0) {
     creation.state = 'PAUSED';
-    creation.target = 0;
+    creation.target = clamped;
   } else if (creation.state === 'PLAYING_FORWARD') creation.target = CREATION_DURATION;
-  else if (creation.state === 'PLAYING_REVERSE') creation.target = 0;
+  else if (creation.state === 'PLAYING_REVERSE') creation.target = journeyStart(route);
   else creation.target = clamped;
   syncHeroWake(clamped);
-  const isInitial = creation.state === 'PAUSED' && creation.time <= 0.05;
-  if (before !== creationStage(clamped) || wasInitial !== isInitial) creation.listeners.forEach(fn => fn());
+  const isInitial = creation.state === 'PAUSED' && clockAtScene(creation.time, route) <= 0.05;
+  if (before !== journeyStage(clamped, route) || wasInitial !== isInitial) creation.listeners.forEach(fn => fn());
+}
+
+/**
+ * Called once, when the visitor picks a journey. The opening has not moved yet (the arrival held
+ * every gesture), so the journey simply decides its first frame; the scroll-once cue stays.
+ */
+export function setCreationJourney(id: JourneyId) {
+  creation.journey = id;
+  creation.choosing = false;
+  try { sessionStorage.setItem(JOURNEY_STORAGE_KEY, id); } catch { /* private storage */ }
+  const route = journeyRoute();
+  creation.rate = 0;
+  if (creation.state === 'PAUSED' || creation.state === 'COMPLETED') {
+    creation.time = creation.state === 'COMPLETED' ? CREATION_DURATION : journeyStart(route);
+    creation.target = creation.time;
+  } else creation.time = sceneAtClock(clockAtScene(creation.time, route), route);
+  syncHeroWake(creation.time);
+  creation.listeners.forEach(fn => fn());
 }
 
 /**
@@ -156,10 +298,10 @@ export function triggerCreationGesture(dir: 1 | -1, source: 'wheel' | 'touch' | 
     creation.listeners.forEach(fn => fn());
   } else if (dir < 0) {
     if (creation.state === 'PLAYING_REVERSE' && !creation.paused) return;
-    if (creation.time <= 0.001) return;
+    if (journeyClock() <= 0.001) return;
     creation.paused = false;
     creation.state = 'PLAYING_REVERSE';
-    creation.target = 0;
+    creation.target = journeyStart();
     creation.listeners.forEach(fn => fn());
   }
 }
@@ -178,7 +320,7 @@ export function reopenCreationInReverse() {
   creation.active = true;
   creation.state = 'PLAYING_REVERSE';
   creation.time = CREATION_DURATION;
-  creation.target = 0;
+  creation.target = journeyStart();
   creation.rate = 0;
   creation.paused = false;
   creation.reason = '';
@@ -234,22 +376,26 @@ export function advanceCreation(dt: number) {
 
   if (Math.abs(creation.rate) < 1e-6) return;
 
-  const before = creationStage(creation.time);
-  creation.time = Math.max(0, Math.min(CREATION_DURATION, creation.time + creation.rate * stepDt));
+  // The playhead moves along the chosen route and the scene follows it (identity for the Odyssey)
+  const route = journeyRoute();
+  const length = journeyLength(route);
+  const before = journeyStage(creation.time, route);
+  const clock = Math.max(0, Math.min(length, clockAtScene(creation.time, route) + creation.rate * stepDt));
+  creation.time = sceneAtClock(clock, route);
   syncHeroWake(creation.time);
 
-  if (creation.state === 'PLAYING_FORWARD' && creation.time >= CREATION_DURATION - 0.015) {
+  if (creation.state === 'PLAYING_FORWARD' && clock >= length - 0.015) {
     creation.time = CREATION_DURATION;
     creation.rate = 0;
     creation.state = 'COMPLETED';
     finishCreation('complete');
-  } else if (creation.state === 'PLAYING_REVERSE' && creation.time <= 0.015) {
-    creation.time = 0;
+  } else if (creation.state === 'PLAYING_REVERSE' && clock <= 0.015) {
+    creation.time = journeyStart(route);
     creation.rate = 0;
     creation.state = 'PAUSED';
-    creation.target = 0;
+    creation.target = creation.time;
     creation.listeners.forEach(fn => fn());
-  } else if (before !== creationStage(creation.time)) {
+  } else if (before !== journeyStage(creation.time, route)) {
     creation.listeners.forEach(fn => fn());
   }
 }

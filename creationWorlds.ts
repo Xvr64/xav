@@ -195,7 +195,10 @@ export const CREATION_SEQUENCE = `
 // pupil dark, while the full program compiles alongside; the hands then fade up inside the pupil.
 uniform float uPortal;
 vec3 thisWorld(vec2 p,float t,float pt,float zoom){return eye(p,t,pt);}
-#ifdef EYE_ONLY
+#if defined(PASSAGE)
+// The Passage: no hands in this pupil, the star tunnel instead (creationRenderer's passageTunnel)
+vec3 nextWorld(vec2 p,float t,float pt,float zoom){return passageTunnel(p,t)*uPortal;}
+#elif defined(EYE_ONLY)
 vec3 nextWorld(vec2 p,float t,float pt,float zoom){return vec3(0);}
 #else
 vec3 nextWorld(vec2 p,float t,float pt,float zoom){return creationHands(p,t,pt,zoom)*uPortal;}

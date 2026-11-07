@@ -3,14 +3,19 @@ import {
   CREATION_DURATION,
   CREATION_STAGES,
   OCEAN_HANDOFF_AT,
+  atJourneyStart,
   creation,
   creationProgress,
   creationStage,
   finishCreation,
+  journeyClock,
+  journeyRoute,
+  journeyStage,
   reopenCreationInReverse,
-  scrubCreation,
   seekCreation,
-  triggerCreationGesture
+  setCreationJourney,
+  triggerCreationGesture,
+  type JourneyId
 } from './creationTimeline';
 import { createWheelGestures } from './cinematicScroll';
 import './creationIntro.css';
@@ -229,9 +234,12 @@ export function CreationIntro() {
         time: creation.time,
         target: creation.target,
         progress: creationProgress(),
-        stage: creationStage(creation.time),
+        stage: journeyStage(creation.time),
+        journey: journeyRoute().id,
+        clock: journeyClock(),
         reason: creation.reason
       }),
+      journey: (id: JourneyId) => setCreationJourney(id),
       seek: (t: number) => {
         seekCreation(Math.max(0, Math.min(CREATION_DURATION - 0.01, t)));
         creation.listeners.forEach(fn => fn());
@@ -250,7 +258,8 @@ export function CreationIntro() {
   }, []);
   if (!creation.active) return fading ? <div className="creation-exit" aria-hidden="true" onAnimationEnd={() => setFading(false)} /> : null;
   const stage = creationStage(creation.time);
-  const showHint = creation.active && creation.state === 'PAUSED' && creation.time <= 0.05;
+  // On the chosen journey's own first frame: the eye, or the Earth for Direct
+  const showHint = atJourneyStart();
   return <div className="creation-controls" data-water={stage === 'OCEAN_ENTRY' || stage === 'WHALE_HANDOFF' ? '' : undefined} role="dialog" aria-modal="true" aria-label="Intro controls">
     <div className="creation-actions">
       <button onClick={() => {

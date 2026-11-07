@@ -1,18 +1,18 @@
-import { INTRO_STORAGE_KEY } from './creationTimeline.ts';
+import { INTRO_STORAGE_KEY, JOURNEY_STORAGE_KEY, creation, setCreationJourney, type JourneyId } from './creationTimeline.ts';
 
 /**
  * THE ARRIVAL — three ways into the same story.
  *
- * The arrival sits in front of the existing site and decides nothing about it yet: every journey
- * enters through enterJourney → launchExistingExperience, which hands the page back exactly as it
- * was, with the opening still waiting at its first frame for its own "scroll once" gesture.
- *
- * Reserved for later, when each journey gets its own opening (none of this exists yet):
- *   direct   straight to the CV hero and "A Journey Without Horizon", past the cinematics
- *   passage  a starfield approach to Earth, down through the sea into the whales and the CV
- *   odyssey  the full Eye of Creation and cosmos, plus an ASCII-to-photograph materialisation
+ * The arrival sits in front of the opening. Every journey enters through enterJourney, which
+ * hands the opening its route (creationTimeline's JOURNEY_ROUTES) and steps aside; the opening
+ * then waits at that route's first frame for its own "scroll once" gesture:
+ *   direct   EARTH -> OCEAN -> CV HERO
+ *   passage  EYE -> STAR TUNNEL -> EARTH -> OCEAN -> CV HERO (recommended)
+ *   odyssey  the complete Eye of Creation opening, unchanged
+ * One clock, one renderer, one hero: the journeys differ only in the scenes they pass through.
  */
-export type JourneyId = 'direct' | 'passage' | 'odyssey';
+export type { JourneyId };
+export { JOURNEY_STORAGE_KEY };
 
 export interface Journey {
   id: JourneyId;
@@ -29,7 +29,6 @@ export const JOURNEYS: readonly Journey[] = [
 ];
 
 export const RECOMMENDED_JOURNEY: JourneyId = 'passage';
-export const JOURNEY_STORAGE_KEY = 'xh-journey-v1';
 
 /**
  * Offered on a fresh arrival at the top of the page: the same conditions as the opening
@@ -55,6 +54,8 @@ export const arrival = {
   /** The arrival's own keyboard navigation, fed by the gate (see installArrivalGate). */
   onKey: null as ((key: string) => void) | null
 };
+// While the arrival is open the renderer compiles the likeliest journey's programs first
+creation.choosing = arrival.open;
 
 /**
  * Keys the opening's controller would read (forward/back, Home/End, Escape to skip) are kept
@@ -101,15 +102,16 @@ export function installArrivalGate() {
 export function enterJourney(id: JourneyId) {
   if (!arrival.open) return;
   arrival.selected = id;
-  try { sessionStorage.setItem(JOURNEY_STORAGE_KEY, id); } catch { /* private storage */ }
-  launchExistingExperience();
+  // The opening takes the journey's route (and records it, so Skip intro can reverse back into it)
+  setCreationJourney(id);
+  launchJourney();
 }
 
 /**
- * Today's only experience: the site as it already is. The arrival stops holding input and steps
- * aside; the opening, its timing and every scroll controller carry on untouched.
+ * The arrival stops holding input and steps aside; the opening, already set on the chosen route,
+ * waits on its first frame, and every scroll controller carries on untouched.
  */
-function launchExistingExperience() {
+function launchJourney() {
   arrival.open = false;
   releaseGate?.();
   arrival.listeners.forEach(fn => fn());
