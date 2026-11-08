@@ -3,6 +3,7 @@ import {
   CREATION_DURATION,
   CREATION_STAGES,
   OCEAN_HANDOFF_AT,
+  HERO_RELEASE_AT,
   atJourneyStart,
   creation,
   creationProgress,
@@ -45,10 +46,23 @@ export function CreationIntro() {
     // Set on the layers themselves: a custom property on <html> would restyle the whole document
     // every frame of the fade. Only the compositor has work to do this way.
     const layers = [...document.querySelectorAll<HTMLElement>('main, nav, [aria-label="Site actions"], [data-hero-current], [data-ocean-life]')];
+    // Once the title is legible the visitor is never held: the page is theirs again while the last
+    // second of the arrival (whales settling, the camera coming to rest) finishes by itself.
+    let released = false;
+    const release = () => {
+      if (released) return;
+      released = true;
+      delete root.dataset.creation;
+      root.style.overflow = previousOverflow; root.style.scrollbarGutter = previousGutter;
+      content.forEach((el, i) => { el.inert = previousInert[i]; });
+      const controls = document.querySelector<HTMLElement>('.creation-controls');
+      if (controls) controls.style.visibility = 'hidden';
+    };
     creation.onHero = woken => {
       layers.forEach(el => { el.style.opacity = String(woken); });
       const controls = document.querySelector<HTMLElement>('.creation-controls');
       if (controls) controls.style.opacity = String(1 - woken);
+      if (woken >= HERO_RELEASE_AT && creation.state === 'PLAYING_FORWARD') release();
     };
     const content = [...document.querySelectorAll<HTMLElement>('main, nav, [data-section-index], [aria-label="Site actions"]')];
     const previousInert = content.map(el => el.inert);
@@ -58,9 +72,9 @@ export function CreationIntro() {
     const gestures = createWheelGestures();
     let lastWheelAt = -Infinity;
     let lastWheelMag = 0;
-    const block = (event: Event) => { event.preventDefault(); event.stopImmediatePropagation(); };
+    const block = (event: Event) => { if (released) return; event.preventDefault(); event.stopImmediatePropagation(); };
     const onWheel = (event: WheelEvent) => {
-      if (event.ctrlKey) return;
+      if (event.ctrlKey || released) return;
       block(event);
       const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? Math.min(window.innerHeight, 360) : 1;
       const delta = event.deltaY * unit;
@@ -87,7 +101,7 @@ export function CreationIntro() {
       touchFiredDir = 0;
     };
     const onTouchMove = (event: TouchEvent) => {
-      if (event.target instanceof HTMLButtonElement) return;
+      if (released || event.target instanceof HTMLButtonElement) return;
       block(event);
       if (event.touches.length !== 1) return;
       const y = event.touches[0].clientY;
@@ -111,6 +125,7 @@ export function CreationIntro() {
     };
 
     const key = (event: KeyboardEvent) => {
+      if (released) return;
       if (event.key === 'Escape') { block(event); skipIntro(); return; }
       if (event.key === 'Tab') {
         const buttons = [...document.querySelectorAll<HTMLButtonElement>('.creation-controls button')];

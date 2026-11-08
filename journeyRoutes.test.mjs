@@ -96,9 +96,9 @@ test('Direct is the shortest, the Passage between, the Odyssey the full length',
   const [direct, passage, odyssey] = ['direct', 'passage', 'odyssey'].map(j => play(j).seconds);
   assert.ok(direct < passage && passage < odyssey, `${direct} ${passage} ${odyssey}`);
   // Their openings keep their fast pace; each then shares the same slow arrival (~20 s from the surface)
-  assert.ok(direct > 13.5 && direct < 17, `Direct ${direct}s`);
-  assert.ok(passage > 19 && passage < 23, `Passage ${passage}s`);
-  assert.ok(odyssey > 30 && odyssey < 35, `Odyssey ${odyssey}s`);
+  assert.ok(direct > 11.5 && direct < 14.5, `Direct ${direct}s`);
+  assert.ok(passage > 17 && passage < 20.5, `Passage ${passage}s`);
+  assert.ok(odyssey > 28.5 && odyssey < 32, `Odyssey ${odyssey}s`);
   assert.ok(Math.abs((passage - direct) - 5.7) < 0.6 && Math.abs((odyssey - direct) - 17.1) < 0.6, 'the openings before the shared arrival are unchanged');
 });
 

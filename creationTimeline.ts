@@ -31,7 +31,7 @@ export type CreationPlaybackState = 'PAUSED' | 'PLAYING_FORWARD' | 'PLAYING_REVE
  */
 export const INTRO_FAST_SPEED = 3.5;
 export const ARRIVAL_SPEED = 1.6;
-export const HERO_REVEAL_SPEED = 1.3;
+export const HERO_REVEAL_SPEED = 2;
 /** The clock begins to ease as the descent reaches the waterline (the surface passes 76..81) */
 export const DECEL_START = 75;
 export const ARRIVAL_STEADY_FROM = 77;
@@ -93,6 +93,8 @@ export const HERO_WAKES_AT = 83.6;
 export const HERO_DONE_AT = 90;
 /** The hero's text decode begins as the fade takes hold (about 10 % woken). */
 export const HERO_TEXT_AT = HERO_WAKES_AT + 0.4;
+/** From here the visitor is released: the title is up, the page scrolls, and the arrival finishes on its own. */
+export const HERO_RELEASE_AT = 0.45;
 /** How much of the Hero is awake at scene time t: 0 before HERO_WAKES_AT, 1 from HERO_DONE_AT. */
 export const heroWoken = (t: number) => Math.sin((Math.max(0, Math.min(1, (t - HERO_WAKES_AT) / (HERO_DONE_AT - HERO_WAKES_AT))) * Math.PI) / 2);
 /** The camera's slow approach runs through the whole arrival, so the last seconds still move. */

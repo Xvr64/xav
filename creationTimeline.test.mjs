@@ -63,9 +63,9 @@ test('fast journey, then one continuous arrival: no crawl, no plateau of dead ti
   assert.ok(INTRO_FAST_SPEED > s76 && s76 > s765 && s765 > ARRIVAL_SPEED, 'eases down through the surface');
   assert.equal(targetPlaybackSpeed(ARRIVAL_STEADY_FROM), ARRIVAL_SPEED);
   assert.equal(targetPlaybackSpeed(HERO_EASE_FROM), ARRIVAL_SPEED);
-  // Then settles gently for the whales and the Hero
+  // Then glides on, briskly, for the whales and the Hero (the Hero does not linger)
   const mid = targetPlaybackSpeed((HERO_EASE_FROM + HERO_EASE_TO) / 2);
-  assert.ok(ARRIVAL_SPEED > mid && mid > HERO_REVEAL_SPEED);
+  assert.ok(mid > Math.min(ARRIVAL_SPEED, HERO_REVEAL_SPEED) && mid < Math.max(ARRIVAL_SPEED, HERO_REVEAL_SPEED));
   assert.equal(targetPlaybackSpeed(HERO_EASE_TO), HERO_REVEAL_SPEED);
   assert.equal(targetPlaybackSpeed(CREATION_DURATION), HERO_REVEAL_SPEED);
   // Never slow motion: the arrival is never slower than the original 1x, and never crawls
@@ -74,10 +74,10 @@ test('fast journey, then one continuous arrival: no crawl, no plateau of dead ti
   let worst = 0;
   for (let t = 0; t < CREATION_DURATION; t += 0.01) worst = Math.max(worst, Math.abs(targetPlaybackSpeed(t + 0.01) - targetPlaybackSpeed(t)) / 0.01);
   assert.ok(worst < 2, `speed is continuous (steepest slope ${worst.toFixed(2)} per unit)`);
-  // The whole arrival, surface to finished Hero, takes 10-12 s of real time
+  // The whole arrival, surface to finished Hero, takes about 8 s of real time
   let seconds = 0;
   for (let t = 76; t < CREATION_DURATION; t += 0.001) seconds += 0.001 / targetPlaybackSpeed(t);
-  assert.ok(seconds > 9.8 && seconds < 12, `arrival ${seconds.toFixed(1)} s`);
+  assert.ok(seconds > 7.5 && seconds < 9.5, `arrival ${seconds.toFixed(1)} s`);
   assert.ok(HERO_TEXT_AT > HERO_WAKES_AT && HERO_TEXT_AT < HERO_DONE_AT);
 });
 
