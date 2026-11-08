@@ -2,6 +2,9 @@ import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { JOURNEYS, RECOMMENDED_JOURNEY, arrival, enterJourney, type JourneyId } from './journeyEntry';
 import { mountArrivalField, type ArrivalField } from './arrivalField';
+import { createDissolve, measureLetters } from './arrivalDissolve';
+import { HANDOFF, endHandoff, handoff, handoffRunning } from './journeyHandoff';
+import { creation } from './creationTimeline';
 import { charGlyph, isDecodable } from './terminalMotion';
 import './journeyArrival.css';
 
@@ -40,7 +43,7 @@ function Decoding({ text, active }: { text: string; active: boolean }) {
 }
 
 /**
- * The arrival: three journeys over the ASCII water, in front of the site. It owns no part of the
+ * The arrival: three journeys under an ASCII night sky, in front of the site. It owns no part of the
  * site's timeline. Choosing calls enterJourney (journeyEntry.ts), the same for all three; this
  * component only lets go of the page and dissolves.
  */
@@ -50,7 +53,11 @@ export function JourneyArrival() {
   const [hovered, setHovered] = useState<JourneyId | null>(null);
   const [focused, setFocused] = useState<JourneyId | null>(null);
   const [keyboard, setKeyboard] = useState(false);
+  /** The opening gave up mid-handoff: lift the veil the plain way instead */
+  const [plainExit, setPlainExit] = useState(false);
   const canvas = useRef<HTMLCanvasElement>(null);
+  const root = useRef<HTMLDivElement>(null);
+  const stage = useRef<HTMLDivElement>(null);
   const field = useRef<ArrivalField | null>(null);
   const buttons = useRef(new Map<JourneyId, HTMLButtonElement>());
   const label = useRef<HTMLParagraphElement>(null);
@@ -116,7 +123,7 @@ export function JourneyArrival() {
     return () => { arrival.onKey = null; };
   }, [phase]);
 
-  // The water: one 2D canvas, quiet behind the type
+  // The sky (arrivalField / arrivalSky): one 2D canvas, quiet behind the type
   useEffect(() => {
     if (!present || !canvas.current) return;
     const f = mountArrivalField(canvas.current);
@@ -135,9 +142,31 @@ export function JourneyArrival() {
   const figure = chosen ?? hovered ?? (keyboard ? focused : null);
   useEffect(() => { field.current?.setMode(figure); }, [figure]);
 
-  // Leaving: the water dissolves and the veil lifts onto the page exactly as it was
+  // Leaving into the opening: the handoff (journeyHandoff.ts). Measured before this frame paints, so
+  // every letter is taken exactly where the visitor last saw it; the canvas draws it from then on.
+  useLayoutEffect(() => {
+    if (phase !== 'leaving' || !handoffRunning() || !field.current || !stage.current) return;
+    const letters = measureLetters(stage.current, chosen ? buttons.current.get(chosen) ?? null : null, handoff.journey);
+    let finished = false;
+    const finish = () => {
+      if (finished) return;
+      finished = true;
+      endHandoff();
+      // The opening is there, whole, beneath: nothing left to lift. Without one, the page beneath
+      // is the site itself, so the veil fades onto it as it always did.
+      if (creation.active) setPhase('gone');
+      else setPlainExit(true);
+    };
+    field.current.dissolve(createDissolve(letters), () => root.current?.setAttribute('data-dissolve', ''), finish);
+    // Never left waiting on a frame that does not come (a hidden tab); past the handoff's own cap
+    const fallback = window.setTimeout(finish, HANDOFF.revealLatest + 2500);
+    return () => window.clearTimeout(fallback);
+  }, [phase]);
+
+  // Leaving without an opening to enter (reduced motion, no WebGL): the sky dissolves and the veil
+  // lifts onto the page exactly as it was
   useEffect(() => {
-    if (phase !== 'leaving') return;
+    if (phase !== 'leaving' || handoffRunning()) return;
     field.current?.leave();
     const fallback = window.setTimeout(() => setPhase('gone'), 1800);
     return () => window.clearTimeout(fallback);
@@ -146,8 +175,10 @@ export function JourneyArrival() {
   if (!present) return null;
   return createPortal(
     <div
+      ref={root}
       className="journey-arrival"
       data-phase={phase}
+      data-handoff={phase === 'leaving' && handoffRunning() && !plainExit ? '' : undefined}
       data-chosen={chosen ?? undefined}
       data-keyboard={keyboard ? '' : undefined}
       role="dialog"
@@ -160,7 +191,7 @@ export function JourneyArrival() {
       onScroll={() => field.current?.refresh()}
     >
       <canvas ref={canvas} className="journey-field" aria-hidden="true" />
-      <div className="journey-stage">
+      <div ref={stage} className="journey-stage">
         <p ref={label} className="journey-label">
           Xavier Hery <span aria-hidden="true">—</span> An interactive portfolio
         </p>

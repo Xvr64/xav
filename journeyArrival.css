@@ -1,5 +1,5 @@
 /* ============================================================================
-   THE ARRIVAL — three journeys over the ASCII water, before the site.
+   THE ARRIVAL — three journeys under an ASCII night sky, before the site.
    The site's own voices: Newsreader for the statement and the journeys, Plex Mono for the
    instrument (indices, the label, the rules). The dark is the opening's (#01030a), so the veil
    lifts straight onto the Eye of Creation without a change of light.
@@ -20,10 +20,31 @@
   overflow-y: auto;
   overscroll-behavior: contain;
   color: var(--arrival-ink);
-  background:
-    radial-gradient(110% 70% at 72% 112%, rgba(8, 34, 52, 0.85) 0%, rgba(8, 34, 52, 0) 62%),
-    #01030a;
   scrollbar-width: none;
+}
+/* The veil is its own layer, so the handoff can thin it to the opening beneath while the letters fly */
+.journey-arrival::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  /* Midnight: the faint light around the distant galaxy, a breath of blue along the Milky Way's
+     band (arrivalSky.ts lays both out), the deep below. The base stays the opening's own dark. */
+  background:
+    radial-gradient(40% 44% at 76.5% 27%, rgba(30, 44, 100, 0.26) 0%, rgba(30, 44, 100, 0) 72%),
+    linear-gradient(to bottom right, rgba(12, 24, 60, 0) 32%, rgba(14, 28, 66, 0.34) 50%, rgba(12, 24, 60, 0) 68%),
+    radial-gradient(130% 80% at 50% 125%, rgba(8, 18, 44, 0.75) 0%, rgba(8, 18, 44, 0) 62%),
+    #01030a;
+  pointer-events: none;
+}
+@media (max-aspect-ratio: 9/10) {
+  .journey-arrival::before {
+    background:
+      radial-gradient(60% 26% at 70% 15.5%, rgba(30, 44, 100, 0.28) 0%, rgba(30, 44, 100, 0) 72%),
+      linear-gradient(to bottom right, rgba(12, 24, 60, 0) 30%, rgba(14, 28, 66, 0.3) 50%, rgba(12, 24, 60, 0) 70%),
+      radial-gradient(140% 60% at 50% 120%, rgba(8, 18, 44, 0.7) 0%, rgba(8, 18, 44, 0) 62%),
+      #01030a;
+  }
 }
 .journey-arrival::-webkit-scrollbar { display: none; }
 /* The page waits behind the arrival without scrolling */
@@ -319,6 +340,20 @@ html[data-arrival='open'] { overflow: hidden !important; }
   from { opacity: 1; }
   to { opacity: 0; }
 }
+
+/* The handoff (journeyHandoff.ts): no fade of the page. The letters are the arrival's canvas's from
+   the first frame of leaving (data-dissolve), so the page's text goes at once and only its quiet
+   strokes ease out; the veil thins onto the opening, which is holding the same dark beneath. */
+.journey-arrival[data-phase='leaving'][data-handoff] { animation: none; }
+.journey-arrival[data-phase='leaving'][data-handoff] .journey-stage > *:not(.journey-list),
+.journey-arrival[data-phase='leaving'][data-handoff] .journey-item { animation: none; }
+.journey-arrival[data-phase='leaving'][data-handoff]::before { opacity: 0; transition: opacity 0.34s cubic-bezier(0.45, 0, 0.55, 1) 0.16s; }
+.journey-arrival[data-dissolve] .journey-stage,
+.journey-arrival[data-dissolve] .journey-stage * { color: transparent !important; -webkit-text-fill-color: transparent; text-shadow: none; }
+.journey-arrival[data-dissolve] .journey-stage { opacity: 0; transition: opacity 0.26s ease-out; }
+/* The opening's own controls arrive with it, once it has resolved */
+html[data-handoff] .creation-actions,
+html[data-handoff] .creation-scroll-hint { opacity: 0 !important; }
 
 /* ---------------------------------------------------------------- smaller screens */
 @media (max-height: 760px) and (min-width: 720px) {

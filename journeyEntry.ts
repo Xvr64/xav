@@ -1,4 +1,5 @@
 import { INTRO_STORAGE_KEY, JOURNEY_STORAGE_KEY, creation, setCreationJourney, type JourneyId } from './creationTimeline.ts';
+import { beginHandoff } from './journeyHandoff.ts';
 
 /**
  * THE ARRIVAL — three ways into the same story.
@@ -68,6 +69,7 @@ export function isGatedKey(key: string, onButton: boolean): boolean {
 }
 
 let releaseGate: (() => void) | null = null;
+const prefersReducedMotion = () => typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 /**
  * Called once, before React renders: listeners on the same target and phase run in the order
@@ -104,6 +106,9 @@ export function enterJourney(id: JourneyId) {
   arrival.selected = id;
   // The opening takes the journey's route (and records it, so Skip intro can reverse back into it)
   setCreationJourney(id);
+  // The arrival becomes the opening (journeyHandoff.ts); without one to enter, or with reduced
+  // motion, the arrival simply lifts away as before
+  if (creation.active && !prefersReducedMotion()) beginHandoff(id);
   launchJourney();
 }
 

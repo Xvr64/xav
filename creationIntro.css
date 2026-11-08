@@ -10,7 +10,7 @@ html[data-creation="active"] [data-ocean-life] { opacity: 0; }
 .creation-exit { position: fixed; inset: 0; z-index: 100; background: #01030a; pointer-events: none; animation: creation-exit .8s ease-out both; }
 @keyframes creation-exit { from { opacity: 1; } to { opacity: 0; } }
 #home:focus { outline: none; }
-.creation-actions { position: absolute; top: max(24px, env(safe-area-inset-top)); right: max(24px, 4vw); display: flex; gap: 10px; pointer-events: auto; }
+.creation-actions { position: absolute; top: max(24px, env(safe-area-inset-top)); right: max(24px, 4vw); display: flex; gap: 10px; pointer-events: auto; transition: opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1); }
 .creation-actions button { min-height: 44px; padding: 10px 16px; border: 1px solid #b3d1e144; background: #07172bd9; color: #e1edf5; border-radius: 3px; font: 11px 'IBM Plex Mono', monospace; cursor: pointer; }
 .creation-actions button:hover { background: #15324d; }
 .creation-actions button:focus-visible { outline: 2px solid #a5d8ff; outline-offset: 4px; }

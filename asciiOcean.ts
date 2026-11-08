@@ -2,6 +2,7 @@ import { buildAtlas, link, type Atlas } from './GradientASCII';
 import { globeScrollGeometry } from './abyssPalette';
 import { OCEAN_HANDOFF_AT, creation, advanceCreation, creationLookahead, finishCreation } from './creationTimeline';
 import type { CreationRenderer } from './creationRenderer';
+import { tickHandoff } from './journeyHandoff';
 import {
   applyWaterColor,
   depthAtDocument,
@@ -365,8 +366,11 @@ export function createAsciiOcean(canvas: HTMLCanvasElement): AsciiOcean {
       canvas.dataset.creationTime = creation.time.toFixed(3);
       canvas.dataset.creationReady = String(creation.ready);
     }
+    // The arrival's handoff: the destination emerges only once its first frame can really be drawn,
+    // and every frame while it does
+    const handingOff = tickHandoff(now, !!opening && creation.active && creation.ready && opening.canDraw(creation.time), creation.active);
     const scroll = window.scrollY;
-    const moved = scroll !== lastScroll || creationMoved;
+    const moved = scroll !== lastScroll || creationMoved || handingOff;
     // Scrolling redraws on every frame so the water moves with the page; at rest the
     // currents only need 30 fps
     if (moved || (!reduce && now - lastDraw >= 1000 / IDLE_FPS - 2)) {

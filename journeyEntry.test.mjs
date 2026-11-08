@@ -1,7 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { JOURNEYS, RECOMMENDED_JOURNEY, arrival, enterJourney, isGatedKey } from './journeyEntry.ts';
-import { fieldIntensity } from './arrivalField.ts';
 
 test('three journeys in order, the passage recommended and the default', () => {
   assert.deepEqual(JOURNEYS.map(j => [j.index, j.id]), [['01', 'direct'], ['02', 'passage'], ['03', 'odyssey']]);
@@ -31,14 +30,4 @@ test('the gate keeps the opening\'s keys from it, but a journey still answers En
   assert.equal(isGatedKey(' ', true), false);
   assert.equal(isGatedKey('Enter', true), false);
   assert.equal(isGatedKey('Tab', false), false);
-});
-
-test('the arrival water stays within 0..1 in every figure', () => {
-  for (const figure of [{}, { direct: 1 }, { passage: 1 }, { odyssey: 1 }, { direct: 0.6, odyssey: 0.7 }]) {
-    const s = { aspect: 1.6, t: 7.5, direct: 0, passage: 0, odyssey: 0, focusX: 0.8, focusY: 0.3, pointerX: 0.4, pointerY: 0.5, ...figure };
-    for (let r = 0; r < 40; r++) for (let c = 0; c < 60; c++) {
-      const v = fieldIntensity((c + 0.5) / 60, (r + 0.5) / 40, c, r, s);
-      assert.ok(v >= 0 && v <= 1 && Number.isFinite(v), `${JSON.stringify(figure)} ${c},${r} -> ${v}`);
-    }
-  }
 });

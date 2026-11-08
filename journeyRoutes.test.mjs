@@ -182,7 +182,8 @@ test('the compiling-ahead check looks across the Passage seam, both ways', () =>
 test('the renderer compiles only what the chosen journey draws', () => {
   reset(null);
   creation.choosing = true;
-  assert.deepEqual(journeyPrograms().slice(0, 3), ['eye', PASSAGE_PROGRAM, 5]);
+  // Every journey's first frame before anything else: the eye-only variant, then Direct's Earth
+  assert.deepEqual(journeyPrograms().slice(0, 3), ['eye', 5, PASSAGE_PROGRAM]);
   setCreationJourney('direct');
   assert.deepEqual(journeyPrograms(), [5]);
   setCreationJourney('passage');

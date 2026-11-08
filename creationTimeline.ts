@@ -135,8 +135,11 @@ export const JOURNEY_ROUTES: Readonly<Record<JourneyId, JourneyRoute>> = {
   // The complete original opening
   odyssey: { id: 'odyssey', segments: [{ from: 0, to: CREATION_DURATION }], programs: ['eye', 0, 1, 2, 3, 4, 5] }
 };
-/** While the visitor is still choosing: the recommended route first, then the rest of the Odyssey. */
-const CHOOSING_PROGRAMS: readonly JourneyProgram[] = ['eye', PASSAGE_PROGRAM, 5, 0, 1, 2, 3, 4];
+/**
+ * While the visitor is still choosing: every journey's first frame first (the eye-only variant opens
+ * both eye journeys, the arrival program opens Direct), then the Passage's own, then the Odyssey's.
+ */
+const CHOOSING_PROGRAMS: readonly JourneyProgram[] = ['eye', 5, PASSAGE_PROGRAM, 0, 1, 2, 3, 4];
 
 const isJourneyId = (v: unknown): v is JourneyId => JOURNEY_IDS.includes(v as JourneyId);
 function storedJourney(): JourneyId | null {

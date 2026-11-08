@@ -5,6 +5,7 @@ import {
   PASSAGE_END, PASSAGE_EYE_END, PASSAGE_PROGRAM, PASSAGE_RESUME,
   creation, journeyProgramAt, journeyPrograms, journeyStart, type JourneyProgram
 } from './creationTimeline';
+import { handoff, handoffClock, handoffReveal, revealShapeFor } from './journeyHandoff';
 
 /** How long the eye can hold with a dark pupil: its portal starts opening just after (hold 5.5 s). */
 const EYE_ONLY_UNTIL = 5.4;
@@ -197,6 +198,10 @@ uniform vec3 uNativeInk;
 uniform vec2 uAtlasGrid;
 uniform float uCount;
 uniform float uTime;
+// The arrival's handoff (journeyHandoff.ts): 1 = whole, as always outside it
+uniform float uReveal;
+uniform float uRevealShape;
+uniform float uRevealClock;
 in vec2 vUv;
 out vec4 outColor;
 void main(){
@@ -224,6 +229,29 @@ void main(){
  // so there is never a stretch where every glyph has the water's own brightness and disappears.
  float turned=clamp(ocean*1.7-pick*.7,0.,1.);
  vec3 color=glow*mix(.21,.99,ocean)+glyph*mix(ink*.88,(uNativeInk-glow)*.5,turned);
+ if(uReveal<1.){
+   // Cell by cell out of the arrival's dark, in the order of the destination's own shape: the eye
+   // opens from a horizontal slit along its lid curve, the Earth gathers inward from its silhouette.
+   // Same mapping as the field's p, so the shape sits exactly where the world will be.
+   float aspect=uCanvas.x/uCanvas.y;
+   vec2 q=(centre-.5)*vec2(aspect,1.)*2.*max(1.,1.45/aspect);
+   float order;
+   if(uRevealShape<.5){
+     float xn=q.x/1.32,d=abs(q.y)/(.6*pow(max(0.,1.-xn*xn),.75)+.03);
+     order=d/(1.+d);
+   }else{
+     float r=length(q)/.486;
+     order=r<1.?(1.-r)*.42:.3+min(1.,(r-1.)/2.2)*.62;
+   }
+   float shown=clamp((uReveal*1.3-order*.8-pick*.2-.02)/.16,0.,1.);
+   // Its edge decodes: the cells it is passing flicker through the ramp before they settle
+   float front=shown*(1.-shown)*4.;
+   float flick=fract(sin(dot(cell+floor(uRevealClock*16.),vec2(12.9898,78.233)))*43758.5453);
+   float fi=floor(flick*(uCount-1.));
+   vec2 fuv=vec2((mod(fi,uAtlasGrid.x)+local.x)/uAtlasGrid.x,(floor(fi/uAtlasGrid.x)+local.y)/uAtlasGrid.y);
+   float decoding=textureGrad(uAtlas,fuv,dFdx(coord/uAtlasGrid),dFdy(coord/uAtlasGrid)).a*step(.5,pick+level);
+   color=mix(vec3(.004,.012,.039),color,shown)+decoding*front*vec3(.59,.75,.84)*.7;
+ }
  outColor=vec4(clamp(color,0.,1.),field.a);
 }`;
 
@@ -342,6 +370,9 @@ export function createCreationRenderer(gl: WebGL2RenderingContext): CreationRend
       gl.uniform2f(s.uCell,startW+(lattice.cellW-startW)*blend,lattice.startH+(lattice.cellH-lattice.startH)*blend);
       gl.uniform3fv(s.uNativeInk,ink.subarray(0,3));
       gl.uniform2f(s.uAtlasGrid,...atlas.grid);gl.uniform1f(s.uCount,atlas.count);gl.uniform1f(s.uTime,t);
+      const now=performance.now();
+      gl.uniform1f(s.uReveal,handoffReveal(now));gl.uniform1f(s.uRevealClock,handoffClock(now));
+      gl.uniform1f(s.uRevealShape,revealShapeFor(handoff.journey)==='planet'?1:0);
       gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);gl.drawArrays(gl.TRIANGLES,0,3);gl.disable(gl.BLEND);
     },
     destroy(){
