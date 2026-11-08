@@ -13,29 +13,30 @@ export const JOURNEY_STORAGE_KEY = 'xh-journey-v1';
 export type CreationPlaybackState = 'PAUSED' | 'PLAYING_FORWARD' | 'PLAYING_REVERSE' | 'COMPLETED';
 
 /**
- * THE PACE OF THE OPENING — fast journey, slow arrival. One speed curve over the shared scene
- * time, so all three journeys (Direct, The Passage, The Odyssey) arrive the same way:
+ * THE PACE OF THE OPENING — fast journey, then one continuous arrival. One speed curve over the
+ * shared scene time, so all three journeys (Direct, The Passage, The Odyssey) arrive the same way:
  *
  *   ZONE A — FAST (t <= DECEL_START): the Eye of Creation, the cosmos, the starfield, Earth and
  *            its atmospheric descent, at INTRO_FAST_SPEED (3.5x). Nothing here is slowed.
  *   DECELERATION (DECEL_START..ARRIVAL_STEADY_FROM): as the camera reaches the ocean surface the
- *            clock eases, progressively, down to ARRIVAL_SPEED.
- *   ZONE B — SLOW ARRIVAL: the waterline passing through the camera, the two whales coming into
- *            the composition at ARRIVAL_SPEED (~1.2x), then a second, gentler easing into the
- *            Hero (HERO_EASE_FROM..HERO_WAKES_AT) which wakes at HERO_REVEAL_SPEED (0.4x): the
- *            Hero, and "A journey without horizons", take their time.
+ *            clock eases down to ARRIVAL_SPEED (1.6x): the waterline passes in about 3 s.
+ *   ZONE B — ARRIVAL: the whales and the Hero share one gentle settling, ARRIVAL_SPEED easing to
+ *            HERO_REVEAL_SPEED (1.3x) between HERO_EASE_FROM and HERO_EASE_TO. Never slow motion:
+ *            what makes the arrival unhurried is what happens in it, not a crawling clock.
  *
- * About 2.8x slower than the previous arrival (7.3 s from the surface to the finished Hero, now
- * about 20 s). Every consumer reads the same clock (the whales' arrival, the Hero's wake), so
- * they stay in step with each other. Whale body motion is real-time and untouched.
+ * Measured against the rendered frames (motion.mjs), the previous arrival (a 1.2x plateau, then
+ * 0.4x) spent ~5 s with almost nothing moving. The arrival is now about 10.5 s from the surface to
+ * the finished Hero; the events inside it (whales, Hero, camera) are timed to overlap so that
+ * something is always moving. Every consumer reads the same clock, so they stay in step.
  */
 export const INTRO_FAST_SPEED = 3.5;
-export const ARRIVAL_SPEED = 1.2;
-export const HERO_REVEAL_SPEED = 0.4;
+export const ARRIVAL_SPEED = 1.6;
+export const HERO_REVEAL_SPEED = 1.3;
 /** The clock begins to ease as the descent reaches the waterline (the surface passes 76..81) */
 export const DECEL_START = 75;
-export const ARRIVAL_STEADY_FROM = 78.5;
-export const HERO_EASE_FROM = 83.5;
+export const ARRIVAL_STEADY_FROM = 77;
+export const HERO_EASE_FROM = 81;
+export const HERO_EASE_TO = 84;
 
 /** Backwards-compatible aliases for legacy imports. */
 export const COSMIC_ACCELERATED_SPEED = INTRO_FAST_SPEED;
@@ -57,7 +58,7 @@ export function targetPlaybackSpeed(t: number): number {
   if (t <= DECEL_START) return INTRO_FAST_SPEED;
   if (t < ARRIVAL_STEADY_FROM) return logBlend(INTRO_FAST_SPEED, ARRIVAL_SPEED, easeRange(t, DECEL_START, ARRIVAL_STEADY_FROM));
   if (t <= HERO_EASE_FROM) return ARRIVAL_SPEED;
-  if (t < HERO_WAKES_AT) return logBlend(ARRIVAL_SPEED, HERO_REVEAL_SPEED, easeRange(t, HERO_EASE_FROM, HERO_WAKES_AT));
+  if (t < HERO_EASE_TO) return logBlend(ARRIVAL_SPEED, HERO_REVEAL_SPEED, easeRange(t, HERO_EASE_FROM, HERO_EASE_TO));
   return HERO_REVEAL_SPEED;
 }
 
@@ -80,21 +81,31 @@ export function creationProgramAt(t: number) {
 }
 /** The opening's whales surface below the waterline, so never above it; the hero wakes after this. */
 export const WHALES_ARRIVE_AT = 79.6;
-export const WHALE_SETTLE_AT = 88;
-export const WHALE_SETTLE_STEP = 2;
-export const WHALE_FADE_SPAN = 5;
-export const HERO_WAKES_AT = 87;
+export const WHALE_SETTLE_AT = 86;
+export const WHALE_SETTLE_STEP = 1.6;
+export const WHALE_FADE_SPAN = 1.2;
 /**
- * The hero's text decode begins here, once its fade has taken hold (about 10 % woken), so the
- * decode is seen as the Hero comes up rather than finishing while it is still invisible.
+ * The Hero begins to appear while the whales are still settling, and is whole at HERO_DONE_AT: its
+ * fade is an ease-out (sine), so it shows at once and eases into place, instead of the long
+ * invisible start of a smootherstep. The last stretch to CREATION_DURATION is the camera's.
  */
-export const HERO_TEXT_AT = 87.9;
+export const HERO_WAKES_AT = 83.6;
+export const HERO_DONE_AT = 90;
+/** The hero's text decode begins as the fade takes hold (about 10 % woken). */
+export const HERO_TEXT_AT = HERO_WAKES_AT + 0.4;
+/** How much of the Hero is awake at scene time t: 0 before HERO_WAKES_AT, 1 from HERO_DONE_AT. */
+export const heroWoken = (t: number) => Math.sin((Math.max(0, Math.min(1, (t - HERO_WAKES_AT) / (HERO_DONE_AT - HERO_WAKES_AT))) * Math.PI) / 2);
+/** The camera's slow approach runs through the whole arrival, so the last seconds still move. */
+export const CAMERA_SETTLE_AT = CREATION_DURATION;
 /**
  * How far a whale still is from its real pose: behind itself along its own heading and down in the
  * deep, so it swims in head first out of the blue. Zero at the end, so the ambient pose takes over.
  */
 export function arrivalOffset(t: number, whale: number, forward: readonly [number, number, number] = [0, 0, -1]): [number, number, number] {
-  const left = 1 - easeRange(t, WHALES_ARRIVE_AT + whale * 1.5, WHALE_SETTLE_AT + whale * WHALE_SETTLE_STEP);
+  // Swimming in: a smootherstep (it begins and ends at rest) taken a little early, so the whales are
+  // in view for most of their arrival rather than waiting far off for the first half of it
+  const x = Math.max(0, Math.min(1, (t - (WHALES_ARRIVE_AT + whale * 1.5)) / (WHALE_SETTLE_AT + whale * WHALE_SETTLE_STEP - (WHALES_ARRIVE_AT + whale * 1.5))));
+  const left = 1 - easeRange(Math.pow(x, 0.6), 0, 1);
   const behind = left * (2.6 + whale * 0.4);
   return [-forward[0] * behind, -forward[1] * behind - left * 0.5, -forward[2] * behind - left * (2.5 + whale * 0.8)];
 }
@@ -249,7 +260,7 @@ export const creation = {
 let lastHeroWoken = 0;
 
 export function syncHeroWake(time = creation.time) {
-  const woken = time >= HERO_WAKES_AT ? easeRange(time, HERO_WAKES_AT, CREATION_DURATION) : 0;
+  const woken = time >= HERO_WAKES_AT ? heroWoken(time) : 0;
   if (woken !== lastHeroWoken || woken > 0) {
     lastHeroWoken = woken;
     creation.onHero?.(woken);

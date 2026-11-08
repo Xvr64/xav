@@ -13,7 +13,10 @@ import {
   DECEL_START,
   ARRIVAL_STEADY_FROM,
   HERO_EASE_FROM,
+  HERO_EASE_TO,
   HERO_TEXT_AT,
+  HERO_DONE_AT,
+  heroWoken,
   INTRO_FAST_SPEED,
   ARRIVAL_SPEED,
   HERO_REVEAL_SPEED,
@@ -39,7 +42,8 @@ test('all original worlds and every arrival phase occur once, with canonical 0..
   assert.deepEqual(CREATION_STAGES.slice(5).map(s => s[0]), ['SPACE_EXIT', 'EARTH_APPROACH', 'ATMOSPHERIC_DESCENT', 'OCEAN_ENTRY', 'WHALE_HANDOFF']);
   assert.equal(CREATION_DURATION, 91, 'canonical duration is 91s');
   assert.equal(OCEAN_HANDOFF_AT, 81, 'native ocean handoff occurs at 81s');
-  assert.equal(HERO_WAKES_AT, 87, 'hero starts waking at 87s');
+  assert.ok(HERO_WAKES_AT > OCEAN_HANDOFF_AT && HERO_WAKES_AT < WHALE_SETTLE_AT + WHALE_SETTLE_STEP, 'the hero wakes after the water has passed, while the whales are still settling');
+  assert.ok(HERO_DONE_AT > HERO_WAKES_AT && HERO_DONE_AT <= CREATION_DURATION);
   CREATION_STAGES.forEach(([name, start, end], i) => {
     assert.equal(creationStage(start), name);
     assert.equal(creationStage(end - 0.00001), name);
@@ -49,30 +53,44 @@ test('all original worlds and every arrival phase occur once, with canonical 0..
   assert.equal(creationStage(1e8), 'COMPLETE');
 });
 
-test('fast journey, slow arrival: fast until the waterline, then a progressive slowdown into the Hero', () => {
-  // ZONE A — the whole journey up to the ocean surface keeps its fast pace, untouched
+test('fast journey, then one continuous arrival: no crawl, no plateau of dead time', () => {
+  // ZONE A — everything up to the waterline keeps its fast pace, untouched
   for (const [t, what] of [[0, 'Eye'], [12, 'Creation'], [25, 'Big Bang'], [33, 'Galaxy'], [48, 'Black hole'], [54, 'Space exit'], [60, 'Earth approach'], [68, 'Atmospheric descent'], [DECEL_START, 'Waterline approach']]) {
     assert.equal(targetPlaybackSpeed(t), INTRO_FAST_SPEED, `${what} stays fast`);
   }
-  // Deceleration begins at the ocean surface and is progressive
-  const s76 = targetPlaybackSpeed(76), s77 = targetPlaybackSpeed(77), s78 = targetPlaybackSpeed(78);
-  assert.ok(INTRO_FAST_SPEED > s76 && s76 > s77 && s77 > s78 && s78 > ARRIVAL_SPEED, 'eases down through the surface');
-  // ZONE B — the whales arrive at the steady arrival pace
+  // The clock eases down through the surface
+  const s76 = targetPlaybackSpeed(76), s765 = targetPlaybackSpeed(76.5);
+  assert.ok(INTRO_FAST_SPEED > s76 && s76 > s765 && s765 > ARRIVAL_SPEED, 'eases down through the surface');
   assert.equal(targetPlaybackSpeed(ARRIVAL_STEADY_FROM), ARRIVAL_SPEED);
-  assert.equal(targetPlaybackSpeed(80), ARRIVAL_SPEED, 'whales come into the composition slowly');
   assert.equal(targetPlaybackSpeed(HERO_EASE_FROM), ARRIVAL_SPEED);
-  // A second, gentler easing into the Hero, which then wakes at the slow reveal pace
-  const s85 = targetPlaybackSpeed(85), s86 = targetPlaybackSpeed(86);
-  assert.ok(ARRIVAL_SPEED > s85 && s85 > s86 && s86 > HERO_REVEAL_SPEED, 'eases into the Hero');
-  assert.equal(targetPlaybackSpeed(HERO_WAKES_AT), HERO_REVEAL_SPEED);
-  assert.equal(targetPlaybackSpeed(89), HERO_REVEAL_SPEED);
+  // Then settles gently for the whales and the Hero
+  const mid = targetPlaybackSpeed((HERO_EASE_FROM + HERO_EASE_TO) / 2);
+  assert.ok(ARRIVAL_SPEED > mid && mid > HERO_REVEAL_SPEED);
+  assert.equal(targetPlaybackSpeed(HERO_EASE_TO), HERO_REVEAL_SPEED);
   assert.equal(targetPlaybackSpeed(CREATION_DURATION), HERO_REVEAL_SPEED);
-  assert.ok(INTRO_FAST_SPEED / ARRIVAL_SPEED > 2.5, 'the arrival is clearly slower than the journey');
-  // No velocity step anywhere: the speed never changes faster than a smooth curve allows
+  // Never slow motion: the arrival is never slower than the original 1x, and never crawls
+  for (let t = ARRIVAL_STEADY_FROM; t <= CREATION_DURATION; t += 0.1) assert.ok(targetPlaybackSpeed(t) >= 1.25, `no crawl at ${t.toFixed(1)}`);
+  // No velocity step anywhere
   let worst = 0;
   for (let t = 0; t < CREATION_DURATION; t += 0.01) worst = Math.max(worst, Math.abs(targetPlaybackSpeed(t + 0.01) - targetPlaybackSpeed(t)) / 0.01);
   assert.ok(worst < 2, `speed is continuous (steepest slope ${worst.toFixed(2)} per unit)`);
-  assert.ok(HERO_TEXT_AT > HERO_WAKES_AT && HERO_TEXT_AT < CREATION_DURATION, 'the hero text decodes as the hero comes up');
+  // The whole arrival, surface to finished Hero, takes 10-12 s of real time
+  let seconds = 0;
+  for (let t = 76; t < CREATION_DURATION; t += 0.001) seconds += 0.001 / targetPlaybackSpeed(t);
+  assert.ok(seconds > 9.8 && seconds < 12, `arrival ${seconds.toFixed(1)} s`);
+  assert.ok(HERO_TEXT_AT > HERO_WAKES_AT && HERO_TEXT_AT < HERO_DONE_AT);
+});
+
+test('the Hero shows at once and eases into place: ease-out, whole before the end', () => {
+  assert.equal(heroWoken(HERO_WAKES_AT - 1), 0);
+  assert.equal(heroWoken(HERO_DONE_AT), 1);
+  assert.equal(heroWoken(CREATION_DURATION), 1);
+  let last = 0;
+  for (let t = HERO_WAKES_AT; t <= HERO_DONE_AT; t += 0.05) { const w = heroWoken(t); assert.ok(w >= last); last = w; }
+  // Visible quickly (an ease-out), and settling at the end with no slope
+  assert.ok(heroWoken(HERO_WAKES_AT + 0.5) > 0.12, 'no long invisible start');
+  assert.ok(heroWoken((HERO_WAKES_AT + HERO_DONE_AT) / 2) > 0.65);
+  assert.ok(heroWoken(HERO_DONE_AT - 0.01) > 0.9999);
 });
 
 test('Earth approach runs fast; the ocean surface eases the clock down without a pause', () => {

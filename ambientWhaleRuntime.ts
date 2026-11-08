@@ -6,7 +6,7 @@ import { qRotate, skinFrames, type Quat } from './whale3dPose';
 import type { V3 } from './whale3dAnatomy';
 import { globeScrollGeometry, inkMixFromAbyss } from './abyssPalette';
 import { waterShade } from './terminalMotion';
-import { creation, arrivalOffset, easeRange, WHALES_ARRIVE_AT, WHALE_SETTLE_AT, WHALE_FADE_SPAN } from './creationTimeline';
+import { creation, arrivalOffset, easeRange, WHALES_ARRIVE_AT, CAMERA_SETTLE_AT, WHALE_FADE_SPAN } from './creationTimeline';
 
 const mix = (a: number, b: number, t: number) => a + (b - a) * t;
 /** A finite number, or the fallback: one bad frame (a zero-height viewport) must never poison eased state. */
@@ -160,7 +160,7 @@ export function mountAmbientWhales(host: HTMLElement): () => void {
     const sway = reduced() ? 0 : 1;
     const tx = 0.05 * Math.sin((seconds * Math.PI * 2) / 97) * sway;
     const ty = 0.035 * Math.sin((seconds * Math.PI * 2) / 131 + 1) * sway;
-    const position: V3 = [tx, ty, frame.z + (creation.active ? .8 * (1 - easeRange(creation.time, WHALES_ARRIVE_AT, WHALE_SETTLE_AT)) : 0)];
+    const position: V3 = [tx, ty, frame.z + (creation.active ? .8 * (1 - easeRange(creation.time, WHALES_ARRIVE_AT, CAMERA_SETTLE_AT)) : 0)];
     const target: V3 = [tx * 0.35, ty * 0.35, 0];
     cam.position.set(...position); cam.up.set(0, 1, 0); cam.lookAt(...target);
     cam.fov = frame.fov; cam.clearViewOffset();
