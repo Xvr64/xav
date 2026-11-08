@@ -4,7 +4,7 @@ import { JOURNEYS, RECOMMENDED_JOURNEY, arrival, enterJourney, type JourneyId } 
 import { mountArrivalField, type ArrivalField } from './arrivalField';
 import { createDissolve, measureLetters } from './arrivalDissolve';
 import { HANDOFF, endHandoff, handoff, handoffRunning } from './journeyHandoff';
-import { creation } from './creationTimeline';
+import { creation, triggerCreationGesture } from './creationTimeline';
 import { charGlyph, isDecodable } from './terminalMotion';
 import './journeyArrival.css';
 
@@ -153,8 +153,12 @@ export function JourneyArrival() {
       endHandoff();
       // The opening is there, whole, beneath: nothing left to lift. Without one, the page beneath
       // is the site itself, so the veil fades onto it as it always did.
-      if (creation.active) setPhase('gone');
-      else setPlainExit(true);
+      if (creation.active) {
+        setPhase('gone');
+        // The choice is the gesture: the journey starts the moment its handoff has finished,
+        // at its own fixed pace, with no scroll needed (scrolling up still reverses it)
+        triggerCreationGesture(1, 'key');
+      } else setPlainExit(true);
     };
     field.current.dissolve(createDissolve(letters), () => root.current?.setAttribute('data-dissolve', ''), finish);
     // Never left waiting on a frame that does not come (a hidden tab); past the handoff's own cap
@@ -195,7 +199,7 @@ export function JourneyArrival() {
           <span className="journey-title-line">Choose your</span>{' '}
           <em className="journey-title-line journey-title-turn">journey.</em>
         </h2>
-        <p ref={dek} id="journey-dek" className="journey-dek">Three ways to discover the same story.</p>
+        <p ref={dek} id="journey-dek" className="journey-dek">Three ways to discover the same profile.</p>
         <ol ref={list} className="journey-list" aria-label="Journeys" data-any-active={lit ? '' : undefined}>
           {JOURNEYS.map(journey => (
             <li key={journey.id} className="journey-item">

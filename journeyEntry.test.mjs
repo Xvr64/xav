@@ -6,7 +6,7 @@ test('three journeys in order, the passage recommended and the default', () => {
   assert.deepEqual(JOURNEYS.map(j => [j.index, j.id]), [['01', 'direct'], ['02', 'passage'], ['03', 'odyssey']]);
   assert.deepEqual(JOURNEYS.filter(j => j.recommended).map(j => j.id), ['passage']);
   assert.equal(RECOMMENDED_JOURNEY, 'passage');
-  assert.deepEqual(JOURNEYS.map(j => j.line), ['Straight to the story.', 'A journey through space and sea.', 'The complete cinematic experience.']);
+  assert.deepEqual(JOURNEYS.map(j => j.line), ['Straight to the profile.', 'A journey through space and sea.', 'The complete cinematic experience.']);
 });
 
 test('every journey enters the same way: it records the choice, closes the arrival once', () => {

@@ -2,7 +2,7 @@ import { INTRO_STORAGE_KEY, JOURNEY_STORAGE_KEY, creation, setCreationJourney, t
 import { beginHandoff } from './journeyHandoff.ts';
 
 /**
- * THE ARRIVAL — three ways into the same story.
+ * THE ARRIVAL — three ways into the same profile.
  *
  * The arrival sits in front of the opening. Every journey enters through enterJourney, which
  * hands the opening its route (creationTimeline's JOURNEY_ROUTES) and steps aside; the opening
@@ -24,7 +24,7 @@ export interface Journey {
 }
 
 export const JOURNEYS: readonly Journey[] = [
-  { id: 'direct', index: '01', title: 'Direct', line: 'Straight to the story.' },
+  { id: 'direct', index: '01', title: 'Direct', line: 'Straight to the profile.' },
   { id: 'passage', index: '02', title: 'The Passage', line: 'A journey through space and sea.', recommended: true },
   { id: 'odyssey', index: '03', title: 'The Odyssey', line: 'The complete cinematic experience.' }
 ];
