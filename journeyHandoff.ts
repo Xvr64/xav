@@ -15,10 +15,10 @@ import type { JourneyId } from './creationTimeline.ts';
 /**
  * The handoff's pace: every moment of it (these timings, the letters' decode cadence and fades, the
  * sky's rush, the reveal's flicker, the veil's CSS) is written at pace 1 and stretched by this one
- * factor, so the whole choreography slows together and nothing drifts out of step. 2.5 lets the
- * decode, the flight and the recomposition each be seen.
+ * factor, so the whole choreography slows together and nothing drifts out of step. At 5 the
+ * decode, the flight and the recomposition each take their time.
  */
-export const HANDOFF_PACE = 2.5;
+export const HANDOFF_PACE = 5;
 /** A moment of the choreography (ms at pace 1), at the handoff's pace */
 export const paced = (ms: number) => ms * HANDOFF_PACE;
 

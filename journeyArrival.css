@@ -325,11 +325,11 @@ html[data-arrival='open'] { overflow: hidden !important; }
 .journey-arrival[data-phase='leaving'][data-handoff] { animation: none; }
 .journey-arrival[data-phase='leaving'][data-handoff] .journey-stage > *:not(.journey-list),
 .journey-arrival[data-phase='leaving'][data-handoff] .journey-item { animation: none; }
-/* At the handoff's pace (HANDOFF_PACE 2.5 in journeyHandoff.ts: 0.34s after 0.16s, and 0.26s, at pace 1) */
-.journey-arrival[data-phase='leaving'][data-handoff]::before { opacity: 0; transition: opacity 0.85s cubic-bezier(0.45, 0, 0.55, 1) 0.4s; }
+/* At the handoff's pace (HANDOFF_PACE 5 in journeyHandoff.ts: 0.34s after 0.16s, and 0.26s, at pace 1) */
+.journey-arrival[data-phase='leaving'][data-handoff]::before { opacity: 0; transition: opacity 1.7s cubic-bezier(0.45, 0, 0.55, 1) 0.8s; }
 .journey-arrival[data-dissolve] .journey-stage,
 .journey-arrival[data-dissolve] .journey-stage * { color: transparent !important; -webkit-text-fill-color: transparent; text-shadow: none; }
-.journey-arrival[data-dissolve] .journey-stage { opacity: 0; transition: opacity 0.65s ease-out; }
+.journey-arrival[data-dissolve] .journey-stage { opacity: 0; transition: opacity 1.3s ease-out; }
 /* The opening's own controls arrive with it, once it has resolved */
 html[data-handoff] .creation-actions,
 html[data-handoff] .creation-scroll-hint { opacity: 0 !important; }
