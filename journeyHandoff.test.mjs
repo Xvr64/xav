@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { HANDOFF, beginHandoff, endHandoff, handoff, handoffReveal, handoffRunning, revealShapeFor, tickHandoff } from './journeyHandoff.ts';
+import { HANDOFF, HANDOFF_PACE, beginHandoff, endHandoff, handoff, handoffReveal, handoffRunning, revealShapeFor, tickHandoff } from './journeyHandoff.ts';
 import { assignTargets, revealGeometry } from './arrivalDissolve.ts';
 
 test('outside a handoff the opening is whole: reveal is exactly 1', () => {
@@ -30,13 +30,18 @@ test('the destination never emerges before it can be drawn, then emerges smoothl
   assert.equal(handoffReveal(5000), 1);
 });
 
-test('the handoff fits the brief when the destination is ready: about 0.9 to 1.4 s', () => {
+test('the handoff is the original choreography at 2.5x: about 2.6 to 3.3 s when the destination is ready', () => {
+  assert.equal(HANDOFF_PACE, 2.5);
+  // Every moment scales together: the order of events is exactly the original's
+  assert.equal(HANDOFF.revealAfter, 600);
+  assert.equal(HANDOFF.reveal, 2050);
+  assert.equal(HANDOFF.scramble, 375);
   beginHandoff('direct', 1);
   tickHandoff(1 + HANDOFF.revealAfter, true);
   const done = handoff.revealAt + HANDOFF.reveal - 1;
-  assert.ok(done >= 900 && done <= 1400, `${done} ms`);
+  assert.ok(done >= 2600 && done <= 3300, `${done} ms`);
   const lastLetter = HANDOFF.chosenTo + HANDOFF.scramble + HANDOFF.flowMax;
-  assert.ok(lastLetter <= 1400, `last letter lands at ${lastLetter} ms`);
+  assert.ok(lastLetter <= done + 200, `last letter lands at ${lastLetter} ms`);
   endHandoff();
 });
 

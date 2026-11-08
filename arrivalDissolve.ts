@@ -1,4 +1,4 @@
-import { HANDOFF, handoff, handoffReveal, revealShapeFor, type RevealShape } from './journeyHandoff.ts';
+import { HANDOFF, handoff, handoffReveal, paced, revealShapeFor, type RevealShape } from './journeyHandoff.ts';
 
 /**
  * The arrival's letters, dissolving (journeyHandoff.ts). Every visible character of the arrival is
@@ -203,7 +203,7 @@ export function createDissolve(letters: Letter[]): Dissolve {
       ctx.textBaseline = 'alphabetic';
       for (const l of letters) {
         // The chosen journey answers first: it lifts toward white while the rest begin to go
-        const lift = l.chosen ? smooth(0, 160, t) * 0.55 : 0;
+        const lift = l.chosen ? smooth(0, paced(160), t) * 0.55 : 0;
         if (t < l.delay) {
           alive = true;
           ctx.font = l.font;
@@ -217,7 +217,7 @@ export function createDissolve(letters: Letter[]): Dissolve {
           alive = true;
           const k = s / HANDOFF.scramble;
           const size = l.size + (cellH - l.size) * smooth(0, 1, k);
-          const g = DECODE[Math.floor(hash1(l.seed * 31 + Math.floor(t / 45)) * DECODE.length)];
+          const g = DECODE[Math.floor(hash1(l.seed * 31 + Math.floor(t / paced(45))) * DECODE.length)];
           ctx.font = mono(size);
           ctx.fillStyle = rgba(mix(mix(l.rgb, LIT, lift), l.chosen ? LIT : INK, k), l.alpha + (0.85 - l.alpha) * k);
           ctx.fillText(g, l.cx - size * 0.3, l.cy + size * 0.35);
@@ -226,8 +226,8 @@ export function createDissolve(letters: Letter[]): Dissolve {
         const f = (s - HANDOFF.scramble) / l.flow;
         const arrivedAt = l.delay + HANDOFF.scramble + l.flow;
         // Once there, each glyph gives way as the destination resolves beneath it
-        const fadeFrom = Math.max(arrivedAt, handoff.revealAt ? handoff.revealAt - handoff.startedAt + 140 : Infinity);
-        const fade = 1 - smooth(fadeFrom, fadeFrom + 220, t);
+        const fadeFrom = Math.max(arrivedAt, handoff.revealAt ? handoff.revealAt - handoff.startedAt + paced(140) : Infinity);
+        const fade = 1 - smooth(fadeFrom, fadeFrom + paced(220), t);
         if (fade <= 0 && reveal > 0.3) continue;
         alive = true;
         ctx.font = mono(cellH);
@@ -251,7 +251,7 @@ export function createDissolve(letters: Letter[]): Dissolve {
         }
         const [x, y] = at(f);
         // Waiting for a destination that cannot draw yet: hold the shape, breathing
-        const hold = f >= 1 && !handoff.revealAt ? 0.75 + 0.25 * Math.sin(t / 140 + l.seed) : 1;
+        const hold = f >= 1 && !handoff.revealAt ? 0.75 + 0.25 * Math.sin(t / paced(140) + l.seed) : 1;
         ctx.fillStyle = rgba(color, 0.85 * fade * hold);
         ctx.fillText(f >= 1 ? '+' : l.glyph, x - cellW / 2, y + cellH * 0.35);
       }

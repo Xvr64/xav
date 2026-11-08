@@ -12,21 +12,31 @@ import type { JourneyId } from './creationTimeline.ts';
  * gathers from its silhouette. The destination is never drawn before it can be: the reveal waits
  * for the opening's first frame, and only the timing of the handoff lives here.
  */
+/**
+ * The handoff's pace: every moment of it (these timings, the letters' decode cadence and fades, the
+ * sky's rush, the reveal's flicker, the veil's CSS) is written at pace 1 and stretched by this one
+ * factor, so the whole choreography slows together and nothing drifts out of step. 2.5 lets the
+ * decode, the flight and the recomposition each be seen.
+ */
+export const HANDOFF_PACE = 2.5;
+/** A moment of the choreography (ms at pace 1), at the handoff's pace */
+export const paced = (ms: number) => ms * HANDOFF_PACE;
+
 export const HANDOFF = {
   /** A letter starts to decode between these (ms); the chosen journey's own letters go last */
-  dissolveFrom: 30,
-  dissolveTo: 200,
-  chosenFrom: 190,
-  chosenTo: 270,
+  dissolveFrom: paced(30),
+  dissolveTo: paced(200),
+  chosenFrom: paced(190),
+  chosenTo: paced(270),
   /** A letter's own decode before it lets go */
-  scramble: 150,
+  scramble: paced(150),
   /** Its flight into the destination's shape */
-  flowMin: 400,
-  flowMax: 560,
+  flowMin: paced(400),
+  flowMax: paced(560),
   /** The destination begins to emerge no sooner than this, and only once it can draw */
-  revealAfter: 240,
+  revealAfter: paced(240),
   /** ...and takes this long */
-  reveal: 820,
+  reveal: paced(820),
   /**
    * Safety only: a destination still compiling is waited for (the letters hold their shape), never
    * revealed over nothing and then cut in. Past this, or with no opening left to enter, it goes ahead.
@@ -71,8 +81,8 @@ export function endHandoff() {
 
 export const handoffRunning = () => handoff.startedAt > 0;
 
-/** Seconds since the choice (the decode's flicker clock), 0 when idle. */
-export const handoffClock = (now = performance.now()) => (handoff.startedAt ? (now - handoff.startedAt) / 1000 : 0);
+/** Seconds since the choice at pace 1 (the reveal's decode flicker keeps step), 0 when idle. */
+export const handoffClock = (now = performance.now()) => (handoff.startedAt ? (now - handoff.startedAt) / paced(1000) : 0);
 
 /**
  * Called on the opening's frame: starts the reveal once the letters have begun to go and the

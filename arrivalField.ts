@@ -1,4 +1,4 @@
-import { handoff, revealShapeFor } from './journeyHandoff.ts';
+import { handoff, paced, revealShapeFor } from './journeyHandoff.ts';
 import { revealGeometry, type Dissolve } from './arrivalDissolve.ts';
 import {
   SKY_MARGIN, buildSky, dustAt, galaxyLight, hash2, meteorAt, seeded, skyLayout, smooth, spawnMeteor, strokeFor,
@@ -234,7 +234,7 @@ export function mountArrivalField(canvas: HTMLCanvasElement): ArrivalField {
 
     // The handoff: the sky rushes past toward the eye, or falls in toward the Earth
     const since = dissolving ? now - handoff.startedAt : -1;
-    const rush = since >= 0 ? smooth(0, 1, since / 950) : 0;
+    const rush = since >= 0 ? smooth(0, 1, since / paced(950)) : 0;
     const toEarth = revealShapeFor(handoff.journey) === 'planet';
 
     // Dust, then the galaxy
@@ -404,7 +404,7 @@ export function mountArrivalField(canvas: HTMLCanvasElement): ArrivalField {
     if (dissolving && ctx) {
       // Every frame while the letters fly; the sky gives way beneath them
       const since = now - handoff.startedAt;
-      render(now, 1 - smooth(0, 820, since));
+      render(now, 1 - smooth(0, paced(820), since));
       const alive = dissolving.letters.draw(ctx, now, view.cellW, view.cellH);
       dissolving.onSwap?.();
       dissolving.onSwap = null;

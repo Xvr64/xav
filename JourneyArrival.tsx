@@ -60,7 +60,6 @@ export function JourneyArrival() {
   const stage = useRef<HTMLDivElement>(null);
   const field = useRef<ArrivalField | null>(null);
   const buttons = useRef(new Map<JourneyId, HTMLButtonElement>());
-  const label = useRef<HTMLParagraphElement>(null);
   const title = useRef<HTMLHeadingElement>(null);
   const dek = useRef<HTMLParagraphElement>(null);
   const list = useRef<HTMLOListElement>(null);
@@ -128,7 +127,7 @@ export function JourneyArrival() {
     if (!present || !canvas.current) return;
     const f = mountArrivalField(canvas.current);
     field.current = f;
-    const zones = [label.current, title.current, dek.current, list.current].filter(Boolean) as Element[];
+    const zones = [title.current, dek.current, list.current].filter(Boolean) as Element[];
     f.setQuietZones(zones);
     const observer = new ResizeObserver(() => f.refresh());
     zones.forEach(el => observer.observe(el));
@@ -159,7 +158,7 @@ export function JourneyArrival() {
     };
     field.current.dissolve(createDissolve(letters), () => root.current?.setAttribute('data-dissolve', ''), finish);
     // Never left waiting on a frame that does not come (a hidden tab); past the handoff's own cap
-    const fallback = window.setTimeout(finish, HANDOFF.revealLatest + 2500);
+    const fallback = window.setTimeout(finish, HANDOFF.revealLatest + HANDOFF.reveal + 2500);
     return () => window.clearTimeout(fallback);
   }, [phase]);
 
@@ -192,12 +191,6 @@ export function JourneyArrival() {
     >
       <canvas ref={canvas} className="journey-field" aria-hidden="true" />
       <div ref={stage} className="journey-stage">
-        <p ref={label} className="journey-label">
-          Xavier Hery <span aria-hidden="true">—</span> An interactive portfolio
-        </p>
-        <p className="journey-keys" aria-hidden="true">
-          <span>↑ ↓</span> to choose <span className="journey-keys-dot">·</span> <span>Enter</span> to begin
-        </p>
         <h2 ref={title} id="journey-title" className="journey-title">
           <span className="journey-title-line">Choose your</span>{' '}
           <em className="journey-title-line journey-title-turn">journey.</em>
