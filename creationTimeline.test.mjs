@@ -10,9 +10,13 @@ import {
   WHALE_SETTLE_STEP,
   WHALE_FADE_SPAN,
   HERO_WAKES_AT,
-  HERO_BLEND_START,
+  DECEL_START,
+  ARRIVAL_STEADY_FROM,
+  HERO_EASE_FROM,
+  HERO_TEXT_AT,
   INTRO_FAST_SPEED,
-  HERO_NATURAL_SPEED,
+  ARRIVAL_SPEED,
+  HERO_REVEAL_SPEED,
   COSMIC_ACCELERATED_SPEED,
   ARRIVAL_NATURAL_SPEED,
   targetPlaybackSpeed,
@@ -45,31 +49,33 @@ test('all original worlds and every arrival phase occur once, with canonical 0..
   assert.equal(creationStage(1e8), 'COMPLETE');
 });
 
-test('playback speed is fast for all pre-hero sequences (Eye, space, Earth, atmosphere, ocean, whales) and slows down strictly at HERO_WAKES_AT', () => {
-  // PART A — FAST INTRO (0..85): all sequences stay fast (~3.5x)
-  assert.equal(targetPlaybackSpeed(0), INTRO_FAST_SPEED, 'Eye starts fast');
-  assert.equal(targetPlaybackSpeed(12), INTRO_FAST_SPEED, 'Creation of Adam is fast');
-  assert.equal(targetPlaybackSpeed(25), INTRO_FAST_SPEED, 'Big Bang is fast');
-  assert.equal(targetPlaybackSpeed(33), INTRO_FAST_SPEED, 'Galaxy is fast');
-  assert.equal(targetPlaybackSpeed(48), INTRO_FAST_SPEED, 'Black hole is fast');
-  assert.equal(targetPlaybackSpeed(54), INTRO_FAST_SPEED, 'Space exit is fast');
-  assert.equal(targetPlaybackSpeed(60), INTRO_FAST_SPEED, 'Earth approach is fast (no premature slowdown)');
-  assert.equal(targetPlaybackSpeed(68), INTRO_FAST_SPEED, 'Atmospheric descent is fast');
-  assert.equal(targetPlaybackSpeed(76), INTRO_FAST_SPEED, 'Ocean entry is fast');
-  assert.equal(targetPlaybackSpeed(81), INTRO_FAST_SPEED, 'Whale handoff is fast');
-  assert.equal(targetPlaybackSpeed(85), INTRO_FAST_SPEED, 'Immediately before Hero wake is fast');
-
-  // Smooth hermite deceleration immediately before HERO_WAKES_AT (85..87)
-  const speedAt86 = targetPlaybackSpeed(86);
-  assert.ok(speedAt86 < INTRO_FAST_SPEED && speedAt86 > HERO_NATURAL_SPEED, 'smooth hermite deceleration into hero wake');
-
-  // PART B — ORIGINAL-SPEED HERO: strictly 1.0x natural speed only at the actual CV Hero reveal (87..91)
-  assert.equal(targetPlaybackSpeed(HERO_WAKES_AT), HERO_NATURAL_SPEED, 'Hero wake begins at strictly 1.0x natural speed');
-  assert.equal(targetPlaybackSpeed(89), HERO_NATURAL_SPEED, 'During hero reveal speed is strictly 1.0x');
-  assert.equal(targetPlaybackSpeed(CREATION_DURATION), HERO_NATURAL_SPEED, 'At completion speed is strictly 1.0x');
+test('fast journey, slow arrival: fast until the waterline, then a progressive slowdown into the Hero', () => {
+  // ZONE A — the whole journey up to the ocean surface keeps its fast pace, untouched
+  for (const [t, what] of [[0, 'Eye'], [12, 'Creation'], [25, 'Big Bang'], [33, 'Galaxy'], [48, 'Black hole'], [54, 'Space exit'], [60, 'Earth approach'], [68, 'Atmospheric descent'], [DECEL_START, 'Waterline approach']]) {
+    assert.equal(targetPlaybackSpeed(t), INTRO_FAST_SPEED, `${what} stays fast`);
+  }
+  // Deceleration begins at the ocean surface and is progressive
+  const s76 = targetPlaybackSpeed(76), s77 = targetPlaybackSpeed(77), s78 = targetPlaybackSpeed(78);
+  assert.ok(INTRO_FAST_SPEED > s76 && s76 > s77 && s77 > s78 && s78 > ARRIVAL_SPEED, 'eases down through the surface');
+  // ZONE B — the whales arrive at the steady arrival pace
+  assert.equal(targetPlaybackSpeed(ARRIVAL_STEADY_FROM), ARRIVAL_SPEED);
+  assert.equal(targetPlaybackSpeed(80), ARRIVAL_SPEED, 'whales come into the composition slowly');
+  assert.equal(targetPlaybackSpeed(HERO_EASE_FROM), ARRIVAL_SPEED);
+  // A second, gentler easing into the Hero, which then wakes at the slow reveal pace
+  const s85 = targetPlaybackSpeed(85), s86 = targetPlaybackSpeed(86);
+  assert.ok(ARRIVAL_SPEED > s85 && s85 > s86 && s86 > HERO_REVEAL_SPEED, 'eases into the Hero');
+  assert.equal(targetPlaybackSpeed(HERO_WAKES_AT), HERO_REVEAL_SPEED);
+  assert.equal(targetPlaybackSpeed(89), HERO_REVEAL_SPEED);
+  assert.equal(targetPlaybackSpeed(CREATION_DURATION), HERO_REVEAL_SPEED);
+  assert.ok(INTRO_FAST_SPEED / ARRIVAL_SPEED > 2.5, 'the arrival is clearly slower than the journey');
+  // No velocity step anywhere: the speed never changes faster than a smooth curve allows
+  let worst = 0;
+  for (let t = 0; t < CREATION_DURATION; t += 0.01) worst = Math.max(worst, Math.abs(targetPlaybackSpeed(t + 0.01) - targetPlaybackSpeed(t)) / 0.01);
+  assert.ok(worst < 2, `speed is continuous (steepest slope ${worst.toFixed(2)} per unit)`);
+  assert.ok(HERO_TEXT_AT > HERO_WAKES_AT && HERO_TEXT_AT < CREATION_DURATION, 'the hero text decodes as the hero comes up');
 });
 
-test('Earth approach and ocean entry run fast without lingering or pauses', () => {
+test('Earth approach runs fast; the ocean surface eases the clock down without a pause', () => {
   Object.assign(creation, {
     active: true,
     ready: true,
@@ -87,17 +93,17 @@ test('Earth approach and ocean entry run fast without lingering or pauses', () =
   const deltaEarth = creation.time - 62.0;
   assert.ok(Math.abs(deltaEarth - INTRO_FAST_SPEED) < 0.15, `Earth approach is fast (~3.5u/s), got ${deltaEarth}`);
 
-  // Test during Ocean entry (t = 76.5)
+  // At the ocean surface (t = 76.5) the clock is already easing down, never stopped
   creation.time = 76.5;
-  creation.rate = INTRO_FAST_SPEED;
+  creation.rate = targetPlaybackSpeed(76.5);
   for (let i = 0; i < 60; i++) advanceCreation(1 / 60);
   const deltaOcean = creation.time - 76.5;
-  assert.ok(Math.abs(deltaOcean - INTRO_FAST_SPEED) < 0.15, `Ocean entry is fast (~3.5u/s), got ${deltaOcean}`);
+  assert.ok(deltaOcean < INTRO_FAST_SPEED - 0.3 && deltaOcean > ARRIVAL_SPEED, `ocean entry eases down, got ${deltaOcean}`);
 
   Object.assign(creation, { active: false });
 });
 
-test('CV Hero reveal (87..91) runs strictly at 1.0x natural cinematic speed', () => {
+test('CV Hero reveal (87..91) runs at the slow reveal pace, not scroll-driven', () => {
   let woken = 0;
   Object.assign(creation, {
     active: true,
@@ -107,7 +113,7 @@ test('CV Hero reveal (87..91) runs strictly at 1.0x natural cinematic speed', ()
     state: 'PLAYING_FORWARD',
     time: 87.0, // Exact HERO_WAKES_AT boundary
     target: CREATION_DURATION,
-    rate: HERO_NATURAL_SPEED,
+    rate: HERO_REVEAL_SPEED,
     ambient: 0,
     onHero: w => { woken = w; }
   });
@@ -115,14 +121,14 @@ test('CV Hero reveal (87..91) runs strictly at 1.0x natural cinematic speed', ()
   // Advance 1 full second during hero reveal
   for (let i = 0; i < 60; i++) advanceCreation(1 / 60);
   const deltaHero = creation.time - 87.0;
-  assert.ok(Math.abs(deltaHero - 1.0) < 0.05, `CV hero runs strictly at 1.0s/s, got ${deltaHero}`);
+  assert.ok(Math.abs(deltaHero - HERO_REVEAL_SPEED) < 0.05, `CV hero runs at ${HERO_REVEAL_SPEED}s/s, got ${deltaHero}`);
   assert.ok(woken > 0, 'hero is waking during this phase');
 
   // Additional downward scrolls do not accelerate it
   for (let i = 0; i < 10; i++) triggerCreationGesture(1, 'wheel');
   for (let i = 0; i < 60; i++) advanceCreation(1 / 60);
   const deltaHero2 = creation.time - (87.0 + deltaHero);
-  assert.ok(Math.abs(deltaHero2 - 1.0) < 0.05, `CV hero rate remains 1.0s/s under repeated scrolls, got ${deltaHero2}`);
+  assert.ok(Math.abs(deltaHero2 - HERO_REVEAL_SPEED) < 0.05, `CV hero rate holds under repeated scrolls, got ${deltaHero2}`);
 
   Object.assign(creation, { active: false, onHero: null });
 });
@@ -209,7 +215,7 @@ test('scrolling upward reverses animation smoothly from current position; scroll
     state: 'PLAYING_FORWARD',
     time: 88.0, // During Hero reveal
     target: CREATION_DURATION,
-    rate: HERO_NATURAL_SPEED,
+    rate: HERO_REVEAL_SPEED,
     ambient: 0,
     onHero: w => { wokenValue = w; }
   });
@@ -219,7 +225,7 @@ test('scrolling upward reverses animation smoothly from current position; scroll
   assert.equal(creation.state, 'PLAYING_REVERSE');
   assert.equal(creation.target, 0);
 
-  // Reverses smoothly at hero speed (1.0)
+  // Reverses smoothly at the hero's reveal pace
   for (let i = 0; i < 60; i++) advanceCreation(1 / 60);
   assert.ok(creation.time < 88.0, 'time decreases smoothly in reverse');
   const timeWhileReversing = creation.time;
@@ -228,7 +234,7 @@ test('scrolling upward reverses animation smoothly from current position; scroll
   for (let i = 0; i < 5; i++) triggerCreationGesture(-1, 'wheel');
   for (let i = 0; i < 60; i++) advanceCreation(1 / 60);
   const deltaRev = timeWhileReversing - creation.time;
-  assert.ok(Math.abs(deltaRev - HERO_NATURAL_SPEED) < 0.15, `expected fixed reverse rate ${HERO_NATURAL_SPEED} in hero zone, got ${deltaRev}`);
+  assert.ok(Math.abs(deltaRev - HERO_REVEAL_SPEED) < 0.1, `expected fixed reverse rate ${HERO_REVEAL_SPEED} in hero zone, got ${deltaRev}`);
 
   // Scrolling downward again resumes forward from current position without restarting
   const resumeFrom = creation.time;
@@ -269,11 +275,11 @@ test('reversing all the way to start settles in paused state on first frame; com
     state: 'PLAYING_FORWARD',
     time: 90.5,
     target: CREATION_DURATION,
-    rate: HERO_NATURAL_SPEED,
+    rate: HERO_REVEAL_SPEED,
     ambient: 0,
     onHero: w => { woken = w; }
   });
-  for (let i = 0; i < 60; i++) advanceCreation(1 / 60);
+  for (let i = 0; i < 180; i++) advanceCreation(1 / 60);
   assert.equal(creation.active, false, 'intro completed');
   assert.equal(creation.state, 'COMPLETED');
   assert.equal(creation.time, CREATION_DURATION);
@@ -341,7 +347,8 @@ test('clock waits for resources, pauses, completes once on reaching end, and nev
   let ends = 0;
   const listener = () => { if (!creation.active) ends++; };
   creation.listeners.add(listener);
-  creation.time = CREATION_DURATION - 0.02;
+  // The hero reveal is slow now: close enough that one eased step finishes it
+  creation.time = CREATION_DURATION - 0.008;
   creation.target = CREATION_DURATION;
   advanceCreation(0.05);
   assert.equal(creation.active, false);

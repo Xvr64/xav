@@ -13,50 +13,52 @@ export const JOURNEY_STORAGE_KEY = 'xh-journey-v1';
 export type CreationPlaybackState = 'PAUSED' | 'PLAYING_FORWARD' | 'PLAYING_REVERSE' | 'COMPLETED';
 
 /**
- * PART A — FAST INTRO (0 <= t < HERO_WAKES_AT):
- * Fast, energetic progression (~3.5x speed) through the entire intro:
- * Eye of Creation worlds, black hole, space, Earth approach, atmospheric descent,
- * ocean surface, underwater entry, and whales swimming into position.
- * Approximately 3.5x faster than original speed.
+ * THE PACE OF THE OPENING — fast journey, slow arrival. One speed curve over the shared scene
+ * time, so all three journeys (Direct, The Passage, The Odyssey) arrive the same way:
+ *
+ *   ZONE A — FAST (t <= DECEL_START): the Eye of Creation, the cosmos, the starfield, Earth and
+ *            its atmospheric descent, at INTRO_FAST_SPEED (3.5x). Nothing here is slowed.
+ *   DECELERATION (DECEL_START..ARRIVAL_STEADY_FROM): as the camera reaches the ocean surface the
+ *            clock eases, progressively, down to ARRIVAL_SPEED.
+ *   ZONE B — SLOW ARRIVAL: the waterline passing through the camera, the two whales coming into
+ *            the composition at ARRIVAL_SPEED (~1.2x), then a second, gentler easing into the
+ *            Hero (HERO_EASE_FROM..HERO_WAKES_AT) which wakes at HERO_REVEAL_SPEED (0.4x): the
+ *            Hero, and "A journey without horizons", take their time.
+ *
+ * About 2.8x slower than the previous arrival (7.3 s from the surface to the finished Hero, now
+ * about 20 s). Every consumer reads the same clock (the whales' arrival, the Hero's wake), so
+ * they stay in step with each other. Whale body motion is real-time and untouched.
  */
 export const INTRO_FAST_SPEED = 3.5;
-
-/**
- * PART B — ORIGINAL-SPEED HERO (HERO_WAKES_AT <= t <= CREATION_DURATION):
- * Strictly 1.0 unit/second to preserve the exact camera movement, easing, and dramatic pacing
- * of the CV Hero reveal and "A Journey Without Horizon" epigraph typography animation.
- */
-export const HERO_NATURAL_SPEED = 1.0;
-
-/** Blend boundary immediately before the actual CV Hero reveal (85.0s to 87.0s). */
-export const HERO_BLEND_START = 85.0;
+export const ARRIVAL_SPEED = 1.2;
+export const HERO_REVEAL_SPEED = 0.4;
+/** The clock begins to ease as the descent reaches the waterline (the surface passes 76..81) */
+export const DECEL_START = 75;
+export const ARRIVAL_STEADY_FROM = 78.5;
+export const HERO_EASE_FROM = 83.5;
 
 /** Backwards-compatible aliases for legacy imports. */
 export const COSMIC_ACCELERATED_SPEED = INTRO_FAST_SPEED;
-export const ARRIVAL_NATURAL_SPEED = HERO_NATURAL_SPEED;
+export const ARRIVAL_NATURAL_SPEED = ARRIVAL_SPEED;
 export const PLAYBACK_SPEED = INTRO_FAST_SPEED;
 export const REVERSE_PLAYBACK_SPEED = INTRO_FAST_SPEED;
 
 /** Exponential rate easing time constant (seconds) for silky-smooth direction and speed blends. */
 export const RATE_SMOOTH_TIME = 0.18;
 
+/** Eased in the logarithm of the speed, so a slowdown feels even rather than back-loaded. */
+const logBlend = (from: number, to: number, x: number) => Math.exp(Math.log(from) + (Math.log(to) - Math.log(from)) * x);
+
 /**
- * Target playback speed at timeline position `t`.
- * 
- * PART A: All pre-hero sequences (Eye, black hole, space, Earth approach, atmospheric descent,
- * ocean surface, underwater entry, and whales) remain FAST (3.5x speed).
- * 
- * PART B: Only at the exact moment the CV Hero begins waking (HERO_WAKES_AT = 87) does the speed
- * settle strictly at original natural cinematic speed (1.0x).
- * 
- * Eased smoothly between HERO_BLEND_START (85.0) and HERO_WAKES_AT (87.0) to eliminate
- * any velocity step or camera jump.
+ * Target playback speed at timeline position `t` (the same curve forward and in reverse).
+ * Every joint is a smootherstep (zero slope at both ends), so there is never a velocity step.
  */
 export function targetPlaybackSpeed(t: number): number {
-  if (t <= HERO_BLEND_START) return INTRO_FAST_SPEED;
-  if (t >= HERO_WAKES_AT) return HERO_NATURAL_SPEED;
-  const blend = easeRange(t, HERO_BLEND_START, HERO_WAKES_AT);
-  return INTRO_FAST_SPEED + (HERO_NATURAL_SPEED - INTRO_FAST_SPEED) * blend;
+  if (t <= DECEL_START) return INTRO_FAST_SPEED;
+  if (t < ARRIVAL_STEADY_FROM) return logBlend(INTRO_FAST_SPEED, ARRIVAL_SPEED, easeRange(t, DECEL_START, ARRIVAL_STEADY_FROM));
+  if (t <= HERO_EASE_FROM) return ARRIVAL_SPEED;
+  if (t < HERO_WAKES_AT) return logBlend(ARRIVAL_SPEED, HERO_REVEAL_SPEED, easeRange(t, HERO_EASE_FROM, HERO_WAKES_AT));
+  return HERO_REVEAL_SPEED;
 }
 
 export const easeRange = (t: number, a: number, b: number) => {
@@ -82,6 +84,11 @@ export const WHALE_SETTLE_AT = 88;
 export const WHALE_SETTLE_STEP = 2;
 export const WHALE_FADE_SPAN = 5;
 export const HERO_WAKES_AT = 87;
+/**
+ * The hero's text decode begins here, once its fade has taken hold (about 10 % woken), so the
+ * decode is seen as the Hero comes up rather than finishing while it is still invisible.
+ */
+export const HERO_TEXT_AT = 87.9;
 /**
  * How far a whale still is from its real pose: behind itself along its own heading and down in the
  * deep, so it swims in head first out of the blue. Zero at the end, so the ambient pose takes over.
@@ -389,6 +396,8 @@ export function advanceCreation(dt: number) {
 
   if (creation.state === 'PLAYING_FORWARD' && clock >= length - 0.015) {
     creation.time = CREATION_DURATION;
+    // The last value the hero hears is exactly "fully awake", however slowly the clock arrived
+    syncHeroWake(CREATION_DURATION);
     creation.rate = 0;
     creation.state = 'COMPLETED';
     finishCreation('complete');

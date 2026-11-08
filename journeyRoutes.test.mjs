@@ -4,6 +4,8 @@ import {
   CREATION_DURATION,
   DIRECT_START,
   HERO_WAKES_AT,
+  HERO_REVEAL_SPEED,
+  ARRIVAL_SPEED,
   PASSAGE_END,
   PASSAGE_PROGRAM,
   PASSAGE_RESUME,
@@ -93,12 +95,14 @@ test('The Odyssey still visits every original stage in order', () => {
 test('Direct is the shortest, the Passage between, the Odyssey the full length', () => {
   const [direct, passage, odyssey] = ['direct', 'passage', 'odyssey'].map(j => play(j).seconds);
   assert.ok(direct < passage && passage < odyssey, `${direct} ${passage} ${odyssey}`);
-  assert.ok(direct > 9 && direct < 16, `Direct still a cinematic journey, ${direct}s`);
-  assert.ok(passage > 15 && passage < 22, `Passage ${passage}s`);
-  assert.ok(odyssey > 27 && odyssey < 33, `Odyssey unchanged ~30s, ${odyssey}s`);
+  // Their openings keep their fast pace; each then shares the same slow arrival (~20 s from the surface)
+  assert.ok(direct > 22 && direct < 29, `Direct ${direct}s`);
+  assert.ok(passage > 28 && passage < 35, `Passage ${passage}s`);
+  assert.ok(odyssey > 39 && odyssey < 46, `Odyssey ${odyssey}s`);
+  assert.ok(Math.abs((passage - direct) - 5.7) < 0.6 && Math.abs((odyssey - direct) - 17.1) < 0.6, 'the openings before the shared arrival are unchanged');
 });
 
-test('every journey: fast through Earth and ocean, natural speed only for the hero', () => {
+test('every journey: fast through the Earth descent, then the same slow arrival into the Hero', () => {
   for (const journey of ['direct', 'passage', 'odyssey']) {
     reset(journey);
     seekCreation(70);
@@ -112,7 +116,13 @@ test('every journey: fast through Earth and ocean, natural speed only for the he
     for (let i = 0; i < 30; i++) advanceCreation(1 / 60);
     const hero = creation.time;
     for (let i = 0; i < 60; i++) advanceCreation(1 / 60);
-    assert.ok(Math.abs(creation.time - hero - 1) < 0.05, `${journey} hero at 1.0x`);
+    assert.ok(Math.abs(creation.time - hero - HERO_REVEAL_SPEED) < 0.05, `${journey} hero at the slow reveal pace`);
+    seekCreation(80);
+    triggerCreationGesture(1, 'wheel');
+    for (let i = 0; i < 30; i++) advanceCreation(1 / 60);
+    const whales = creation.time;
+    for (let i = 0; i < 60; i++) advanceCreation(1 / 60);
+    assert.ok(Math.abs(creation.time - whales - ARRIVAL_SPEED) < 0.05, `${journey} whales arrive at the steady arrival pace`);
   }
   creation.active = false;
 });
@@ -160,7 +170,7 @@ test('Skip intro stays reversible into the chosen journey', () => {
   reopenCreationInReverse();
   assert.equal(creation.journey, 'passage');
   assert.equal(creation.state, 'PLAYING_REVERSE');
-  for (let i = 0; i < 60 * 30 && creation.state !== 'PAUSED'; i++) {
+  for (let i = 0; i < 60 * 60 && creation.state !== 'PAUSED'; i++) {
     advanceCreation(1 / 60);
     assert.ok(creation.time <= PASSAGE_END || creation.time >= PASSAGE_RESUME);
   }
