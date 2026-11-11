@@ -40,14 +40,14 @@ html[data-creation="active"] [data-ocean-life] { opacity: 0; }
   transform: translateX(-50%) translateY(0);
 }
 
+/* An instruction, so in the metadata voice at a size that can be read: sentence case, 12px */
 .creation-scroll-hint-text {
   font-family: 'IBM Plex Mono', monospace;
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 400;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
+  letter-spacing: 0.04em;
   color: #d8e8f2;
-  opacity: 0.65;
+  opacity: 0.85;
   line-height: 1;
   white-space: nowrap;
 }
@@ -93,12 +93,11 @@ html[data-creation="active"] [data-ocean-life] { opacity: 0; }
 
 .globe-scroll-hint-text {
   font-family: 'IBM Plex Mono', monospace;
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 400;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
+  letter-spacing: 0.04em;
   color: var(--ink-162633, #162633);
-  opacity: 0.65;
+  opacity: 0.9;
   line-height: 1;
   white-space: nowrap;
 }

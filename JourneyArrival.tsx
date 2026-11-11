@@ -6,6 +6,7 @@ import { createDissolve, measureLetters } from './arrivalDissolve';
 import { HANDOFF, endHandoff, handoff, handoffRunning } from './journeyHandoff';
 import { creation, triggerCreationGesture } from './creationTimeline';
 import { charGlyph, isDecodable } from './terminalMotion';
+import { CV_CREDIT } from './cvData';
 import './journeyArrival.css';
 
 type Phase = 'choosing' | 'leaving' | 'gone';
@@ -14,6 +15,13 @@ const RULE_REST = '· '.repeat(160);
 const RULE_INK = '~'.repeat(320);
 const DECODE_MS = 520;
 const reducedMotion = () => typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+/** The arrival's faces. On a first visit they are still loading when the page mounts. */
+const ARRIVAL_FACES = ['300 1em Newsreader', 'italic 300 1em Newsreader', '400 1em "IBM Plex Mono"'];
+/** The longest the type waits for its fonts before rising in whatever is there. */
+const FONT_WAIT_MS = 1500;
+const facesLoaded = () => {
+  try { return typeof document === 'undefined' || !document.fonts || ARRIVAL_FACES.every(face => document.fonts.check(face)); } catch { return true; }
+};
 
 /** A line that resolves out of the site's own scramble glyphs (terminalMotion) whenever it wakes. */
 function Decoding({ text, active }: { text: string; active: boolean }) {
@@ -55,6 +63,9 @@ export function JourneyArrival() {
   const [keyboard, setKeyboard] = useState(false);
   /** The opening gave up mid-handoff: lift the veil the plain way instead */
   const [plainExit, setPlainExit] = useState(false);
+  /** The type rises once its faces are in: never in a fallback serif that then swaps and reflows */
+  const [typeReady, setTypeReady] = useState(facesLoaded);
+  const masthead = useRef<HTMLParagraphElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
   const root = useRef<HTMLDivElement>(null);
   const stage = useRef<HTMLDivElement>(null);
@@ -66,6 +77,15 @@ export function JourneyArrival() {
   /** Where the page had put focus before the arrival took it: the opening's own controls */
   const returnFocus = useRef<HTMLElement | null>(null);
   const present = phase !== 'gone';
+
+  useEffect(() => {
+    if (typeReady) return;
+    let settled = false;
+    const settle = () => { if (!settled) { settled = true; setTypeReady(true); } };
+    Promise.all(ARRIVAL_FACES.map(face => document.fonts.load(face))).then(settle, settle);
+    const cap = window.setTimeout(settle, FONT_WAIT_MS);
+    return () => { settled = true; window.clearTimeout(cap); };
+  }, [typeReady]);
 
   // Follow the choice, whichever way it was made
   useEffect(() => {
@@ -127,7 +147,7 @@ export function JourneyArrival() {
     if (!present || !canvas.current) return;
     const f = mountArrivalField(canvas.current);
     field.current = f;
-    const zones = [title.current, dek.current, list.current].filter(Boolean) as Element[];
+    const zones = [masthead.current, title.current, dek.current, list.current].filter(Boolean) as Element[];
     f.setQuietZones(zones);
     const observer = new ResizeObserver(() => f.refresh());
     zones.forEach(el => observer.observe(el));
@@ -184,6 +204,7 @@ export function JourneyArrival() {
       data-handoff={phase === 'leaving' && handoffRunning() && !plainExit ? '' : undefined}
       data-chosen={chosen ?? undefined}
       data-keyboard={keyboard ? '' : undefined}
+      data-ready={typeReady ? '' : undefined}
       role="dialog"
       aria-modal="true"
       aria-labelledby="journey-title"
@@ -195,6 +216,18 @@ export function JourneyArrival() {
     >
       <canvas ref={canvas} className="journey-field" aria-hidden="true" />
       <div ref={stage} className="journey-stage">
+        {/* Whose page this is, before anything is chosen, and the one exit that needs no journey */}
+        <p ref={masthead} className="journey-masthead">
+          <span className="journey-masthead-who">
+            <span className="journey-masthead-name">{CV_CREDIT.name}</span>
+            <span className="journey-masthead-dash" aria-hidden="true"> — </span>
+            <span className="journey-masthead-line">{CV_CREDIT.line}</span>
+          </span>
+          <a className="journey-masthead-cv" href={CV_CREDIT.cvUrl} target="_blank" rel="noopener noreferrer">
+            CV <span aria-hidden="true">↗</span>
+            <span className="journey-sr"> (PDF, opens in a new tab)</span>
+          </a>
+        </p>
         <h2 ref={title} id="journey-title" className="journey-title">
           <span className="journey-title-line">Choose your</span>{' '}
           <em className="journey-title-line journey-title-turn">journey.</em>

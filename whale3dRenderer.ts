@@ -23,6 +23,7 @@
 import * as THREE from 'three';
 import { SKIN_ROWS, packSkin, type Articulation, type Quat } from './whale3dPose.ts';
 import { SPINE_NODES, buildWhaleGeometry, type V3 } from './whale3dAnatomy.ts';
+import { VEIL_KEEP_LINE, VEIL_KEEP_TONE, rasterizeVeil, type VeilRect } from './whaleVeil.ts';
 
 export type AsciiMode = 'shape' | 'luminance' | 'raw';
 
@@ -539,14 +540,18 @@ uniform float uOpacity;
 uniform float uContrast;
 uniform float uFarFade;
 uniform float uInvert;
+uniform sampler2D uVeil;
+uniform float uVeilAmount;
+uniform vec2 uVeilKeep;
 out vec4 outColor;
 void main() {
   vec2 fc = vec2(gl_FragCoord.x, uCanvasH - gl_FragCoord.y);
   ivec2 cell = ivec2(floor(fc / uCell));
   vec4 c = texelFetch(uCells, cell, 0);
   float gi = floor(c.r * 255.0 + 0.5);
-  // Nothing but the glyphs: no panel, no fill and no mask, so a whale's silhouette stays whole
-  // wherever it swims (the copy keeps its own halo above this layer)
+  // Nothing but the glyphs: no panel and no fill. Behind a line of copy the engraving thins by
+  // the reading veil (whaleVeil.ts): the tone almost clears and the contour only softens, so the
+  // silhouette stays whole while the text in front of it stays readable
   if (c.g <= 0.0 || gi < 0.5) discard;
   // Line work (silhouette, contours, mouth, eye) is class 1; the body's tone cells carry their
   // engraver's level 0 … 1 below it
@@ -556,6 +561,10 @@ void main() {
   vec2 tile = vec2(mod(gi, uAtlasCols), floor(gi / uAtlasCols));
   float a = texelFetch(uAtlas, ivec2(tile * uTile + min(local, uTile - 1.0)), 0).a * min(1.0, c.g * uContrast) * uOpacity;
   a *= 1.0 - uFarFade * c.b;
+  if (uVeilAmount > 0.0) {
+    float veil = texture(uVeil, fc / (uCell * vec2(textureSize(uVeil, 0)))).r * uVeilAmount;
+    a *= mix(1.0, mix(uVeilKeep.x, uVeilKeep.y, line), veil);
+  }
   vec3 col = mix(uInk, uInkFar, c.b);
   // The drawing and the deepest shadow take the strongest ink (deeper on light water, brighter
   // on the abyss), so the contour holds the form and the modelling reads in depth
@@ -625,6 +634,13 @@ export class WhaleAsciiRenderer {
   private dpr = 1;
   private gscale: number;
   private readonly occluder = { center: new THREE.Vector3(), radius: 0, amount: 0 };
+  /** The reading veil (whaleVeil.ts): the copy's line boxes, rasterised on the glyph grid. */
+  private veilRects: readonly VeilRect[] | null = null;
+  private veilAmount = 0;
+  private veilDirty = false;
+  private veilData: Uint8Array<ArrayBuffer> = new Uint8Array(1);
+  private veilScratch = new Float32Array(2);
+  private veilTexture = WhaleAsciiRenderer.makeVeilTexture(new Uint8Array(1), 1, 1);
   private readonly light = new THREE.Vector3(-0.42, 0.8, 0.42).normalize();
   private readonly tmp = new THREE.Vector3();
   private readonly onLost = (e: Event) => {
@@ -636,6 +652,7 @@ export class WhaleAsciiRenderer {
     this.lost = false;
     this.atlasKey = '';
     this.skinTexture.needsUpdate = true;
+    this.veilDirty = true;
   };
   private readonly canvas: HTMLCanvasElement;
 
@@ -751,7 +768,10 @@ export class WhaleAsciiRenderer {
         uOpacity: { value: 1 },
         uContrast: { value: WHALE_LOOK.contrast },
         uFarFade: { value: WHALE_LOOK.farFade },
-        uInvert: { value: 0 }
+        uInvert: { value: 0 },
+        uVeil: { value: null },
+        uVeilAmount: { value: 0 },
+        uVeilKeep: { value: new THREE.Vector2(VEIL_KEEP_TONE, VEIL_KEEP_LINE) }
       }
     });
     this.rawMaterial = new THREE.ShaderMaterial({
@@ -821,6 +841,45 @@ export class WhaleAsciiRenderer {
     this.occluder.center.set(...center);
     this.occluder.radius = radius;
     this.occluder.amount = amount;
+  }
+
+  /**
+   * Where the page's copy sits (viewport CSS px line boxes), so the engraving thins behind it;
+   * null or amount 0 draws the whales at full strength everywhere. Pass the same array while
+   * nothing has moved: the map is only redrawn when the array or the glyph grid changes.
+   */
+  setVeil(rects: readonly VeilRect[] | null, amount = 1) {
+    if (rects !== this.veilRects) { this.veilRects = rects; this.veilDirty = true; }
+    this.veilAmount = rects && rects.length ? Math.max(0, Math.min(1, amount)) : 0;
+  }
+
+  private static makeVeilTexture(data: Uint8Array<ArrayBuffer>, cols: number, rows: number) {
+    const texture = new THREE.DataTexture(data, cols, rows, THREE.RedFormat, THREE.UnsignedByteType);
+    texture.minFilter = THREE.LinearFilter;
+    texture.magFilter = THREE.LinearFilter;
+    texture.wrapS = texture.wrapT = THREE.ClampToEdgeWrapping;
+    texture.generateMipmaps = false;
+    texture.flipY = false;
+    texture.unpackAlignment = 1;
+    texture.needsUpdate = true;
+    return texture;
+  }
+
+  /** Redraw the veil on the current glyph grid (cw × ch device px per cell) if anything changed. */
+  private syncVeil(cw: number, ch: number, W: number, H: number) {
+    if (this.veilAmount <= 0 || !this.veilRects) return;
+    const cols = Math.ceil(W / cw), rows = Math.ceil(H / ch);
+    if (this.veilData.length !== cols * rows || this.veilTexture.image.width !== cols) {
+      this.veilData = new Uint8Array(cols * rows);
+      this.veilScratch = new Float32Array(cols * rows * 2);
+      this.veilTexture.dispose();
+      this.veilTexture = WhaleAsciiRenderer.makeVeilTexture(this.veilData, cols, rows);
+      this.veilDirty = true;
+    }
+    if (!this.veilDirty) return;
+    this.veilDirty = false;
+    rasterizeVeil(this.veilData, this.veilScratch, cols, rows, cw / this.dpr, ch / this.dpr, this.veilRects);
+    this.veilTexture.needsUpdate = true;
   }
 
   private ensureCells() {
@@ -943,6 +1002,9 @@ export class WhaleAsciiRenderer {
       pu.uOpacity.value = this.style.opacity;
       pu.uContrast.value = this.style.contrast;
       pu.uFarFade.value = this.style.farFade;
+      this.syncVeil(cw, ch, W, H);
+      pu.uVeil.value = this.veilTexture;
+      pu.uVeilAmount.value = this.veilAmount;
       this.quad.material = this.compositeMaterial;
       r.render(this.quadScene, this.quadCamera);
     }
@@ -963,6 +1025,7 @@ export class WhaleAsciiRenderer {
     this.gbuffer.dispose();
     this.cells.dispose();
     this.atlasTexture?.dispose();
+    this.veilTexture.dispose();
     this.skinTexture.dispose();
     this.whales[0]?.mesh.geometry.dispose();
     for (const w of this.whales) w.material.dispose();

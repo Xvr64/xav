@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { AsciiText } from './TerminalEditorial';
 import { createHeroCurrent } from './heroCurrent';
-import { CV_DATA } from './cvData';
+import { CV_CREDIT, CV_DATA } from './cvData';
 import {
   directWhales,
   heroZone,
@@ -77,6 +77,25 @@ export const HeroCurrentLayer: React.FC = React.memo(() => {
     const nameEl = stage.querySelector<HTMLElement>('[data-hero-name]');
     if (!nameEl) return;
 
+    // The cover's credit line yields as the headline starts to break up. While it shows, its two
+    // ends are reading text like the headline: the whales thin behind them (stage-local boxes,
+    // measured on layout changes only; the stage is pinned at the top while the credit is visible).
+    const colophon = stage.querySelector<HTMLElement>('[data-hero-colophon]');
+    let colophonShown = 1;
+    let colophonRects: { left: number; top: number; width: number; height: number }[] = [];
+    const measureColophon = () => {
+      if (!colophon) return;
+      const origin = stage.getBoundingClientRect().top;
+      colophonRects = Array.from(colophon.children, (el) => {
+        const r = el.getBoundingClientRect();
+        return { left: r.left, top: r.top - origin, width: r.width, height: r.height };
+      }).filter((r) => r.width > 0 && r.height > 0);
+    };
+    measureColophon();
+    const colophonObserver = new ResizeObserver(measureColophon);
+    if (colophon) colophonObserver.observe(colophon);
+    document.fonts?.ready.then(measureColophon, () => undefined);
+
     const handle = createHeroCurrent({
       canvas,
       section,
@@ -86,11 +105,18 @@ export const HeroCurrentLayer: React.FC = React.memo(() => {
       nameLines: Array.from(nameEl.querySelectorAll<HTMLElement>('[data-hero-name-line]')),
       horizon: stage.querySelector<HTMLElement>('[data-hero-horizon]'),
       onZones: (rects) => {
-        if (rects.length === 0 && heroZone.rects.length === 0) return;
-        heroZone.rects = rects;
+        const zones = colophonShown > 0.05 && colophonRects.length ? [...rects, ...colophonRects] : rects;
+        if (zones.length === 0 && heroZone.rects.length === 0) return;
+        heroZone.rects = zones;
         heroZone.version++;
       },
       onFrame: ({ t, stageTop, stageHeight }) => {
+        const shown = 1 - smoothStepRange(t, 0.012, 0.085);
+        if (colophon && shown !== colophonShown) {
+          colophonShown = shown;
+          colophon.style.opacity = String(shown);
+          colophon.style.visibility = shown <= 0 ? 'hidden' : '';
+        }
         // Arrival → descent → name, then the stage scrolls away as the Globe's runway rises and
         // the whales are let go, to swim on from wherever they are
         const toDescent = smoothStepRange(t, 0.04, 0.36);
@@ -107,6 +133,8 @@ export const HeroCurrentLayer: React.FC = React.memo(() => {
     });
     return () => {
       handle.destroy();
+      colophonObserver.disconnect();
+      if (colophon) { colophon.style.removeProperty('opacity'); colophon.style.removeProperty('visibility'); }
       directWhales('cover', 0, LANES_SURFACE);
     };
   }, []);
@@ -286,6 +314,19 @@ export const ProgressiveOceanEntry: React.FC<ProgressiveOceanEntryProps> = React
             <span className="hero-name-first" data-hero-name-line>Xavier</span>
             <span className="hero-name-last" data-hero-name-line>Hery</span>
           </p>
+          {/* The cover's credit: whose page this is, readable from the first frame, and the one
+              cue the cover needs. It yields as the headline starts to break up (HeroCurrentLayer). */}
+          <div className="hero-colophon" data-hero-colophon>
+            <p className="hero-colophon-who meta">
+              <span className="hero-colophon-name">{CV_CREDIT.name}</span>
+              <span className="hero-colophon-dash" aria-hidden="true"> — </span>
+              <span className="hero-colophon-line">{CV_CREDIT.line}</span>
+            </p>
+            <p className="hero-colophon-cue meta" aria-hidden="true">
+              Scroll
+              <span className="hero-colophon-tick" />
+            </p>
+          </div>
         </div>
         {/* The page's one h1. With motion the name resolved on the stage carries it visually, so it
             is clipped (and kept out of the word system); without motion it is set as type here. */}

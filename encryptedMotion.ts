@@ -1,6 +1,16 @@
 /** Aceternity-style letter locking, driven by the portfolio's reversible scroll lifecycle. */
 export const ENCRYPTED_CHARSET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()_+-={}[];:,.<>/?';
 export const REVEAL_DELAY_MS = 50;
+/**
+ * The longest any one rendered line takes to resolve. Short labels keep the letter-by-letter lock
+ * (50 ms a character); a full line of copy, which at that pace stayed scrambled for 2–4 seconds
+ * after it had scrolled into the reading zone, sweeps through in the same time as a 12-letter word.
+ * The effect is the same wave; the page is simply never waited on.
+ */
+export const LINE_REVEAL_MAX_MS = 600;
+/** How long a line of `characterCount` characters takes to resolve once it starts. */
+export const lineRevealMs = (characterCount: number) =>
+  Math.min(LINE_REVEAL_MAX_MS, Math.max(REVEAL_DELAY_MS, characterCount * REVEAL_DELAY_MS));
 export const FLIP_DELAY_MS = 50;
 
 export type EncryptedLineState = {
@@ -27,7 +37,7 @@ export function advanceEncryptedLine(
     return { revealState: 'exiting', currentP: Math.min(previous.currentP, zoneProgress) };
   }
   if (previous.revealState === 'hidden') return { revealState: 'revealing', currentP: 0 };
-  const progress = previous.currentP + Math.max(0, elapsedMs) / Math.max(REVEAL_DELAY_MS, characterCount * REVEAL_DELAY_MS);
+  const progress = previous.currentP + Math.max(0, elapsedMs) / lineRevealMs(characterCount);
   const currentP = progress >= 1 - 1e-9 ? 1 : progress;
   return { revealState: currentP === 1 ? 'revealed' : 'revealing', currentP };
 }

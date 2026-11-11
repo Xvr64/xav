@@ -71,6 +71,45 @@ html[data-arrival='open'] { overflow: hidden !important; }
   padding: clamp(22px, 4.2vh, 44px) var(--page-margin, 48px) clamp(28px, 7vh, 72px);
 }
 
+/* The masthead: whose page this is, on the stage's first row in the instrument voice, and the
+   one exit that needs no journey. Present before anything is chosen. */
+.journey-masthead {
+  grid-column: 1 / -1;
+  grid-row: 1;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 24px;
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.5;
+  letter-spacing: 0.04em;
+  color: var(--arrival-ink-2);
+  animation-delay: 0.1s;
+}
+.journey-masthead-name { color: var(--arrival-ink); letter-spacing: 0.06em; }
+.journey-masthead-dash { white-space: pre; color: var(--arrival-ink-3); }
+.journey-masthead-cv {
+  flex: none;
+  color: var(--arrival-ink);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 4px;
+  text-decoration-color: rgba(232, 240, 244, 0.35);
+  transition: text-decoration-color 160ms;
+}
+.journey-masthead-cv:hover { text-decoration-color: currentColor; }
+.journey-masthead-cv:focus-visible { outline: 1px solid currentColor; outline-offset: 5px; }
+.journey-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 .journey-title {
   grid-column: 1 / span 10;
   grid-row: 2;
@@ -299,6 +338,11 @@ html[data-arrival='open'] { overflow: hidden !important; }
   from { opacity: 0; transform: translateY(14px); }
   to { opacity: 1; transform: none; }
 }
+/* The type waits for its faces (JourneyArrival sets data-ready, 1.5 s at most): held on its first
+   frame, it never rises in a fallback serif that then swaps and reflows. The sky is already there. */
+.journey-arrival:not([data-ready]) .journey-stage { opacity: 0; }
+.journey-arrival:not([data-ready]) .journey-stage > *,
+.journey-arrival:not([data-ready]) .journey-item { animation-play-state: paused; }
 
 .journey-arrival[data-phase='leaving'] {
   pointer-events: none;
@@ -353,6 +397,10 @@ html[data-handoff] .creation-scroll-hint { opacity: 0 !important; }
     margin: clamp(56px, 13vh, 120px) 0 18px;
     font-size: clamp(48px, 14.5vw, 76px);
   }
+  .journey-masthead { grid-column: 1; align-items: flex-start; }
+  .journey-masthead-dash { display: none; }
+  .journey-masthead-name, .journey-masthead-line { display: block; }
+  .journey-masthead-who { text-wrap: balance; }
   .journey-dek { grid-column: 1; grid-row: 3; padding-top: 0; font-size: 19px; }
   .journey-list { grid-column: 1; grid-row: 4; margin-top: clamp(32px, 6vh, 56px); }
   .journey {

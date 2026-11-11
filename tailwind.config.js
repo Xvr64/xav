@@ -6,6 +6,11 @@
  */
 export default {
   content: ['./index.html', './*.{ts,tsx}', '!./archivedComponents.tsx'],
+  // Without this, preflight's `*, ::before, ::after` rule gives every element (and both of its
+  // pseudo-elements) some fifty --tw-* custom properties, and any whole-document restyle on this
+  // page costs 18-30 ms instead of 13-14 (measured, 2026-11). With it, each default is declared only on the
+  // utilities that read it (transforms, rings, shadows, filters), which is all the page needs.
+  experimental: { optimizeUniversalDefaults: true },
   theme: {
     extend: {
       fontFamily: {

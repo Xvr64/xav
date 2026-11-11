@@ -6,6 +6,7 @@ import { mountLanternCursor } from './lanternCursor';
 import { CV_DATA } from './cvData';
 import { ReadingZoneTracker } from './ReadingZoneTracker';
 import { SectionIndex } from './SectionIndex';
+import { DepthGauge } from './DepthGauge';
 import { JourneyGlobe } from './JourneyGlobe';
 import { AsciiWhaleBackground } from './AsciiWhaleBackground';
 import { AsciiOceanField } from './AsciiOceanField';
@@ -191,6 +192,7 @@ export default function App() {
       <WhalesAroundGlobe />
       <AsciiWhaleBackground mode="ambient" />
       <SectionIndex cvUrl={ORIGINAL_CV_PDF_URL} />
+      <DepthGauge />
 
       {downloadToast && (
         <div aria-hidden="true" className="fixed top-20 right-6 z-50 bg-[#171717]/90 backdrop-blur-md text-[#F5F3EE] border border-[#B6C5B0] px-4 py-3 shadow-lg flex items-center gap-3 font-mono text-xs">
@@ -238,8 +240,8 @@ export default function App() {
               <FloatingSectionHeader
                 sectionId="experience"
                 layout="benchmark"
-                title="Operational & commercial internships"
-                asideAccent="Translating cross-cultural adaptability into rigorous business execution and freight logistics."
+                title="Experience"
+                asideAccent="Two internships, one on the commercial side of international business and one in its operations."
               />
             </RevealBlock>
 
@@ -272,9 +274,9 @@ export default function App() {
                         </ul>
                       </div>
                     )}
-                    {exp.concisePoints && exp.concisePoints.length > 0 && (
+                    {exp.verbatimPoints && exp.verbatimPoints.length > 0 && (
                       <ul className="exp-what">
-                        {exp.concisePoints.map((pt, i) => (
+                        {exp.verbatimPoints.map((pt, i) => (
                           <li key={i} className="body-copy">
                             <BioWords text={pt} />
                           </li>
@@ -293,8 +295,7 @@ export default function App() {
               <FloatingSectionHeader
                 sectionId="skills"
                 layout="benchmark"
-                title="Technical & creative toolset"
-                description="Organized across automated workflows, media production, and enterprise productivity suites."
+                title="Skills & tools"
               />
             </RevealBlock>
 
@@ -324,7 +325,7 @@ export default function App() {
               <FloatingSectionHeader
                 sectionId="education"
                 layout="indented"
-                title="Academic chronology"
+                title="Education"
               />
             </RevealBlock>
 
@@ -376,8 +377,8 @@ export default function App() {
               <FloatingSectionHeader
                 sectionId="languages"
                 layout="benchmark"
-                title="Across languages"
-                description="Multilingual fluency forged through living and studying in six distinct linguistic regions."
+                title="Languages"
+                description="Six languages, from native French to first steps in Mandarin."
               />
             </RevealBlock>
 
@@ -407,8 +408,7 @@ export default function App() {
               <FloatingSectionHeader
                 sectionId="interests"
                 layout="benchmark"
-                title="Disciplines & cultural monitoring"
-                description="Athletic conditioning, music production, macroeconomic research, and luxury retail observation."
+                title="Interests"
               />
             </RevealBlock>
 
@@ -437,14 +437,14 @@ export default function App() {
               <FloatingSectionHeader
                 sectionId="contact"
                 layout="monument"
-                title="Direct correspondence"
+                title="Contact"
               />
             </RevealBlock>
 
             {/* The address is the last large statement of the descent, its label hanging on line a */}
             <div className="contact-mail ed-grid">
               <p className="contact-label meta">
-                <AsciiText text="electronic mail" />
+                <AsciiText text="Email" />
               </p>
               <div className="contact-mail-body">
                 <a href={CV_DATA.emailHref} className="contact-address text-[#171717]">
@@ -461,23 +461,23 @@ export default function App() {
             {/* The closing row, ruled like a colophon: the CV on line b, the other channels on line c */}
             <footer className="contact-foot ed-grid">
               <p className="contact-label meta">
-                <AsciiText text="curriculum vitae" />
+                <AsciiText text="CV" />
               </p>
               <div className="contact-cv">
                 <h3 className="item">
-                  <BioWords text="Original English CV PDF" />
+                  <BioWords text="Curriculum vitae" />
                 </h3>
                 <p className="meta">
-                  <BioWords text="Engl CV Xavier Hery.pdf · official document" />
+                  <BioWords text="English · PDF" />
                 </p>
                 <div className="contact-actions">
                   <button type="button" onClick={() => setCvModalOpen(true)} className="text-control" aria-haspopup="dialog">
                     <Eye className="w-4 h-4" aria-hidden="true" />
-                    <AsciiText text="preview document" />
+                    <AsciiText text="preview" />
                   </button>
                   <button type="button" onClick={handleDownloadOriginalCv} className="text-control">
                     <Download className="w-4 h-4" aria-hidden="true" />
-                    <AsciiText text="download pdf" />
+                    <AsciiText text="download" />
                   </button>
                 </div>
               </div>

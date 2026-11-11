@@ -150,24 +150,53 @@ export function glyphsAt(depth: number) {
 const css = ([r, g, b]: RGB) => `${Math.round(r * 255)}, ${Math.round(g * 255)}, ${Math.round(b * 255)}`;
 let lastWater = '';
 let lastLow = '';
+let wantWater = '';
+let wantLow = '';
+let lastWaterWrite = -Infinity;
+let waterTimer: ReturnType<typeof setTimeout> | 0 = 0;
+/**
+ * How often the page's CSS may follow the water (ms). A custom property on <html> restyles the
+ * whole document, measured at 18-28 ms a write on this page; written on every frame of the
+ * descent, as it was, that held the Globe's film at 15-24 fps with half the main thread in forced
+ * style recalculation. The water itself is the ocean's opaque canvas, which still draws the exact
+ * colour on every frame; these properties only tint what sits on it (the text's halo, the Globe
+ * caption's veil), where a step of a few levels of 255 inside a blurred shadow cannot be seen.
+ * The last colour is always written once the water settles.
+ */
+export const WATER_CSS_INTERVAL_MS = 240;
+/** Whether a write is due `now`, given the last one (pure, for tests). */
+export const waterWriteDue = (now: number, last: number) => now - last >= WATER_CSS_INTERVAL_MS;
+const writeWater = (now: number) => {
+  lastWaterWrite = now;
+  const root = document.documentElement.style;
+  if (wantWater !== lastWater) {
+    lastWater = wantWater;
+    root.setProperty('--ocean-background', `rgb(${wantWater})`);
+    root.setProperty('--abyss-wash', wantWater);
+    root.setProperty('--abyss-halo', `rgba(${wantWater}, 0.82)`);
+  }
+  if (wantLow !== lastLow) {
+    lastLow = wantLow;
+    root.setProperty('--abyss-wash-low', wantLow);
+  }
+};
 /**
  * The page's own water (body background, text halos, caption veils, the phone menu) takes the
  * colour of the ocean at the screen's centre, so nothing drawn on it reads as a grey patch.
  * The water deepens down the screen, so washes that sit low (the phone Globe caption's veil)
  * take `--abyss-wash-low`, the colour four fifths of the way down, `lowDepth`.
+ * Called every drawn frame; the document is only restyled every WATER_CSS_INTERVAL_MS.
  */
 export function applyWaterColor(depth: number, lowDepth = depth) {
-  const water = css(waterAt(depth));
-  const low = css(waterAt(lowDepth));
-  const root = document.documentElement.style;
-  if (water !== lastWater) {
-    lastWater = water;
-    root.setProperty('--ocean-background', `rgb(${water})`);
-    root.setProperty('--abyss-wash', water);
-    root.setProperty('--abyss-halo', `rgba(${water}, 0.82)`);
-  }
-  if (low !== lastLow) {
-    lastLow = low;
-    root.setProperty('--abyss-wash-low', low);
+  wantWater = css(waterAt(depth));
+  wantLow = css(waterAt(lowDepth));
+  if (wantWater === lastWater && wantLow === lastLow) return;
+  const now = performance.now();
+  if (waterWriteDue(now, lastWaterWrite)) {
+    if (waterTimer) { clearTimeout(waterTimer); waterTimer = 0; }
+    writeWater(now);
+  } else if (!waterTimer) {
+    // The trailing write: whatever colour the water has reached by then, even if it has stopped
+    waterTimer = setTimeout(() => { waterTimer = 0; writeWater(performance.now()); }, WATER_CSS_INTERVAL_MS - (now - lastWaterWrite));
   }
 }

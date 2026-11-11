@@ -9,7 +9,7 @@ import { globeZone, heroZone, readingZones } from './oceanDirection';
 // nothing moves). The whales read them to let their tone recede softly behind a line of text.
 
 /** Reading text the whales recede behind. */
-export const READING_SELECTOR = 'main h1, main h2, main h3, main p, main li, main a, main button';
+export const READING_SELECTOR = 'main h1, main h2, main h3, main p, main li, main dt, main dd, main a, main button';
 
 export const ReadingZoneTracker: React.FC = React.memo(() => {
   useEffect(() => {

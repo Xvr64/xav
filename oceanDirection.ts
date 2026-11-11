@@ -91,6 +91,10 @@ export const setGlobeZone = (rects: HeroRect[]) => {
   whaleStage.refresh?.();
 };
 
+/** Copy that stands outside the page's flow (the depth gauge): viewport boxes the whales thin
+ * behind, like the reading text. Whoever writes `rects` bumps `version`. */
+export const fixedCopy: { rects: HeroRect[]; version: number } = { rects: [], version: 0 };
+
 /** Wakes the whales' frame loop when something it waits on changes outside of a scroll. */
 export const whaleStage: { refresh: (() => void) | null } = { refresh: null };
 

@@ -30,7 +30,8 @@
   --text-item: clamp(18px, 1.3vw, 20px);
   --text-body: clamp(16px, 1.05vw, 17px);
   --text-small: 14px;
-  --text-meta: 12px;
+  /* The instrument voice carries the facts a recruiter scans for (dates, places, levels): 13px */
+  --text-meta: 13px;
   /* h3 is the item role */
   --text-h3: var(--text-item);
 
@@ -359,6 +360,50 @@ body {
   .hero-name, .hero-horizon { display: none; }
 }
 
+/* The cover's credit line, at the foot of the stage in the instrument voice: whose page this is
+   on the margin, the one cue the cover needs at the far end. It is the only thing on the first
+   screen besides the headline, and it yields as the headline starts to break up
+   (HeroCurrentLayer sets its opacity from the cover's own scroll value). */
+.hero-colophon {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: clamp(24px, 5svh, 48px);
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: var(--space-m);
+  pointer-events: none;
+}
+.hero-colophon p { margin: 0; opacity: 1; color: var(--ink-2B353B, #1c2a3a); }
+.hero-colophon-name { color: var(--ink-171717, #171717); letter-spacing: var(--tracking-mono-wide); }
+.hero-colophon-dash { white-space: pre; opacity: 0.55; }
+.hero-colophon-cue { display: inline-flex; align-items: flex-end; gap: 10px; white-space: nowrap; }
+.hero-colophon-tick {
+  position: relative;
+  width: 1px;
+  height: 26px;
+  margin-bottom: 2px;
+  background: var(--rule-20, rgba(23, 23, 23, 0.2));
+  overflow: hidden;
+}
+.hero-colophon-tick::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: currentColor;
+  transform: scaleY(0);
+  transform-origin: top;
+  animation: creation-scroll-stretch-down 2.4s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .hero-colophon-cue { display: none; }
+}
+@media (max-width: 767px) {
+  .hero-colophon-dash { display: none; }
+  .hero-colophon-name, .hero-colophon-line { display: block; }
+}
+
 /* Migration: an empty runway whose scroll is the journey's timeline (drawn by the whale
    canvas). Without motion there is no journey, and no runway. */
 .migration-runway { height: 0; }
@@ -480,13 +525,15 @@ body {
   max-width: 18em;
   text-wrap: balance;
 }
-.exp-entry .exp-scope { grid-column: c / end; grid-row: 1; }
+/* The scope spans both rows, so the record starts right under the role, not under the scope list */
+.exp-entry .exp-scope { grid-column: c / end; grid-row: 1 / span 2; }
 .exp-entry .exp-scope ul { margin-top: var(--space-s); }
 .exp-entry .exp-scope li + li { margin-top: var(--space-xs); }
 /* The record, when an entry carries one: numbered readings under the role on line b */
 .exp-entry .exp-what {
   grid-column: b / span 6;
   grid-row: 2;
+  margin-top: var(--space-xs);
   counter-reset: reading;
 }
 .exp-entry .exp-what li {
@@ -831,6 +878,106 @@ body {
   .fixed-top-controls { display: none !important; }
 }
 
+/* ---------------------------------------------------------------------------
+   Depth gauge (DepthGauge.tsx) — the sounding line in the right margin: a hairline, one tick
+   per section, a marker travelling with the reading line. Strokes only at rest; the names show
+   when it is approached and for a moment when it first arrives. From the introduction on.
+   --------------------------------------------------------------------------- */
+.depth-gauge {
+  --gauge-ink: var(--ink-52595E, #52595e);
+  --gauge-strong: var(--ink-171717, #171717);
+  position: fixed;
+  top: 50%;
+  right: clamp(14px, calc(var(--page-margin) / 2 - 6px), 46px);
+  z-index: 40;
+  margin-top: calc(var(--gauge-step) * -3.5);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.6s ease, visibility 0.6s;
+  text-shadow: 0 0 2px var(--abyss-halo), 0 0 9px var(--abyss-halo);
+}
+.depth-gauge[data-shown] { opacity: 1; visibility: visible; }
+.depth-gauge ol { list-style: none; margin: 0; padding: 0; }
+.depth-gauge li { height: var(--gauge-step); }
+/* The line itself, from the first tick to the last */
+.depth-gauge::before {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: calc(var(--gauge-step) / 2);
+  height: calc(var(--gauge-step) * 6);
+  width: 1px;
+  background: var(--rule-20, rgba(23, 23, 23, 0.2));
+}
+.terminal-portfolio .depth-gauge a {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  width: 30px;
+  height: 100%;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1;
+  letter-spacing: var(--tracking-mono);
+  color: var(--gauge-ink);
+  text-decoration: none;
+  white-space: nowrap;
+}
+/* Out of the flow, so the gauge's own box (and its hit area) is only as wide as its strokes */
+.depth-gauge-label {
+  position: absolute;
+  right: 28px;
+  opacity: 0;
+  transform: translateX(6px);
+  transition: opacity 0.35s ease, transform 0.45s cubic-bezier(0.16, 1, 0.3, 1), color 0.2s ease;
+  pointer-events: none;
+}
+.depth-gauge-tick {
+  flex: none;
+  width: 9px;
+  height: 1px;
+  background: currentColor;
+  opacity: 0.75;
+  transition: width 0.3s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease;
+}
+/* Approached, or introducing itself: the names come out, the current one in full ink */
+.depth-gauge:hover .depth-gauge-label,
+.depth-gauge:focus-within .depth-gauge-label,
+.depth-gauge[data-labels] .depth-gauge-label { opacity: 0.85; transform: none; }
+.depth-gauge a[aria-current] { color: var(--gauge-strong); }
+.depth-gauge:hover a[aria-current] .depth-gauge-label,
+.depth-gauge:focus-within a[aria-current] .depth-gauge-label,
+.depth-gauge[data-labels] a[aria-current] .depth-gauge-label { opacity: 1; }
+.depth-gauge a:hover { color: var(--gauge-strong); }
+.depth-gauge a:hover .depth-gauge-label { opacity: 1; }
+.depth-gauge a:hover .depth-gauge-tick,
+.depth-gauge a:focus-visible .depth-gauge-tick { width: 16px; opacity: 1; }
+.terminal-portfolio .depth-gauge a:focus-visible { outline: 1px solid currentColor; outline-offset: 2px; }
+/* The marker: where the reading line is, between two stations or on one */
+.depth-gauge-marker {
+  position: absolute;
+  right: -2px;
+  top: calc(var(--gauge-step) / 2 - 2.5px);
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--gauge-strong);
+  box-shadow: 0 0 0 3px var(--abyss-halo);
+  will-change: transform;
+  pointer-events: none;
+}
+/* No margin to stand in on tablets and phones */
+@media (max-width: 1100px) {
+  .depth-gauge { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .depth-gauge, .depth-gauge-label, .depth-gauge-tick { transition: none; }
+}
+@media print {
+  .depth-gauge { display: none !important; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .ascii-word, .ascii-source { opacity: 1 !important; }
   .ascii-visual { visibility: hidden; }
@@ -958,6 +1105,20 @@ body {
   letter-spacing: var(--tracking-h2);
 }
 .globe-caption .globe-period { opacity: 1; }
+/* The stretch's one fact (the school, the exchange), in the page's italic aside voice */
+.globe-caption .globe-note {
+  margin: var(--space-s) 0 0;
+  font-family: var(--font-display);
+  font-variation-settings: 'opsz' 36;
+  font-style: italic;
+  font-weight: var(--display-weight, 300);
+  font-size: clamp(18px, 1.45vw, 22px);
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+  color: var(--ink-2F4858, #2F4858);
+  max-width: 16em;
+  text-wrap: balance;
+}
 
 /* The Globe's pinned runway: the city journey's 600vh. Reduced motion collapses it to a single
    still screen.
