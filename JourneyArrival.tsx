@@ -218,11 +218,6 @@ export function JourneyArrival() {
       <div ref={stage} className="journey-stage">
         {/* Whose page this is, before anything is chosen, and the one exit that needs no journey */}
         <p ref={masthead} className="journey-masthead">
-          <span className="journey-masthead-who">
-            <span className="journey-masthead-name">{CV_CREDIT.name}</span>
-            <span className="journey-masthead-dash" aria-hidden="true"> — </span>
-            <span className="journey-masthead-line">{CV_CREDIT.line}</span>
-          </span>
           <a className="journey-masthead-cv" href={CV_CREDIT.cvUrl} target="_blank" rel="noopener noreferrer">
             CV <span aria-hidden="true">↗</span>
             <span className="journey-sr"> (PDF, opens in a new tab)</span>
