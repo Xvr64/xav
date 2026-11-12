@@ -7,13 +7,13 @@ import { CV_DATA } from './cvData.ts';
 
 // Execute the real controller, camera/city state, canvas draw, renderer RAF and shared
 // progress module together. DOM/Canvas/React hooks are simulated, not WebKit or GPU pixels.
-const compile = file => ts.transpileModule(fs.readFileSync(new URL(file, import.meta.url), 'utf8'), {
+const compile = file => ts.transpileModule(fs.readFileSync(new URL(file, import.meta.url), 'utf8').replaceAll('import.meta', '({ env: { DEV: true } })'), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020, jsx: ts.JsxEmit.React }
 }).outputText;
-const sources = Object.fromEntries(['cinematicScroll', 'abyssPalette', 'JourneyGlobe'].map(name =>
+const sources = Object.fromEntries(['cinematicScroll', 'abyssPalette', 'asciiGlobePrototype', 'globeSurface', 'JourneyGlobe'].map(name =>
   [name, compile(`./${name}.${name === 'JourneyGlobe' ? 'tsx' : 'ts'}`)]));
 
-function globe({ staleReads = false, coarse = true } = {}) {
+function globe({ staleReads = false, coarse = true, ascii = false } = {}) {
   let now = 0, nextFrame = 0, controller, geometry, pendingY = null, blits = 0;
   let width = 390, height = 844, start = 2500;
   const raf = new Map(), listeners = new Map(), refs = [], effects = [], io = [];
@@ -83,6 +83,7 @@ function globe({ staleReads = false, coarse = true } = {}) {
   };
   const deps = {
     react: { ...react, default: react },
+    './portfolioExperiments': { portfolioExperiments: { asciiGlobe: ascii } },
     './glyphcssGlobe': { loadLandDots: () => new Promise(() => {}) },
     './lanternCursor': { setLanternDepth() {} },
     './oceanDirection': { setGlobeZone() {} },
@@ -101,7 +102,7 @@ function globe({ staleReads = false, coarse = true } = {}) {
     },
     require: name => { assert.ok(deps[name], name); return deps[name]; }
   });
-  for (const name of ['cinematicScroll', 'abyssPalette', 'JourneyGlobe']) {
+  for (const name of ['cinematicScroll', 'abyssPalette', 'asciiGlobePrototype', 'globeSurface', 'JourneyGlobe']) {
     context.exports = {};
     vm.runInContext(`(function(exports, require) { ${sources[name]}\n})(exports, require);`, context);
     deps[`./${name}`] = context.exports;
@@ -136,6 +137,7 @@ function globe({ staleReads = false, coarse = true } = {}) {
   advance(16);
   return {
     win, controller, style, samples, renders, cities, paintedLabels, advance, emit, startTouch, move, endTouch,
+    anchor() { const a = new Element(); a.closest = () => a; emit('click', { target: a }); },
     get blits() { return blits; }, get hint() { return hintVisible; },
     get p() { return deps['./abyssPalette'].globeScrollProgress(); },
     get end() { return geometry.start + geometry.travel; },
@@ -270,4 +272,40 @@ test('production Globe: teardown and explicit navigation restore original styles
       assert.equal(b.controller.snapshot().ownership, 'document', exit);
     } finally { b.cleanup(); }
   }
+});
+
+test('Profile anchor: a single native jump releases mobile ownership without playing cities; reverse still works', () => {
+  for (const coarse of [true, false]) {
+    const b = globe({ coarse });
+    try {
+      if (coarse) b.swipe(100);
+      else b.emit('wheel', { deltaY: 100, deltaMode: 0 });
+      b.advance(1800);
+      b.anchor();
+      b.forceNative(b.end + 250);
+      b.emit('hashchange');
+      b.advance(1000);
+      assert.equal(b.controller.snapshot().playing, false);
+      assert.equal(b.controller.snapshot().ownership, coarse ? 'document' : 'desktop');
+      assert.equal(b.style.getPropertyValue('overflow-y'), '');
+      assert.equal(b.win.scrollY, b.end + 250);
+      b.forceNative(b.end - 10);
+      b.advance(13000);
+      assert.equal(b.cities.at(-1), 'doha');
+    } finally { b.cleanup(); }
+  }
+});
+
+test('ASCII prototype retains every city, frame progress, reversal and mobile ownership', () => {
+  const baseline = globe(), ascii = globe({ ascii: true });
+  try {
+    baseline.swipe(100); ascii.swipe(100);
+    baseline.advance(13000); ascii.advance(13000);
+    assert.deepEqual(ascii.cities, baseline.cities);
+    assert.deepEqual(ascii.renders, baseline.renders);
+    assert.equal(ascii.controller.snapshot().ownership, 'document');
+    assert.ok(ascii.paintedLabels.has(':'), 'sphere is painted with glyphs');
+    ascii.swipe(-100); ascii.advance(13000);
+    assert.equal(ascii.cities.at(-1), 'doha');
+  } finally { baseline.cleanup(); ascii.cleanup(); }
 });

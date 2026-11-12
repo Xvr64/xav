@@ -8,6 +8,18 @@ import type { HeroRect } from './heroCurrent';
 /** Whale tile strength in open water, beside a line of text, and right behind it (or behind the
  * Globe): low enough behind the copy that a passing whale never competes with a line it crosses. */
 export const READING_WHALE_ALPHA = [1, 0.5, 0.16];
+/**
+ * How far the whales step back while a section holds them in the deep water. On the pale surface
+ * they are engraved in a blue close to the water's own and sit quietly behind the type; on the
+ * abyss the same engraving turns to pale sea-glass on near-black, the strongest contrast on the
+ * page, and a whale the height of the screen outshouts the CV it swims beside. So their strength
+ * eases down with the water's darkness (`ink`, 0 surface .. 1 abyss) for as long as a composed
+ * stretch holds them (`weight`), and is whole again in open water. 0 restores the old look.
+ */
+export const DEEP_READING_RECESSION = 0.22;
+export const whaleStrength = (weight: number, ink: number): number =>
+  1 - (0.06 + DEEP_READING_RECESSION * Math.max(0, Math.min(1, ink))) * Math.max(0, Math.min(1, weight));
+
 /** Viewport line boxes of the page's reading text, shared by the fluid clear map and the whales. */
 export const readingZones: { read: () => readonly { left: number; top: number; width: number; height: number }[] } = {
   read: () => []
@@ -91,12 +103,26 @@ export const setGlobeZone = (rects: HeroRect[]) => {
   whaleStage.refresh?.();
 };
 
-/** Copy that stands outside the page's flow (the depth gauge): viewport boxes the whales thin
- * behind, like the reading text. Whoever writes `rects` bumps `version`. */
+/** Copy that stands outside the page's flow (the depth gauge, the corner controls): viewport
+ * boxes the whales thin behind, like the reading text. Written through publishFixedCopy. */
 export const fixedCopy: { rects: HeroRect[]; version: number } = { rects: [], version: 0 };
 
 /** Wakes the whales' frame loop when something it waits on changes outside of a scroll. */
 export const whaleStage: { refresh: (() => void) | null } = { refresh: null };
+
+/**
+ * Each piece of fixed copy publishes its own boxes under its own name, so one never erases
+ * another's. An empty list withdraws that piece; nothing changes when there was nothing to
+ * withdraw, so the whales are only woken for a real change.
+ */
+const fixedCopySources = new Map<string, HeroRect[]>();
+export function publishFixedCopy(id: string, rects: readonly HeroRect[]): void {
+  if (rects.length) fixedCopySources.set(id, rects.map((r) => ({ ...r })));
+  else if (!fixedCopySources.delete(id)) return;
+  fixedCopy.rects = Array.from(fixedCopySources.values()).flat();
+  fixedCopy.version++;
+  whaleStage.refresh?.();
+}
 
 /** Projected 3D spine for the existing ocean's feeding/sonar effects. No second whale simulation. */
 export const ambientWhalesLive = {

@@ -1,5 +1,7 @@
 import { handoff, paced, revealShapeFor } from './journeyHandoff.ts';
 import { revealGeometry, type Dissolve } from './arrivalDissolve.ts';
+import { portfolioExperiments } from './portfolioExperiments';
+import { buildCityConstellation, type ConstellationGlyph } from './cityConstellation';
 import {
   SKY_MARGIN, buildSky, dustAt, galaxyLight, hash2, meteorAt, seeded, skyLayout, smooth, spawnMeteor, strokeFor,
   type Meteor, type SkyLayout, type Star
@@ -75,6 +77,7 @@ export function mountArrivalField(canvas: HTMLCanvasElement): ArrivalField {
   let mode: FieldMode | null = null;
   let dissolving: { letters: Dissolve; onSwap: (() => void) | null; onDone: () => void } | null = null;
   let quiet: Element[] = [];
+  let constellation: ConstellationGlyph[] = [];
 
   const view = { w: 1, h: 1, ratio: 1, cellH: 14, cellW: 8.4, cols: 0, rows: 0 };
   /** Sky time (s): stands still under reduced motion */
@@ -174,6 +177,7 @@ export function mountArrivalField(canvas: HTMLCanvasElement): ArrivalField {
     order = new Int32Array(n);
     layout = skyLayout(view.w, view.h);
     stars = buildSky(view.w, view.h);
+    constellation = (import.meta as any).env?.DEV && portfolioExperiments.cityConstellation ? buildCityConstellation(view.w, view.h) : [];
     // What does not move is worked out once: the band's dust and the galaxy's stellar grain
     dust = new Float32Array(n);
     dustGlyph = new Uint16Array(n);
@@ -336,6 +340,10 @@ export function mountArrivalField(canvas: HTMLCanvasElement): ArrivalField {
       const cells = Math.min(Math.round(5 + 13 * m.depth), Math.floor(travelled * Math.max(Math.abs(m.dx) / cellW, Math.abs(m.dy) / cellH)));
       streak(at.x, at.y, m.dx, m.dy, cells, at.light * (0.3 + 0.45 * m.depth), 1, true);
     }
+
+    // Seven-city motif uses this field's quiet mask and disappears before the handoff.
+    for (const point of constellation)
+      put(point.x, point.y, point.light * (1 - rush), 0, code(point.glyph));
 
     // Glyphs, grouped by colour so the canvas changes style a few dozen times, not per glyph
     counts.fill(0);

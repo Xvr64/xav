@@ -10,11 +10,60 @@ html[data-creation="active"] [data-ocean-life] { opacity: 0; }
 .creation-exit { position: fixed; inset: 0; z-index: 100; background: #01030a; pointer-events: none; animation: creation-exit .8s ease-out both; }
 @keyframes creation-exit { from { opacity: 1; } to { opacity: 0; } }
 #home:focus { outline: none; }
-.creation-actions { position: absolute; top: max(24px, env(safe-area-inset-top)); right: max(24px, 4vw); display: flex; gap: 10px; pointer-events: auto; transition: opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1); }
-.creation-actions button { min-height: 44px; padding: 10px 16px; border: 1px solid #b3d1e144; background: #07172bd9; color: #e1edf5; border-radius: 3px; font: 11px 'IBM Plex Mono', monospace; cursor: pointer; }
-.creation-actions button:hover { background: #15324d; }
-.creation-actions button:focus-visible { outline: 2px solid #a5d8ff; outline-offset: 4px; }
-@media (max-width: 600px) { .creation-actions { right: 16px; } }
+/* The opening's two controls speak in the site's own instrument voice and stand exactly where the
+   site's sound and CV controls stand (terminal.css .fixed-top-controls): same corner, same row,
+   same size, the same quiet label beside the same underlined one. As the Hero wakes one pair
+   cross-fades into the other in place, instead of two boxed buttons from another interface being
+   swapped for text. They cross every scene of the opening, from the eye's bright glyphs to the
+   pale water, so the pair rests on one soft pool of the scene's own dark (or, past the waterline,
+   its light): feathered, never a panel. Each target stays 44px tall for a thumb. */
+.creation-actions {
+  --pool: 1, 3, 10;
+  position: absolute;
+  top: calc(max(clamp(22px, 3.6vh, 40px), env(safe-area-inset-top)) - 13px);
+  right: max(var(--page-margin, 24px), calc((100vw - 1440px) / 2 + var(--page-margin, 24px)));
+  display: flex;
+  align-items: center;
+  gap: clamp(24px, 2.5vw, 36px);
+  pointer-events: auto;
+  transition: opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.creation-actions::before {
+  content: '';
+  position: absolute;
+  inset: 12px -4px;
+  border-radius: 999px;
+  background: rgba(var(--pool), 0.66);
+  box-shadow: 0 0 16px 16px rgba(var(--pool), 0.66);
+  pointer-events: none;
+  transition: background-color 0.6s, box-shadow 0.6s;
+}
+.creation-controls[data-water] .creation-actions { --pool: 168, 221, 244; }
+.creation-controls[data-water] .creation-actions::before { transition-delay: 0.5s; }
+.creation-actions button {
+  position: relative;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: 400 13px/1.5 'IBM Plex Mono', ui-monospace, monospace;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: opacity 0.2s ease, text-decoration-color 160ms;
+}
+/* The quiet one (Pause / Resume) reads like the sound label; the way out is underlined like the CV */
+.creation-actions button:first-child { opacity: 0.72; }
+.creation-actions button:first-child:hover { opacity: 1; }
+.creation-actions button:last-child {
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 4px;
+  text-decoration-color: color-mix(in srgb, currentColor 38%, transparent);
+}
+.creation-actions button:last-child:hover { text-decoration-color: currentColor; }
+.creation-actions button:focus-visible { outline: 1px solid currentColor; outline-offset: 3px; opacity: 1; }
 
 /* Minimal animated scroll indicator on initial landing screen */
 .creation-scroll-hint {

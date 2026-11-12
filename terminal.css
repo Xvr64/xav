@@ -397,21 +397,11 @@ body {
   animation: creation-scroll-stretch-down 2.4s cubic-bezier(0.65, 0, 0.35, 1) infinite;
 }
 @media (prefers-reduced-motion: reduce) {
-  .hero-colophon-cue { display: none; }
+  .hero-colophon-cue > span { display: none; }
 }
 @media (max-width: 767px) {
   .hero-colophon-dash { display: none; }
   .hero-colophon-name, .hero-colophon-line { display: block; }
-}
-
-/* Migration: an empty runway whose scroll is the journey's timeline (drawn by the whale
-   canvas). Without motion there is no journey, and no runway. */
-.migration-runway { height: 0; }
-@media (prefers-reduced-motion: no-preference) {
-  .migration-runway { height: 460svh; }
-}
-@media (prefers-reduced-motion: no-preference) and (max-width: 767px) {
-  .migration-runway { height: 400svh; }
 }
 
 /* ---------------------------------------------------------------------------
@@ -508,6 +498,40 @@ body {
 @keyframes datum-draw {
   from { transform: scaleX(0); }
   to { transform: scaleX(1); }
+}
+/* The same gesture rules the rest of the CV: every hairline that heads a row (a discipline in the
+   skills index, a school, the closing row of the contact) is taken from the margin as its row
+   rises, exactly like a station's datum, so the page has one way of drawing a line rather than
+   one animated rule among static ones. Scroll-linked and reversible; where scroll-driven
+   animations or motion are unavailable the plain borders below stand as they always did. The
+   closing row rests low on the last screen, so its line is whole as soon as the row is in view. */
+@media (prefers-reduced-motion: no-preference) {
+  @supports (animation-timeline: view()) {
+    .skill-row,
+    .edu-entry--school,
+    .contact-foot { position: relative; view-timeline-name: --row-datum; }
+    .skill-row,
+    .contact-foot { border-top-color: transparent; }
+    .skill-row::before,
+    .contact-foot::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: -1px;
+      height: 1px;
+      background: var(--rule-15, rgba(23, 23, 23, 0.15));
+    }
+    .skill-row::before,
+    .edu-entry--school::before,
+    .contact-foot::before {
+      transform-origin: left center;
+      animation: datum-draw linear both;
+      animation-timeline: --row-datum;
+      animation-range: entry 0% cover 30%;
+    }
+    .contact-foot::before { animation-range: entry 0% entry 60%; }
+  }
 }
 .exp-entry .exp-when { grid-column: a / span 2; grid-row: 1; margin: 0; }
 .exp-entry .exp-who { grid-column: b / span 5; grid-row: 1; }
@@ -738,6 +762,23 @@ body {
   .section-head--benchmark > .ocean-h2 { grid-column: a / span 9; }
   .section-head--benchmark > :is(.section-dek, .section-aside) { grid-column: b / span 6; grid-row: 2; }
   .section-head--indented > .ocean-h2 { grid-column: b / end; }
+}
+
+/* The last screen. Below desktop width the section before ends only a line or two above the
+   Contact title, and at the end of the page those lines come to rest at the very top of the
+   screen: under the fixed sound and CV controls, and readable (the decode keeps the final
+   screen resolved), so two texts sat on top of each other. The Contact section now fills the
+   last screen by itself, set on its middle: the page ends on one composed spread. Short
+   landscape screens are shorter than the section, so nothing changes there. */
+@media (max-width: 1100px) {
+  #contact {
+    min-height: 100svh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    /* Even above and below, so the spread sits on the screen's true middle */
+    padding-block: var(--space-l);
+  }
 }
 
 /* ---------------------------------------------------------------------------
@@ -1128,6 +1169,53 @@ body {
   height: 600vh;
   overflow: visible !important;
 }
+
+/* A local editorial shortcut: native anchor navigation skips the runway in one step.
+   It lives on the cover only; the existing depth gauge serves the CV below. */
+.profile-shortcut {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  gap: 0.6em;
+  margin-right: clamp(18px, 3vw, 40px);
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 5px;
+  text-decoration-color: var(--rule-20);
+  pointer-events: auto;
+}
+.profile-shortcut:hover { text-decoration-color: currentColor; }
+.profile-shortcut:focus-visible { outline: 1px solid currentColor; outline-offset: 4px; }
+.hero-colophon-cue > span { display: inline-flex; align-items: flex-end; gap: 10px; }
+#introduction { scroll-margin-top: clamp(64px, 9vh, 96px); }
+#introduction:focus { outline: none; }
+.profile-journey {
+  grid-column: b / end;
+  margin-block: var(--space-m);
+  color: var(--ink-171717);
+  grid-row: 3;
+}
+.profile-journey > p { margin: 0 0 12px; color: var(--ink-52595E, var(--ink-muted)); }
+.profile-journey ol {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-family: var(--font-mono);
+  font-size: var(--text-meta);
+  line-height: 1.8;
+}
+.profile-journey li { white-space: nowrap; }
+.profile-journey li:not(:last-child)::after { content: ' / '; padding-inline: 0.65em; opacity: 0.45; }
+@media (max-width: 767px) {
+  .hero-colophon { flex-wrap: wrap; gap: 12px; }
+  .hero-colophon-cue { width: 100%; justify-content: space-between; }
+  .profile-shortcut { margin-right: 0; }
+}
+@media (prefers-reduced-motion: reduce) { .hero-colophon-cue > span { display: none; } }
 @media (prefers-reduced-motion: reduce) {
   .journey-runway,
   .terminal-portfolio [data-journey-runway] { height: 100svh; }

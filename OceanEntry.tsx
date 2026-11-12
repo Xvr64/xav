@@ -5,7 +5,6 @@ import { CV_CREDIT, CV_DATA } from './cvData';
 import {
   directWhales,
   heroZone,
-  migrationRunway,
   mixLane,
   smoothStepRange,
   whaleDirection,
@@ -258,35 +257,6 @@ export const WhaleStretch: React.FC<{ sectionId: string; lanes: readonly Lane[];
   return null;
 };
 
-/**
- * The migration's runway: an empty interval of scroll between the cover and the introduction.
- * It never moves the page; its length is the migration's timeline, which the whale canvas draws
- * (camera, whales, wakes and the spherical ocean — see migrationScene.ts). Collapsed for reduced motion.
- */
-export const MigrationRunway: React.FC = React.memo(() => {
-  const ref = useRef<HTMLDivElement | null>(null);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const measure = () => {
-      const r = el.getBoundingClientRect();
-      migrationRunway.top = r.top + window.scrollY;
-      migrationRunway.height = r.height;
-    };
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(el);
-    observer.observe(document.documentElement);
-    window.addEventListener('resize', measure);
-    return () => {
-      observer.disconnect();
-      window.removeEventListener('resize', measure);
-      migrationRunway.height = 0;
-    };
-  }, []);
-  return <div ref={ref} className="migration-runway" aria-hidden="true" />;
-});
-
 export const ProgressiveOceanEntry: React.FC<ProgressiveOceanEntryProps> = React.memo(() => {
   return (
     <>
@@ -322,10 +292,10 @@ export const ProgressiveOceanEntry: React.FC<ProgressiveOceanEntryProps> = React
               <span className="hero-colophon-dash" aria-hidden="true"> — </span>
               <span className="hero-colophon-line">{CV_CREDIT.line}</span>
             </p>
-            <p className="hero-colophon-cue meta" aria-hidden="true">
-              Scroll
-              <span className="hero-colophon-tick" />
-            </p>
+            <div className="hero-colophon-cue meta">
+              <a className="profile-shortcut" href="#introduction">Profile <span aria-hidden="true">↓</span></a>
+              <span aria-hidden="true">Scroll<span className="hero-colophon-tick" /></span>
+            </div>
           </div>
         </div>
         {/* The page's one h1. With motion the name resolved on the stage carries it visually, so it
@@ -340,8 +310,8 @@ export const ProgressiveOceanEntry: React.FC<ProgressiveOceanEntryProps> = React
 });
 
 /**
- * The introduction: the personal statement, met in the deep water once the whales have become the
- * Earth and the city journey has ended. It uses the shared ASCII word reveal like every other
+ * The introduction: the personal statement, met in the deep water after the city journey.
+ * It uses the shared ASCII word reveal like every other
  * section; the whales keep to its open left field while it reads.
  */
 const essca = CV_DATA.education[0];
@@ -356,10 +326,16 @@ const INTRO_FACTS = [
 ];
 
 export const OceanIntroduction: React.FC = React.memo(() => (
-  <section id="introduction" data-editorial-section className="terminal-overview ed-grid relative">
-    <p className="intro-kicker meta"><AsciiText text="Profile" /></p>
+  <section id="introduction" tabIndex={-1} aria-labelledby="profile-title" data-editorial-section className="terminal-overview ed-grid relative">
+    <h2 id="profile-title" className="intro-kicker meta"><AsciiText text="Profile" /></h2>
     <p className="lead" data-text-rank="2"><AsciiText text={CV_DATA.heroIntroConcise} /></p>
     <p className="intro-support" data-text-rank="3"><AsciiText text={CV_DATA.heroIntroSecondary} /></p>
+    <div className="profile-journey" data-ascii-preserve>
+      <p className="meta">Seven cities, one journey</p>
+      <ol aria-label="Cities in journey order">
+        {CV_DATA.locations.map((location) => <li key={location.id}>{location.city}</li>)}
+      </ol>
+    </div>
     <dl className="intro-facts">
       {INTRO_FACTS.map((fact) => (
         <div key={fact.label}>

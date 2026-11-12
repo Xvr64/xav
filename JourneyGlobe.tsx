@@ -1,4 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { portfolioExperiments } from './portfolioExperiments';
+import { createAsciiGlobePainter } from './asciiGlobePrototype';
+import { observeGlobeSurface } from './globeSurface';
 import { loadLandDots, type LandDots } from './glyphcssGlobe';
 import type { LocationItem } from './cvData';
 import { abyssFromProgress, globeScrollGeometry, globeScrollProgress, lerpN } from './abyssPalette';
@@ -129,6 +132,7 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
     const ctx = offCanvas.getContext('2d', { alpha: true });
     if (!ctx) return;
     const diagnostics = mountGlobeDiagnostics(stage);
+    const paintAscii = (import.meta as any).env?.DEV && portfolioExperiments.asciiGlobe ? createAsciiGlobePainter() : null;
 
     let prefersReduced =
       typeof window !== 'undefined' &&
@@ -322,86 +326,92 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
       const mc = (l: number[], d: number[]) =>
         `rgba(${Math.round(lerpN(l[0], d[0], nt))}, ${Math.round(lerpN(l[1], d[1], nt))}, ${Math.round(lerpN(l[2], d[2], nt))}, ${lerpN(l[3] ?? 1, d[3] ?? 1, nt).toFixed(3)})`;
 
-      // Sphere: soft sea-glass disc (separates the globe from the whales) + hairline limb
-      const ocean = ctx.createRadialGradient(cx - R * 0.3, cy - R * 0.35, R * 0.1, cx, cy, R);
-      ocean.addColorStop(0, mc([226, 242, 250, 0.92], [134, 170, 226, 0.6]));
-      ocean.addColorStop(1, mc([198, 226, 244, 0.92], [96, 132, 204, 0.66]));
-      ctx.beginPath();
-      ctx.arc(cx, cy, R, 0, Math.PI * 2);
-      ctx.fillStyle = ocean;
-      ctx.fill();
-      ctx.lineWidth = 1;
-      ctx.strokeStyle = mc([31, 59, 87, 0.22], [200, 218, 240, 0.32]);
-      ctx.stroke();
+      if (paintAscii) {
+        paintAscii(ctx, land, { cx, cy, radius: R, mobile: W < 768, view, east, north },
+          mc([31, 59, 87], [200, 218, 240]));
+      } else {
+        // Sphere: soft sea-glass disc (separates the globe from the whales) + hairline limb
+        const ocean = ctx.createRadialGradient(cx - R * 0.3, cy - R * 0.35, R * 0.1, cx, cy, R);
+        ocean.addColorStop(0, mc([226, 242, 250, 0.92], [134, 170, 226, 0.6]));
+        ocean.addColorStop(1, mc([198, 226, 244, 0.92], [96, 132, 204, 0.66]));
+        ctx.beginPath();
+        ctx.arc(cx, cy, R, 0, Math.PI * 2);
+        ctx.fillStyle = ocean;
+        ctx.fill();
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = mc([31, 59, 87, 0.22], [200, 218, 240, 0.32]);
+        ctx.stroke();
 
-      // Graticule (front hemisphere only, batched into 1 stroke call)
-      ctx.lineWidth = 0.6;
-      ctx.strokeStyle = mc([31, 59, 87, 0.08], [12, 26, 64, 0.12]);
-      ctx.beginPath();
-      for (const line of graticule) {
-        let pen = false;
-        for (const v of line) {
-          if (vecDot(v, view) > 0) {
-            if (pen) ctx.lineTo(px(v), py(v));
-            else ctx.moveTo(px(v), py(v));
-            pen = true;
-          } else pen = false;
-        }
-      }
-      ctx.stroke();
-
-      // Land: fine dot-matrix batched into 4 alpha buckets per relief band (<=12 fill calls instead of ~2,000)
-      if (land && dotBuckets) {
-        const { xyz, bands } = land;
-        const ex = east[0], ey = east[1], ez = east[2];
-        const nx = north[0], ny = north[1], nz = north[2];
-        const vx = view[0], vy = view[1], vz = view[2];
-        const dotScale = Math.max(0.75, Math.min(1.6, R / 300));
-        const bandColors = [
-          mc([76, 100, 124], [30, 52, 104]),
-          mc([52, 74, 98], [18, 38, 86]),
-          mc([32, 50, 72], [8, 22, 62])
-        ];
-        const bCounts = [0, 0, 0, 0];
-        for (let b = 0; b < 3; b++) {
-          ctx.fillStyle = bandColors[b];
-          bCounts[0] = 0;
-          bCounts[1] = 0;
-          bCounts[2] = 0;
-          bCounts[3] = 0;
-          for (let d = bands[b]; d < bands[b + 1]; d++) {
-            const o = d * 3;
-            const x = xyz[o], y = xyz[o + 1], z = xyz[o + 2];
-            const depth = x * vx + y * vy + z * vz;
-            if (depth <= 0.14) continue;
-            const sx = cx + R * (x * ex + y * ey + z * ez);
-            const sy = cy - R * (x * nx + y * ny + z * nz);
-            const s = (0.75 + depth * 1.0) * dotScale;
-            const limb = Math.min(1, (depth - 0.14) / 0.3);
-            const alpha = (0.2 + depth * 0.65) * limb;
-            const tIdx = Math.min(3, (alpha * 4.5) | 0);
-            const pos = bCounts[tIdx] * 3;
-            const arr = dotBuckets[tIdx];
-            arr[pos] = sx - s * 0.5;
-            arr[pos + 1] = sy - s * 0.5;
-            arr[pos + 2] = s;
-            bCounts[tIdx]++;
+        // Graticule (front hemisphere only, batched into 1 stroke call)
+        ctx.lineWidth = 0.6;
+        ctx.strokeStyle = mc([31, 59, 87, 0.08], [12, 26, 64, 0.12]);
+        ctx.beginPath();
+        for (const line of graticule) {
+          let pen = false;
+          for (const v of line) {
+            if (vecDot(v, view) > 0) {
+              if (pen) ctx.lineTo(px(v), py(v));
+              else ctx.moveTo(px(v), py(v));
+              pen = true;
+            } else pen = false;
           }
-          for (let t = 0; t < 4; t++) {
-            const cnt = bCounts[t];
-            if (cnt === 0) continue;
-            ctx.globalAlpha = DOT_BUCKET_ALPHAS[t];
-            ctx.beginPath();
-            const arr = dotBuckets[t];
-            for (let m = 0; m < cnt; m++) {
-              const p = m * 3;
-              const s = arr[p + 2];
-              ctx.rect(arr[p], arr[p + 1], s, s);
+        }
+        ctx.stroke();
+
+        // Land: fine dot-matrix batched into 4 alpha buckets per relief band (<=12 fill calls instead of ~2,000)
+        if (land && dotBuckets) {
+          const { xyz, bands } = land;
+          const ex = east[0], ey = east[1], ez = east[2];
+          const nx = north[0], ny = north[1], nz = north[2];
+          const vx = view[0], vy = view[1], vz = view[2];
+          const dotScale = Math.max(0.75, Math.min(1.6, R / 300));
+          const bandColors = [
+            mc([76, 100, 124], [30, 52, 104]),
+            mc([52, 74, 98], [18, 38, 86]),
+            mc([32, 50, 72], [8, 22, 62])
+          ];
+          const bCounts = [0, 0, 0, 0];
+          for (let b = 0; b < 3; b++) {
+            ctx.fillStyle = bandColors[b];
+            bCounts[0] = 0;
+            bCounts[1] = 0;
+            bCounts[2] = 0;
+            bCounts[3] = 0;
+            for (let d = bands[b]; d < bands[b + 1]; d++) {
+              const o = d * 3;
+              const x = xyz[o], y = xyz[o + 1], z = xyz[o + 2];
+              const depth = x * vx + y * vy + z * vz;
+              if (depth <= 0.14) continue;
+              const sx = cx + R * (x * ex + y * ey + z * ez);
+              const sy = cy - R * (x * nx + y * ny + z * nz);
+              const s = (0.75 + depth * 1.0) * dotScale;
+              const limb = Math.min(1, (depth - 0.14) / 0.3);
+              const alpha = (0.2 + depth * 0.65) * limb;
+              const tIdx = Math.min(3, (alpha * 4.5) | 0);
+              const pos = bCounts[tIdx] * 3;
+              const arr = dotBuckets[tIdx];
+              arr[pos] = sx - s * 0.5;
+              arr[pos + 1] = sy - s * 0.5;
+              arr[pos + 2] = s;
+              bCounts[tIdx]++;
             }
-            ctx.fill();
+            for (let t = 0; t < 4; t++) {
+              const cnt = bCounts[t];
+              if (cnt === 0) continue;
+              ctx.globalAlpha = DOT_BUCKET_ALPHAS[t];
+              ctx.beginPath();
+              const arr = dotBuckets[t];
+              for (let m = 0; m < cnt; m++) {
+                const p = m * 3;
+                const s = arr[p + 2];
+                ctx.rect(arr[p], arr[p + 1], s, s);
+              }
+              ctx.fill();
+            }
           }
+          ctx.globalAlpha = 1;
         }
-        ctx.globalAlpha = 1;
+
       }
 
       // Routes: completed legs a quiet hairline, the current leg slightly stronger
@@ -536,8 +546,9 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
     let lastActive = Math.max(0, locations.findIndex((l) => l.id === activeIdRef.current));
 
     const apply = (st: JourneyState) => {
+      const drawStart = diagnostics ? performance.now() : 0;
       draw(st);
-      diagnostics?.render(st.p, st.active);
+      diagnostics?.render(st.p, st.active, performance.now() - drawStart);
       if (progressFillRef.current) progressFillRef.current.style.transform = `scaleX(${st.p.toFixed(4)})`;
       for (let idx = 0; idx < cityStopEls.length; idx++) {
         const op = 0.4 + st.reveal[idx] * 0.6;
@@ -673,6 +684,7 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
     requestRender();
     window.addEventListener('scroll', onScroll, { passive: true });
     window.addEventListener('resize', onResize, { passive: true });
+    const stopSurface = observeGlobeSurface(stage, onResize);
     // Labels use the editorial web fonts: re-measure & redraw once they are ready
     document.fonts?.ready
       .then(() => {
@@ -687,6 +699,7 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
       disposed = true;
       cinematic.destroy();
       diagnostics?.destroy();
+      stopSurface();
       globeScrollGeometry.controlledY = null;
       cinematicPlayingRef.current = false;
       motionQuery.removeEventListener('change', onMotionChange);

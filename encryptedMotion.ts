@@ -27,9 +27,19 @@ export function advanceEncryptedLine(
   scrollDelta: number,
   elapsedMs: number,
   characterCount: number,
-  reduced: boolean
+  reduced: boolean,
+  entranceOnly = false
 ): EncryptedLineState {
   if (reduced) return { revealState: 'revealed', currentP: 1 };
+  if (entranceOnly) {
+    // Once read, never erase on exit/reverse. Fast jumps past a line resolve it too.
+    if (previous.revealState === 'revealed' || inTopZone || aboveExit)
+      return { revealState: 'revealed', currentP: 1 };
+    if (belowEntry) return { revealState: 'hidden', currentP: 0 };
+    if (previous.revealState === 'hidden') return { revealState: 'revealing', currentP: 0 };
+    const currentP = Math.min(1, previous.currentP + Math.max(0, elapsedMs) / lineRevealMs(characterCount));
+    return { revealState: currentP >= 1 ? 'revealed' : 'revealing', currentP };
+  }
   if (belowEntry || aboveExit) return { revealState: 'hidden', currentP: 0 };
   if (inTopZone) return { revealState: 'exiting', currentP: zoneProgress };
   // Reverse the lower entrance when scrolling upwards; do not restart a timer while paused.

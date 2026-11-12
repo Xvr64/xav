@@ -5,7 +5,7 @@ import { advanceEncryptedLine, encryptedCharacterState, lineRevealMs, ENCRYPTED_
 const advance = (state, options = {}) => advanceEncryptedLine(
   state, options.zone ?? 1, options.below ?? false, options.above ?? false,
   options.top ?? false, options.delta ?? 0, options.ms ?? 50,
-  options.count ?? 10, options.reduced ?? false
+  options.count ?? 10, options.reduced ?? false, options.entranceOnly ?? false
 );
 
 test('fast entrance starts encrypted, locks one character per 50ms, then rests', () => {
@@ -18,6 +18,19 @@ test('fast entrance starts encrypted, locks one character per 50ms, then rests',
   }
   assert.equal(state.revealState, 'revealed');
   assert.equal(advance(state, { ms: 5000 }).currentP, 1);
+});
+
+test('entrance-only experiment keeps read lines resolved through exits, reversal and resize state reuse', () => {
+  const shown = { revealState: 'revealed', currentP: 1 };
+  for (const options of [{ above: true }, { below: true }, { top: true, zone: 0.2 }, { delta: -300, zone: 0.3 }])
+    assert.deepEqual(advance(shown, { ...options, entranceOnly: true }), shown);
+  const initial = { revealState: 'hidden', currentP: 0 };
+  assert.deepEqual(advance(initial, { above: true, entranceOnly: true }), shown, 'fast anchor jump resolves passed text');
+  assert.deepEqual(advance(initial, { reduced: true, entranceOnly: true }), shown);
+  assert.deepEqual(advance(initial, { below: true, entranceOnly: true }), initial);
+  const entered = advance(initial, { entranceOnly: true });
+  assert.equal(entered.revealState, 'revealing');
+  assert.deepEqual(advance(entered, { ms: 600, entranceOnly: true }), shown);
 });
 
 test('scrolling upward encrypts and erases at the lower edge, pauses, and resumes downward', () => {

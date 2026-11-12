@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { fixedCopy, whaleStage } from './oceanDirection';
+import { publishFixedCopy } from './oceanDirection';
 import { gaugePosition } from './gaugePosition';
 
 // ============================================================================
@@ -105,17 +105,13 @@ export const DepthGauge: React.FC = () => {
     const publish = () => {
       const r = el && shown && getComputedStyle(el).display !== 'none' ? el.getBoundingClientRect() : null;
       const names = labelsOut ? LABEL_REACH : 0;
-      fixedCopy.rects = r && r.width > 0 ? [{ left: r.left - names, top: r.top, width: r.width + names, height: r.height }] : [];
-      fixedCopy.version++;
-      whaleStage.refresh?.();
+      publishFixedCopy('gauge', r && r.width > 0 ? [{ left: r.left - names, top: r.top, width: r.width + names, height: r.height }] : []);
     };
     publish();
     window.addEventListener('resize', publish);
     return () => {
       window.removeEventListener('resize', publish);
-      fixedCopy.rects = [];
-      fixedCopy.version++;
-      whaleStage.refresh?.();
+      publishFixedCopy('gauge', []);
     };
   }, [shown, labelsOut]);
 

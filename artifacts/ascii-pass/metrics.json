@@ -1,0 +1,28 @@
+{
+  "node": "v24.21.0",
+  "cpu": "AMD Ryzen 7 7735U with Radeon Graphics         ",
+  "metrics": [
+    {
+      "viewport": [
+        1000,
+        800
+      ],
+      "terrainPoints": 14336,
+      "medianSamplingMs": 0.2880000000000109,
+      "p95SamplingMs": 0.37750000000005457,
+      "meanGlyphs": 2784.126923076923,
+      "note": "CPU sampler only; excludes font rasterization, canvas, DOM, compositor and GPU."
+    },
+    {
+      "viewport": [
+        358,
+        844
+      ],
+      "terrainPoints": 14336,
+      "medianSamplingMs": 0.2074999999999818,
+      "p95SamplingMs": 0.25679999999999836,
+      "meanGlyphs": 1285.0346153846153,
+      "note": "CPU sampler only; excludes font rasterization, canvas, DOM, compositor and GPU."
+    }
+  ]
+}

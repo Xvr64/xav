@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { WHALE_LOOK, WhaleAsciiRenderer, type WhaleState } from './whale3dRenderer';
-import { ambientWhalesLive, fixedCopy, globeZone, readingZones, whaleDirection, whaleStage } from './oceanDirection';
+import { ambientWhalesLive, fixedCopy, globeZone, readingZones, whaleDirection, whaleStage, whaleStrength } from './oceanDirection';
 import { ambientCamera, newTravel, noteScrollIntent, projectedBounds, sampleAmbientWhale, stepTravel, type AmbientComposition } from './ambientWhaleScene';
 import { qRotate, skinFrames, type Quat } from './whale3dPose';
 import type { V3 } from './whale3dAnatomy';
@@ -191,7 +191,7 @@ export function mountAmbientWhales(host: HTMLElement): () => void {
     const presence = reduced() ? (globeZone.rects.length ? 0.5 : 1) : whaleDirection.presence;
     // Deep ocean blue on light water, a pale sea-glass on the abyss. Nothing masks or fills behind them: the glyphs are the whale.
     const near = WHALE_LOOK.ink, far = WHALE_LOOK.inkFar;
-    ascii.setStyle({ opacity: presence * (1 - 0.06 * composition.weight) * (creation.active ? easeRange(creation.time, WHALES_ARRIVE_AT, WHALES_ARRIVE_AT + WHALE_FADE_SPAN) : 1), gamma: WHALE_LOOK.gamma, tone: WHALE_LOOK.tone, contrast: WHALE_LOOK.contrast, farFade: WHALE_LOOK.farFade, invert: ink > 0.5,
+    ascii.setStyle({ opacity: presence * whaleStrength(composition.weight, ink) * (creation.active ? easeRange(creation.time, WHALES_ARRIVE_AT, WHALES_ARRIVE_AT + WHALE_FADE_SPAN) : 1), gamma: WHALE_LOOK.gamma, tone: WHALE_LOOK.tone, contrast: WHALE_LOOK.contrast, farFade: WHALE_LOOK.farFade, invert: ink > 0.5,
       ink: [mix(near[0], 196, ink), mix(near[1], 218, ink), mix(near[2], 228, ink)], inkFar: [mix(far[0], 132, ink), mix(far[1], 168, ink), mix(far[2], 182, ink)] });
     if (debugAngles) {
       const d = debugAngles;

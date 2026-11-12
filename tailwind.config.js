@@ -5,7 +5,7 @@
  * @type {import('tailwindcss').Config}
  */
 export default {
-  content: ['./index.html', './*.{ts,tsx}', '!./archivedComponents.tsx'],
+  content: ['./index.html', './*.{ts,tsx}'],
   // Without this, preflight's `*, ::before, ::after` rule gives every element (and both of its
   // pseudo-elements) some fifty --tw-* custom properties, and any whole-document restyle on this
   // page costs 18-30 ms instead of 13-14 (measured, 2026-11). With it, each default is declared only on the

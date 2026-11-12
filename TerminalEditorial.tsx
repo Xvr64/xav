@@ -10,6 +10,7 @@ import {
 import { advanceEncryptedLine, encryptedCharacterState, ENCRYPTED_CHARSET, FLIP_DELAY_MS } from './encryptedMotion';
 import { creation, HERO_TEXT_AT } from './creationTimeline';
 import { EncryptedText } from './components/ui/encrypted-text';
+import { portfolioExperiments } from './portfolioExperiments';
 import {
   disableDecodeSound,
   disposeDecodeSound,
@@ -305,7 +306,8 @@ export function useEditorialScroll() {
           scrollDelta,
           elapsedMs,
           line.characterCount,
-          isReduced
+          isReduced,
+          !!(import.meta as any).env?.DEV && portfolioExperiments.entranceOnly
         );
         line.revealState = next.revealState;
         line.currentP = next.currentP;
@@ -410,7 +412,7 @@ export function useEditorialScroll() {
     };
 
     const schedule = () => {
-      if (!frame) frame = requestAnimationFrame(render);
+      if (!frame && !disposed && !document.hidden) frame = requestAnimationFrame(render);
     };
     const invalidate = () => {
       dirty = true;
@@ -435,6 +437,12 @@ export function useEditorialScroll() {
         invalidate();
     });
     mutations.observe(document.body, { childList: true, subtree: true });
+    const onVisibility = () => {
+      lastTime = 0;
+      if (document.hidden) { cancelAnimationFrame(frame); frame = 0; }
+      else schedule();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
     window.addEventListener('scroll', schedule, { passive: true });
     window.addEventListener('resize', invalidate);
     window.addEventListener('terminal-content-change', invalidate);
@@ -452,6 +460,7 @@ export function useEditorialScroll() {
       cancelAnimationFrame(frame);
       observer.disconnect();
       mutations.disconnect();
+      document.removeEventListener('visibilitychange', onVisibility);
       window.removeEventListener('scroll', schedule);
       window.removeEventListener('resize', invalidate);
       window.removeEventListener('terminal-content-change', invalidate);

@@ -19,6 +19,7 @@ import {
   type JourneyId
 } from './creationTimeline';
 import { createWheelGestures } from './cinematicScroll';
+import { holdRootScroll } from './rootScrollLock';
 import './creationIntro.css';
 
 /** Controls and scroll-scrubbing input; rendering and time belong to the existing ocean's scheduler. */
@@ -39,10 +40,10 @@ export function CreationIntro() {
     // index.html's pre-paint guess: the page's own water takes over if the opening will not play
     if (!creation.active) { delete root.dataset.creation; return; }
     const previousFocus = document.activeElement as HTMLElement | null;
-    const previousOverflow = root.style.overflow;
-    const previousGutter = root.style.scrollbarGutter;
     root.dataset.creation = 'active';
-    root.style.scrollbarGutter = 'stable'; root.style.overflow = 'hidden';
+    // Held once and given back once (rootScrollLock.ts): the Globe may own the page's scrolling
+    // by the time this effect cleans up, and a second restore would clear its lock
+    const scrollHold = holdRootScroll(root.style);
     // Set on the layers themselves: a custom property on <html> would restyle the whole document
     // every frame of the fade. Only the compositor has work to do this way.
     const layers = [...document.querySelectorAll<HTMLElement>('main, nav, [aria-label="Site actions"], [data-hero-current], [data-ocean-life]')];
@@ -53,7 +54,7 @@ export function CreationIntro() {
       if (released) return;
       released = true;
       delete root.dataset.creation;
-      root.style.overflow = previousOverflow; root.style.scrollbarGutter = previousGutter;
+      scrollHold.release();
       content.forEach((el, i) => { el.inert = previousInert[i]; });
       const controls = document.querySelector<HTMLElement>('.creation-controls');
       if (controls) controls.style.visibility = 'hidden';
@@ -162,7 +163,7 @@ export function CreationIntro() {
     return () => {
       delete root.dataset.creation; creation.onHero = null;
       layers.forEach(el => { el.style.removeProperty('opacity'); });
-      root.style.overflow = previousOverflow; root.style.scrollbarGutter = previousGutter;
+      scrollHold.release();
       content.forEach((el, i) => { el.inert = previousInert[i]; });
       window.removeEventListener('wheel', onWheel, true);
       window.removeEventListener('touchstart', onTouchStart, true);

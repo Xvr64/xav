@@ -10,18 +10,24 @@ export function mountGlobeDiagnostics(stage: HTMLElement) {
   stage.appendChild(panel);
   let controller: CinematicSnapshot | null = null;
   let progress = 0;
-  const record = (kind: string, renderedProgress?: number, cityIndex?: number) => {
+  let lastPanelUpdate = -Infinity;
+  const record = (kind: string, renderedProgress?: number, cityIndex?: number, drawMs?: number) => {
     const sample = { at: performance.now(), kind, ...controller, documentY: window.scrollY,
-      timelineProgress: progress, renderedProgress, cityIndex };
+      timelineProgress: progress, renderedProgress, cityIndex, drawMs,
+      dpr: window.devicePixelRatio, layoutHeight: window.innerHeight,
+      visualHeight: window.visualViewport?.height, visualScale: window.visualViewport?.scale };
     if (samples.length === 1200) samples.shift();
     samples.push(sample);
-    if (kind === 'render') panel.textContent = JSON.stringify(sample, null, 1);
+    if (kind === 'render' && sample.at - lastPanelUpdate >= 250) {
+      panel.textContent = JSON.stringify(sample, null, 1);
+      lastPanelUpdate = sample.at;
+    }
   };
   // Available for device inspection/export while ?globeDebug is enabled in the local server.
   (window as any).__globeDiagnostics = samples;
   return {
     controller(sample: CinematicSnapshot, p: number) { controller = sample; progress = p; record('controller'); },
-    render(p: number, city: number) { record('render', p, city); },
+    render(p: number, city: number, drawMs?: number) { record('render', p, city, drawMs); },
     destroy() { panel.remove(); delete (window as any).__globeDiagnostics; }
   };
 }
