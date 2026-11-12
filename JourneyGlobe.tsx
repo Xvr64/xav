@@ -275,12 +275,6 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
       H = Math.max(1, rect.height);
       stageDocLeft = rect.left + sx;
       dpr = Math.min(window.devicePixelRatio || 1, 1.5);
-      const pw = Math.max(1, Math.round(W * dpr));
-      const ph = Math.max(1, Math.round(H * dpr));
-      canvas.width = pw;
-      canvas.height = ph;
-      offCanvas.width = pw;
-      offCanvas.height = ph;
       if (runway && pinned) {
         const rr = runway.getBoundingClientRect();
         const pr = pinned.getBoundingClientRect();
@@ -301,6 +295,14 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
 
     // ---- Drawing -----------------------------------------------------------------
     const draw = (st: JourneyState) => {
+      // Keep the previous frame through resize/observer callbacks. Reallocate only
+      // when needed, in the same task that paints and blits its replacement.
+      const pw = Math.max(1, Math.round(W * dpr));
+      const ph = Math.max(1, Math.round(H * dpr));
+      if (canvas.width !== pw) canvas.width = pw;
+      if (canvas.height !== ph) canvas.height = ph;
+      if (offCanvas.width !== pw) offCanvas.width = pw;
+      if (offCanvas.height !== ph) offCanvas.height = ph;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, W, H);
 

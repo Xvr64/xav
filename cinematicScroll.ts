@@ -301,6 +301,20 @@ export function mountCinematicScroll(
     const target = sequenceTarget(st, window.scrollY, dir);
     if (target !== null) goTo(target);
   };
+  // Wheel, native inertia and touch must enter through the same resting state. In the
+  // current film earth === 0: goTo(0) alone is a no-op, not a landing on Doha.
+  const enterFromAbove = (st: CinematicStops, entryY: number) => {
+    scrollTo(st.y[0]);
+    lastDirection = 1;
+    if (st.earth > 0) {
+      goTo(st.earth);
+      if (play) play.entryY = Math.min(play.entryY, entryY);
+    } else {
+      wheelLocked = true;
+      settleUntil = performance.now() + SETTLE_MS;
+      gestures.disarm?.(1, performance.now());
+    }
+  };
   const captures = (st: CinematicStops, pos: number, dir: number, distance = 0) => {
     if (play) return true;
     const first = st.y[0], last = st.y[st.y.length - 1];
@@ -372,16 +386,7 @@ export function mountCinematicScroll(
     const entering = enteringFromAbove || enteringFromBelow;
     if (g || (entering && (entryGesture === dir || activeStream)) || (entering && native)) {
       if (enteringFromAbove && dir > 0) {
-        const entryY = window.scrollY;
-        scrollTo(st.y[st.earth]);
-        if (st.earth > 0) {
-          goTo(st.earth);
-          if (play) play.entryY = Math.min(play.entryY, entryY);
-        } else {
-          wheelLocked = true;
-          settleUntil = performance.now() + SETTLE_MS;
-          gestures.disarm?.(dir, performance.now());
-        }
+        enterFromAbove(st, window.scrollY);
       } else if (enteringFromBelow && dir < 0) {
         const entryY = window.scrollY;
         scrollTo(st.y[st.y.length - 1]);
@@ -426,25 +431,46 @@ export function mountCinematicScroll(
 
   let touchY = 0, touchX = 0;
   let touchCaptured = false, touchEligible = false, touchStartedPlaying = false;
+  let touchEntryY = 0, touchSettlingDirection = 0;
   const onTouchStart = (e: TouchEvent) => {
-    touchEligible = e.touches.length === 1 && !editable(e.target) && !nestedScroller(e.target);
+    touchEligible = !e.defaultPrevented && e.touches.length === 1 && !editable(e.target) && !nestedScroller(e.target);
     touchCaptured = false;
     touchStartedPlaying = !!play;
+    touchEntryY = window.scrollY;
+    touchSettlingDirection = wheelLocked && performance.now() < settleUntil ? lastDirection : 0;
     if (!touchEligible) return;
     touchY = e.touches[0].clientY;
     touchX = e.touches[0].clientX;
   };
   const onTouchMove = (e: TouchEvent) => {
-    if (!touchEligible || e.touches.length !== 1) return;
+    if (e.touches.length !== 1) { touchEligible = false; touchCaptured = false; return; }
+    if (!touchEligible || e.defaultPrevented) return;
     const dy = touchY - e.touches[0].clientY;
     if (Math.abs(dy) < 6 || Math.abs(dy) < Math.abs(touchX - e.touches[0].clientX)) return;
     const st = geometry();
-    touchCaptured ||= !!st && captures(st, window.scrollY, Math.sign(dy), dy);
+    touchCaptured ||= !!st && (touchSettlingDirection === Math.sign(dy) || captures(st, window.scrollY, Math.sign(dy), dy));
     if (touchCaptured && e.cancelable) e.preventDefault();
   };
   const onTouchEnd = (e: TouchEvent) => {
     const dy = touchY - (e.changedTouches[0]?.clientY ?? touchY);
-    if (touchCaptured && (!touchStartedPlaying || play) && Math.abs(dy) >= 24) step(Math.sign(dy) as -1 | 1);
+    const dir = Math.sign(dy) as -1 | 1;
+    const st = geometry();
+    if (touchEligible && touchCaptured && !e.defaultPrevented && st &&
+        (!touchStartedPlaying || play) && Math.abs(dy) >= 24 && dir !== touchSettlingDirection) {
+      if (!touchStartedPlaying && touchEntryY < st.y[0] - 2 && dir > 0) {
+        // The same finger may already have crossed natively and been pinned by onScroll.
+        // It still owns only the entry, never the next film.
+        if (!play) enterFromAbove(st, touchEntryY);
+      } else if (!touchStartedPlaying && touchEntryY > st.y[st.y.length - 1] + 2 && dir < 0) {
+        if (!play) {
+          scrollTo(st.y[st.y.length - 1]);
+          goTo(st.earth);
+        }
+      } else {
+        releaseLock();
+        step(dir);
+      }
+    }
     touchCaptured = false;
     touchEligible = false;
   };
@@ -498,15 +524,7 @@ export function mountCinematicScroll(
       if (prevY <= first + 2 && curY > first + 2 && curY < last - 2) {
         entryGesture = 0;
         native = null;
-        scrollTo(first);
-        if (st.earth > 0) {
-          goTo(st.earth);
-          if (play) play.entryY = Math.min(play.entryY, prevY);
-        } else {
-          wheelLocked = true;
-          settleUntil = performance.now() + SETTLE_MS;
-          gestures.disarm?.(1, performance.now());
-        }
+        enterFromAbove(st, prevY);
       } else if (prevY >= last - 2 && curY < last - 2 && curY > first + 2) {
         entryGesture = 0;
         native = null;

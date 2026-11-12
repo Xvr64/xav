@@ -243,6 +243,7 @@ test('two touch swipes complete both films and the next swipe is native', t => {
   assert.ok(b.swipe(100).defaultPrevented);
   b.advance(14000);
   assert.equal(b.win.scrollY, 1150);
+  b.advance(SETTLE_MS);
   b.swipe(100); b.advance(16000);
   assert.equal(b.win.scrollY, 4300);
   assert.equal(b.swipe(100).defaultPrevented, false);
@@ -489,7 +490,7 @@ const prodStops = {
   earth: 0,
 };
 
-function prodBrowser(t, initialY = 0) {
+function prodBrowser(t, initialY = 0, geometry = prodStops) {
   let now = 1000, next = 0, lockedY = null;
   const frames = new Map(), listeners = new Map(), mediaListeners = new Set();
   let glide = null;
@@ -525,7 +526,7 @@ function prodBrowser(t, initialY = 0) {
   }
   t.mock.method(performance, 'now', () => now);
   let isPlaying = false;
-  const controller = mountCinematicScroll(() => prodStops, (y, playing = false) => {
+  const controller = mountCinematicScroll(() => geometry, (y, playing = false) => {
     lockedY = y;
     isPlaying = playing;
   });
@@ -543,7 +544,7 @@ function prodBrowser(t, initialY = 0) {
     get isPlaying() { return isPlaying; },
     get waitingForExplore() {
       const y = lockedY ?? win.scrollY;
-      return !isPlaying && Math.abs(y - prodStops.y[prodStops.earth]) <= 6;
+      return !isPlaying && Math.abs(y - geometry.y[geometry.earth]) <= 6;
     },
     advance(ms) {
       const end = now + ms;
@@ -663,6 +664,88 @@ test('second scroll-once indicator ("Scroll once to explore") shows immediately 
   b.advance(SETTLE_MS + GESTURE_GAP_MS);
   b.wheel(100);
   assert.equal(b.waitingForExplore, false, 'hides immediately when triggered again');
+});
+
+const touchStart = b => b.emit('touchstart', { touches: [{ clientY: 650, clientX: 180 }] });
+const touchMove = (b, dy) => b.emit('touchmove', { touches: [{ clientY: 650 - dy, clientX: 180 }] });
+const touchEnd = (b, dy) => b.emit('touchend', { changedTouches: [{ clientY: 650 - dy, clientX: 180 }] });
+const touchSwipe = (b, dy) => { touchStart(b); touchMove(b, dy); touchEnd(b, dy); };
+
+test('mobile: swipe entering from the Hero lands on Doha instead of freezing above it', t => {
+  const b = prodBrowser(t, prodStops.y[0] - 100);
+  touchSwipe(b, 160);
+  assert.equal(b.win.scrollY, prodStops.y[0]);
+  assert.equal(b.waitingForExplore, true);
+  assert.equal(b.active, 0);
+});
+
+test('mobile: a long entry swipe crossing natively never also starts the city film', t => {
+  const b = prodBrowser(t, prodStops.y[0] - 100);
+  touchStart(b);
+  b.win.scrollY = prodStops.y[0] + 50;
+  b.emit('scroll');
+  touchMove(b, 200);
+  b.advance(1000); // Still the same finger, even after the settling timer expires.
+  touchEnd(b, 200);
+  assert.equal(b.waitingForExplore, true);
+  assert.equal(b.active, 0);
+});
+
+test('mobile: settling absorbs fresh same-direction touches; one later swipe starts the film', t => {
+  const b = prodBrowser(t, prodStops.y[0] - 100);
+  b.wheel(160);
+  touchSwipe(b, 100);
+  assert.equal(b.active, 0);
+  b.advance(SETTLE_MS + 1);
+  touchSwipe(b, 100);
+  assert.equal(b.isPlaying, true);
+});
+
+test('mobile: continuous fast swipes do not accelerate playback, reversal and replays keep their endpoints', t => {
+  const b = prodBrowser(t, prodStops.y[0]);
+  const duration = prodStops.dur.reduce((a, d) => a + d, 0);
+  for (let replay = 0; replay < 3; replay++) {
+    touchSwipe(b, 80);
+    for (let ms = 0; ms < 2000; ms += 100) {
+      b.advance(100);
+      touchSwipe(b, 500);
+    }
+    assert.ok(Math.abs(b.win.scrollY - timelineY(prodStops, 2)) <= 1);
+    b.advance(duration * 1000 - 2000 + 16);
+    assert.equal(b.win.scrollY, prodStops.y.at(-1));
+    b.advance(SETTLE_MS + 1);
+    touchSwipe(b, -120);
+    b.advance(duration * 1000 + 16);
+    assert.equal(b.waitingForExplore, true);
+    b.advance(SETTLE_MS + 1);
+  }
+});
+
+test('mobile: changing viewport geometry mid-film preserves elapsed time and reverse endpoint', t => {
+  const geometry = structuredClone(prodStops);
+  const b = prodBrowser(t, geometry.y[0], geometry);
+  touchSwipe(b, 80);
+  b.advance(2000);
+  geometry.y = geometry.y.map(y => y * 0.6);
+  b.win.innerHeight = 390;
+  b.emit('resize');
+  b.advance(1000);
+  assert.ok(Math.abs(b.win.scrollY - timelineY(geometry, 3)) <= 1);
+  touchSwipe(b, -100);
+  b.advance(10000);
+  assert.equal(b.win.scrollY, Math.round(geometry.y[0]));
+  assert.equal(b.waitingForExplore, true);
+});
+
+test('mobile: cancelled and multi-touch gestures cannot launch the film', t => {
+  const b = prodBrowser(t, prodStops.y[0]);
+  touchStart(b); touchMove(b, 100);
+  b.emit('touchcancel'); touchEnd(b, 100);
+  assert.equal(b.active, 0);
+  touchStart(b); touchMove(b, 100);
+  b.emit('touchmove', { touches: [{clientY: 550, clientX: 180}, {clientY: 500, clientX: 200}] });
+  touchEnd(b, 100);
+  assert.equal(b.active, 0);
 });
 
 

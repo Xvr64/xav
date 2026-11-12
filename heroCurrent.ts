@@ -194,8 +194,9 @@ export function createHeroCurrent(opts: HeroCurrentOptions): HeroCurrentHandle {
     dpr = Math.min(window.devicePixelRatio || 1, 2);
     viewW = window.innerWidth;
     const viewH = window.innerHeight;
-    canvas.width = Math.round(viewW * dpr);
-    canvas.height = Math.round(viewH * dpr);
+    const pw = Math.round(viewW * dpr), ph = Math.round(viewH * dpr);
+    if (canvas.width !== pw) canvas.width = pw;
+    if (canvas.height !== ph) canvas.height = ph;
 
     const sr = stage.getBoundingClientRect();
     stageH = sr.height || viewH;
@@ -534,8 +535,10 @@ export function createHeroCurrent(opts: HeroCurrentOptions): HeroCurrentHandle {
     window.clearTimeout(remeasureTimer);
     remeasureTimer = window.setTimeout(() => {
       if (disposed) return;
+      cancelAnimationFrame(frame);
       measure();
-      schedule();
+      // Measuring can clear the backing buffer; replace it before this task can paint.
+      renderHero();
     }, 80);
   };
 
@@ -546,8 +549,9 @@ export function createHeroCurrent(opts: HeroCurrentOptions): HeroCurrentHandle {
   document.fonts?.addEventListener?.('loadingdone', remeasure);
   (document.fonts?.ready ?? Promise.resolve()).then(() => {
     if (disposed) return;
+    cancelAnimationFrame(frame);
     measure();
-    schedule();
+    renderHero();
   });
 
   return {

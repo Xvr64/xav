@@ -182,6 +182,7 @@ export function createAsciiOcean(canvas: HTMLCanvasElement): AsciiOcean {
   let frameSeed = 0;
   /** QA only: skip the WebGL passes, to measure the page without them. */
   let qaPaused = false;
+  let resizePending = true;
   let opening: CreationRenderer | null = null;
   let openingWait = 0;
 
@@ -251,6 +252,13 @@ export function createAsciiOcean(canvas: HTMLCanvasElement): AsciiOcean {
   };
 
   const resize = () => {
+    // ResizeObserver runs after RAF and before paint. Resizing its opaque canvas here
+    // used to present a cleared (black) buffer until the next frame on mobile.
+    resizePending = true;
+    schedule();
+  };
+  const applyResize = () => {
+    resizePending = false;
     view.width = Math.max(1, canvas.clientWidth);
     view.height = Math.max(1, canvas.clientHeight);
     const narrow = view.width < 768;
@@ -258,21 +266,26 @@ export function createAsciiOcean(canvas: HTMLCanvasElement): AsciiOcean {
     view.cellCss = narrow ? 12 : 14;
     geometry.viewHeight = window.innerHeight;
     geometry.maxScroll = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
-    canvas.width = Math.max(1, Math.round(view.width * view.ratio));
-    canvas.height = Math.max(1, Math.round(view.height * view.ratio));
+    const width = Math.max(1, Math.round(view.width * view.ratio));
+    const height = Math.max(1, Math.round(view.height * view.ratio));
+    if (canvas.width !== width) canvas.width = width;
+    if (canvas.height !== height) canvas.height = height;
     if (gl && glReady) {
       const cellH = view.cellCss * view.ratio;
       const cellW = cellH * 0.6;
-      cellGrid.cols = Math.ceil(canvas.width / cellW) + 1;
-      cellGrid.rows = Math.ceil(canvas.height / cellH) + 2;
-      gl.bindTexture(gl.TEXTURE_2D, cellTexture);
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, cellGrid.cols, cellGrid.rows, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
-      gl.bindFramebuffer(gl.FRAMEBUFFER, cellFramebuffer);
-      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, cellTexture, 0);
-      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      const cols = Math.ceil(canvas.width / cellW) + 1;
+      const rows = Math.ceil(canvas.height / cellH) + 2;
+      if (cols !== cellGrid.cols || rows !== cellGrid.rows) {
+        cellGrid.cols = cols;
+        cellGrid.rows = rows;
+        gl.bindTexture(gl.TEXTURE_2D, cellTexture);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, cols, rows, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, cellFramebuffer);
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, cellTexture, 0);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      }
     }
     lastScroll = NaN;
-    schedule();
   };
 
   /** Depth samples for a column of points down the screen, at this scroll position. */
@@ -349,6 +362,9 @@ export function createAsciiOcean(canvas: HTMLCanvasElement): AsciiOcean {
   const frame = (now: number) => {
     raf = 0;
     if (disposed || document.hidden) return;
+    // Allocate and draw in one RAF task; no cleared backing buffer reaches a paint.
+    // Keep the last frame intact while the diagnostic pause is active as well.
+    if (resizePending && !qaPaused) applyResize();
     const dt = last ? Math.min(0.1, (now - last) / 1000) : 0;
     last = now;
     if (!reduce) time += dt;
@@ -408,11 +424,13 @@ export function createAsciiOcean(canvas: HTMLCanvasElement): AsciiOcean {
   });
   pageObserver.observe(document.body);
   window.addEventListener('scroll', schedule, { passive: true });
+  window.addEventListener('resize', resize, { passive: true });
   // QA hook, like __ambientWhales: draw a chosen moment now and read the frame back in the same
   // task (the drawing buffer is not preserved), and report what the water is doing
   (window as unknown as { __asciiOcean?: unknown }).__asciiOcean = {
     render: (atTime?: number) => {
       if (atTime !== undefined) time = atTime;
+      if (resizePending) applyResize();
       measure();
       const t0 = performance.now();
       applyWaterColor(depthAtScroll(window.scrollY, geometry), depthAtDocument(window.scrollY + 0.8 * geometry.viewHeight, geometry));
@@ -445,6 +463,7 @@ export function createAsciiOcean(canvas: HTMLCanvasElement): AsciiOcean {
       resizeObserver.disconnect();
       pageObserver.disconnect();
       window.removeEventListener('scroll', schedule);
+      window.removeEventListener('resize', resize);
       document.removeEventListener('visibilitychange', onVisibility);
       motionQuery.removeEventListener('change', onMotion);
       canvas.removeEventListener('webglcontextlost', onContextLost);
