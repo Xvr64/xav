@@ -4,6 +4,7 @@ import type { LocationItem } from './cvData';
 import { abyssFromProgress, globeScrollGeometry, globeScrollProgress, lerpN } from './abyssPalette';
 import { setGlobeZone } from './oceanDirection';
 import { CINEMATIC_SPEED, mountCinematicScroll, type CinematicStops } from './cinematicScroll';
+import { mountGlobeDiagnostics } from './globeDiagnostics';
 
 const PlainText = ({ text }: { text: string }) => <>{text}</>;
 
@@ -127,6 +128,7 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
     const offCanvas = document.createElement('canvas');
     const ctx = offCanvas.getContext('2d', { alpha: true });
     if (!ctx) return;
+    const diagnostics = mountGlobeDiagnostics(stage);
 
     let prefersReduced =
       typeof window !== 'undefined' &&
@@ -535,6 +537,7 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
 
     const apply = (st: JourneyState) => {
       draw(st);
+      diagnostics?.render(st.p, st.active);
       if (progressFillRef.current) progressFillRef.current.style.transform = `scaleX(${st.p.toFixed(4)})`;
       for (let idx = 0; idx < cityStopEls.length; idx++) {
         const op = 0.4 + st.reveal[idx] * 0.6;
@@ -638,8 +641,10 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
       globeScrollGeometry.controlledY = y;
       cinematicPlayingRef.current = playing;
       syncScrollHint();
-      if (globeInView) requestRender();
-    });
+      // Playback owns rendering too: an asynchronous/stale IntersectionObserver result
+      // must never suspend an active film. Still render on demand when the film is idle.
+      if (playing || globeInView) requestRender();
+    }, diagnostics ? sample => diagnostics.controller(sample, globeScrollProgress()) : undefined);
     // Travel to a city = glide to that city's checkpoint
     goToCityRef.current = (id: string) => {
       const idx = locations.findIndex((l) => l.id === id);
@@ -655,6 +660,7 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
 
     const onResize = () => {
       resize();
+      cinematic.refresh();
       requestRender();
     };
     const motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -672,8 +678,7 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
       .then(() => {
         if (!disposed) {
           measureCityLabels();
-          resize();
-          requestRender();
+          onResize();
         }
       })
       .catch(() => undefined);
@@ -681,6 +686,7 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
     return () => {
       disposed = true;
       cinematic.destroy();
+      diagnostics?.destroy();
       globeScrollGeometry.controlledY = null;
       cinematicPlayingRef.current = false;
       motionQuery.removeEventListener('change', onMotionChange);

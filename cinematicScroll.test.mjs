@@ -14,6 +14,16 @@ const gesturesIn = (events, g = createWheelGestures()) => {
   return out;
 };
 
+function styleDeclaration() {
+  const values = new Map(), priorities = new Map();
+  return {
+    getPropertyValue: p => values.get(p) ?? '',
+    getPropertyPriority: p => priorities.get(p) ?? '',
+    setProperty(p, v, priority = '') { values.set(p, v); priorities.set(p, priority); },
+    removeProperty(p) { values.delete(p); priorities.delete(p); }
+  };
+}
+
 test('one mouse-wheel notch is one gesture; notches spun together are still one', () => {
   assert.deepEqual(gesturesIn([[100, 0]]), [1]);
   assert.deepEqual(gesturesIn([[100, 0], [100, 40], [100, 40], [100, 40], [100, 40]]), [1]);
@@ -70,13 +80,14 @@ function browser(t, initialY = 100, reducedMotion = false) {
   };
   const win = {
     scrollY: initialY, innerHeight: 800,
-    matchMedia: () => media,
+    history: { scrollRestoration: 'auto' },
+    matchMedia: query => query.includes('coarse') ? { matches: false } : media,
     scrollTo({top}) { glide = null; this.scrollY = Math.max(0, Math.round(top)); },
     addEventListener(kind, fn) { if (!listeners.has(kind)) listeners.set(kind, new Set()); listeners.get(kind).add(fn); },
     removeEventListener(kind, fn) { listeners.get(kind)?.delete(fn); },
   };
   const originals = new Map();
-  for (const [key, value] of Object.entries({ window: win, document: { body, documentElement: {clientWidth:1200} },
+  for (const [key, value] of Object.entries({ window: win, document: { body, documentElement: {clientWidth:1200, style: styleDeclaration()}, addEventListener: win.addEventListener, removeEventListener: win.removeEventListener },
     HTMLElement: Element, getComputedStyle: () => ({overflowY:'visible'}),
     requestAnimationFrame: fn => { frames.set(++next, fn); return next; },
     cancelAnimationFrame: id => frames.delete(id) })) {
@@ -511,13 +522,14 @@ function prodBrowser(t, initialY = 0, geometry = prodStops) {
   };
   const win = {
     scrollY: initialY, innerHeight: 922,
-    matchMedia: () => media,
+    history: { scrollRestoration: 'auto' },
+    matchMedia: query => query.includes('coarse') ? { matches: false } : media,
     scrollTo({top}) { glide = null; this.scrollY = Math.max(0, Math.round(top)); },
     addEventListener(kind, fn) { if (!listeners.has(kind)) listeners.set(kind, new Set()); listeners.get(kind).add(fn); },
     removeEventListener(kind, fn) { listeners.get(kind)?.delete(fn); },
   };
   const originals = new Map();
-  for (const [key, value] of Object.entries({ window: win, document: { body, documentElement: {clientWidth:1200} },
+  for (const [key, value] of Object.entries({ window: win, document: { body, documentElement: {clientWidth:1200, style: styleDeclaration()}, addEventListener: win.addEventListener, removeEventListener: win.removeEventListener },
     HTMLElement: Element, getComputedStyle: () => ({overflowY:'visible'}),
     requestAnimationFrame: fn => { frames.set(++next, fn); return next; },
     cancelAnimationFrame: id => frames.delete(id) })) {
@@ -691,12 +703,9 @@ test('mobile: a long entry swipe crossing natively never also starts the city fi
   assert.equal(b.active, 0);
 });
 
-test('mobile: settling absorbs fresh same-direction touches; one later swipe starts the film', t => {
+test('mobile: first deliberate new swipe at Doha starts immediately without a cooldown', t => {
   const b = prodBrowser(t, prodStops.y[0] - 100);
   b.wheel(160);
-  touchSwipe(b, 100);
-  assert.equal(b.active, 0);
-  b.advance(SETTLE_MS + 1);
   touchSwipe(b, 100);
   assert.equal(b.isPlaying, true);
 });
@@ -746,6 +755,22 @@ test('mobile: cancelled and multi-touch gestures cannot launch the film', t => {
   b.emit('touchmove', { touches: [{clientY: 550, clientX: 180}, {clientY: 500, clientX: 200}] });
   touchEnd(b, 100);
   assert.equal(b.active, 0);
+});
+
+test('regression: a native touch scroll after Doha settling cannot leave stale renderer progress', t => {
+  const b = prodBrowser(t, prodStops.y[0] - 100);
+  touchSwipe(b, 160);
+  b.advance(SETTLE_MS + 1);
+  // Safari has already claimed the gesture: scroll arrives independently of cancelable touchmove.
+  b.win.scrollY += 450;
+  b.emit('scroll');
+  assert.equal(b.win.scrollY, b.lockedY, 'document and published Globe position must agree while owned');
+});
+
+test('regression: first small touchmove at Doha is captured before native pan begins', t => {
+  const b = prodBrowser(t, prodStops.y[0]);
+  touchStart(b);
+  assert.equal(touchMove(b, 2).defaultPrevented, true);
 });
 
 

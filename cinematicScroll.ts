@@ -92,6 +92,19 @@ export interface CinematicScroll {
   goTo(index: number): void;
   skip(): void;
   destroy(): void;
+  snapshot(): CinematicSnapshot;
+  refresh(): void;
+}
+
+export type MobileOwnership = 'document' | 'ready' | 'playing' | 'draining';
+export interface CinematicSnapshot {
+  ownership: MobileOwnership | 'desktop';
+  playing: boolean;
+  time: number | null;
+  target: number | null;
+  direction: number;
+  timelineY: number | null;
+  documentY: number;
 }
 
 export const CINEMATIC_SPEED = 1.5;
@@ -147,7 +160,8 @@ export function sequenceTarget(st: CinematicStops, y: number, dir: -1 | 1): numb
 
 export function mountCinematicScroll(
   stops: () => CinematicStops | null,
-  onLockY?: (y: number | null, playing?: boolean) => void
+  onLockY?: (y: number | null, playing?: boolean) => void,
+  onSample?: (sample: CinematicSnapshot) => void
 ): CinematicScroll {
   let gestures = createWheelGestures();
   let raf = 0;
@@ -169,20 +183,57 @@ export function mountCinematicScroll(
   let lastScrollY = window.scrollY;
   let scrollbarDrag = false;
   let settleUntil = -Infinity;
+  let mobile = window.matchMedia('(pointer: coarse)').matches;
+  let ownership: MobileOwnership = 'document';
+  let touchDown = false;
+  let readyTime = 0;
+  let restoreNative: (() => void) | null = null;
+  // Mobile ownership is a gesture lifecycle, not a timer. A finger already down at
+  // an endpoint must lift before the next gesture can leave or start another film.
+  const own = (next: MobileOwnership) => {
+    ownership = next;
+    if (next === 'document') { restoreNative?.(); restoreNative = null; return; }
+    if (restoreNative) return;
+    const style = document.documentElement.style;
+    const properties = ['overflow-y', 'touch-action', 'overscroll-behavior'] as const;
+    const saved = properties.map(p => [p, style.getPropertyValue(p), style.getPropertyPriority(p)]);
+    const restoration = window.history.scrollRestoration;
+    // Keep the document scrollable by the clock (sticky geometry stays unchanged),
+    // but remove native panning/scroll chaining. Never turn body into a scroll container.
+    style.setProperty('overflow-y', 'hidden', 'important');
+    style.setProperty('touch-action', 'none', 'important');
+    style.setProperty('overscroll-behavior', 'none', 'important');
+    window.history.scrollRestoration = 'manual';
+    restoreNative = () => {
+      for (const [p, value, priority] of saved) {
+        if (value) style.setProperty(p, value, priority); else style.removeProperty(p);
+      }
+      window.history.scrollRestoration = restoration;
+    };
+  };
+  const snapshot = (): CinematicSnapshot => ({
+    ownership: mobile ? ownership : 'desktop', playing: play !== null,
+    time: play?.time ?? null, target: play?.target ?? null,
+    direction: play?.direction ?? lastDirection,
+    timelineY: expectedY, documentY: window.scrollY
+  });
+  const publish = () => { onLockY?.(expectedY, play !== null); onSample?.(snapshot()); };
   /** Where the browser's own smooth scrolling of recent, uncaptured wheel events is heading. */
   let native: { target: number; until: number } | null = null;
   const reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
   const geometry = () => reduced.matches ? null : stops();
   const scrollTo = (y: number) => {
+    // Publish the clock's output, never a possibly stale Safari scroll readback.
+    expectedY = y;
     window.scrollTo({ top: y, behavior: 'instant' as ScrollBehavior });
-    expectedY = window.scrollY;
-    lastScrollY = expectedY;
-    onLockY?.(expectedY, play !== null);
+    lastScrollY = window.scrollY;
+    publish();
   };
   const releaseLock = () => {
     wheelLocked = false;
     expectedY = null;
-    onLockY?.(null, play !== null);
+    if (mobile) own('document');
+    publish();
   };
   const cancel = () => {
     cancelAnimationFrame(raf);
@@ -190,15 +241,29 @@ export function mountCinematicScroll(
     play = null;
     releaseLock();
   };
+  const releaseWhenCommitted = () => {
+    raf = 0;
+    if (ownership !== 'draining' || play) return;
+    // Safari may acknowledge scrollTo on a later frame. Do not drop the final
+    // renderer position until that position is also the document's position.
+    if (expectedY !== null && Math.abs(window.scrollY - expectedY) > 2) {
+      raf = requestAnimationFrame(releaseWhenCommitted);
+    } else if (!touchDown) releaseLock();
+  };
   const finish = () => {
     const lockedY = expectedY;
     cancelAnimationFrame(raf);
     raf = 0;
     play = null;
+    if (mobile) {
+      own('draining'); publish();
+      releaseWhenCommitted();
+      return;
+    }
     // Events seen during playback never queue the next film, including momentum at its end.
     wheelLocked = true;
     expectedY = lockedY;
-    onLockY?.(expectedY, false);
+    publish();
     settleUntil = performance.now() + SETTLE_MS;
     gestures.disarm?.(lastDirection, performance.now());
   };
@@ -283,6 +348,7 @@ export function mountCinematicScroll(
       hi,
       entryY: play?.entryY ?? preEntryY
     };
+    if (mobile) own('playing');
     // Take the scroll now: programmatic scroll pins position to the start of this film
     const outY = timelineY(st, time);
     scrollTo(outY);
@@ -304,6 +370,7 @@ export function mountCinematicScroll(
   // Wheel, native inertia and touch must enter through the same resting state. In the
   // current film earth === 0: goTo(0) alone is a no-op, not a landing on Doha.
   const enterFromAbove = (st: CinematicStops, entryY: number) => {
+    if (mobile) { readyTime = 0; own('ready'); }
     scrollTo(st.y[0]);
     lastDirection = 1;
     if (st.earth > 0) {
@@ -343,6 +410,19 @@ export function mountCinematicScroll(
       return;
     }
     const now = performance.now();
+    if (mobile && ownership !== 'document') {
+      e.preventDefault();
+      if (ownership === 'draining') return;
+      const g = gestures.feed(delta, now);
+      if (g) {
+        if (!play && sequenceTarget(st, expectedY ?? window.scrollY, g) === null) {
+          const y = expectedY ?? window.scrollY;
+          releaseLock();
+          window.scrollTo({ top: y + delta, behavior: 'instant' as ScrollBehavior });
+        } else step(g);
+      }
+      return;
+    }
     const quiet = now - lastWheel >= GESTURE_GAP_MS;
     if (quiet) entryGesture = 0;
     lastWheel = now;
@@ -431,32 +511,54 @@ export function mountCinematicScroll(
 
   let touchY = 0, touchX = 0;
   let touchCaptured = false, touchEligible = false, touchStartedPlaying = false;
-  let touchEntryY = 0, touchSettlingDirection = 0;
+  let touchEntryY = 0;
   const onTouchStart = (e: TouchEvent) => {
+    mobile = true;
+    touchDown = true;
     touchEligible = !e.defaultPrevented && e.touches.length === 1 && !editable(e.target) && !nestedScroller(e.target);
     touchCaptured = false;
     touchStartedPlaying = !!play;
     touchEntryY = window.scrollY;
-    touchSettlingDirection = wheelLocked && performance.now() < settleUntil ? lastDirection : 0;
+    // Adopt playback started by keyboard/city selection before any touch arrives.
+    if (play) own('playing');
     if (!touchEligible) return;
     touchY = e.touches[0].clientY;
     touchX = e.touches[0].clientX;
+    const st = geometry();
+    if (st && window.scrollY >= st.y[0] - 2 && window.scrollY < st.y[st.y.length - 1] - 2) {
+      touchCaptured = true;
+      if (!play) {
+        readyTime = timelineTime(st, expectedY ?? window.scrollY);
+        own('ready'); scrollTo(expectedY ?? window.scrollY);
+      }
+    }
   };
   const onTouchMove = (e: TouchEvent) => {
+    // Cancel the FIRST move, including a 1px/horizontal move, while owned. Waiting
+    // for the intent threshold lets iOS commit a native pan that cannot be cancelled later.
+    if (ownership !== 'document' && e.cancelable) e.preventDefault();
     if (e.touches.length !== 1) { touchEligible = false; touchCaptured = false; return; }
-    if (!touchEligible || e.defaultPrevented) return;
+    if (!touchEligible) return;
     const dy = touchY - e.touches[0].clientY;
     if (Math.abs(dy) < 6 || Math.abs(dy) < Math.abs(touchX - e.touches[0].clientX)) return;
     const st = geometry();
-    touchCaptured ||= !!st && (touchSettlingDirection === Math.sign(dy) || captures(st, window.scrollY, Math.sign(dy), dy));
+    touchCaptured ||= !!st && captures(st, window.scrollY, Math.sign(dy), dy);
     if (touchCaptured && e.cancelable) e.preventDefault();
   };
   const onTouchEnd = (e: TouchEvent) => {
     const dy = touchY - (e.changedTouches[0]?.clientY ?? touchY);
     const dir = Math.sign(dy) as -1 | 1;
     const st = geometry();
+    touchDown = e.touches?.length > 0;
+    if (ownership === 'draining') {
+      if (!touchDown && !raf) releaseWhenCommitted();
+      touchCaptured = false;
+      touchEligible = false;
+      return;
+    }
     if (touchEligible && touchCaptured && !e.defaultPrevented && st &&
-        (!touchStartedPlaying || play) && Math.abs(dy) >= 24 && dir !== touchSettlingDirection) {
+        (!touchStartedPlaying || play) && Math.abs(dy) >= 24 &&
+        Math.abs(dy) >= Math.abs(touchX - (e.changedTouches[0]?.clientX ?? touchX))) {
       if (!touchStartedPlaying && touchEntryY < st.y[0] - 2 && dir > 0) {
         // The same finger may already have crossed natively and been pinned by onScroll.
         // It still owns only the entry, never the next film.
@@ -467,14 +569,21 @@ export function mountCinematicScroll(
           goTo(st.earth);
         }
       } else {
-        releaseLock();
-        step(dir);
+        if (!play && sequenceTarget(st, expectedY ?? window.scrollY, dir) === null) {
+          // The outward gesture at a resting endpoint hands back native navigation.
+          const y = expectedY ?? window.scrollY;
+          releaseLock();
+          window.scrollTo({ top: y + dy, behavior: 'instant' as ScrollBehavior });
+        } else step(dir);
       }
     }
     touchCaptured = false;
     touchEligible = false;
   };
-  const onTouchCancel = () => { touchCaptured = false; touchEligible = false; };
+  const onTouchCancel = () => {
+    touchCaptured = false; touchEligible = false; touchDown = false;
+    if (ownership === 'draining' && !raf) releaseWhenCommitted();
+  };
   // Scrollbar drags, anchors and assistive navigation always override playback; incoming
   // smooth scrolls or trackpad momentum from before entering do not: the film's frames keep the page
   const onScroll = () => {
@@ -485,6 +594,13 @@ export function mountCinematicScroll(
     if (!st) return;
     const first = st.y[0];
     const last = st.y[st.y.length - 1];
+
+    if (mobile && ownership !== 'document' && expectedY !== null) {
+      // Native inertia is never interpreted as navigation while mobile owns the scene,
+      // including at Doha and for jumps beyond the runway. Explicit navigation releases below.
+      if (Math.abs(curY - expectedY) > 2) scrollTo(expectedY);
+      return;
+    }
 
     if (play && expectedY !== null) {
       const diff = Math.abs(curY - expectedY);
@@ -516,6 +632,9 @@ export function mountCinematicScroll(
         releaseLock();
         return;
       }
+      // A resting renderer lock must never outlive its document ownership.
+      if (Math.abs(curY - expectedY) > 2) scrollTo(expectedY);
+      return;
     }
 
     // If native scrolling / inertia from outside crosses into the section while idle,
@@ -544,6 +663,10 @@ export function mountCinematicScroll(
     scrollbarDrag = false;
   };
   const onReduced = () => { if (reduced.matches) cancel(); };
+  const onNavigation = (e: Event) => {
+    if (e.type !== 'click' || (e.target instanceof HTMLElement && e.target.closest('a[href]'))) cancel();
+  };
+  const onVisibility = () => { if (play) play.last = performance.now(); };
   window.addEventListener('wheel', onWheel, { passive: false });
   window.addEventListener('keydown', onKey);
   window.addEventListener('touchstart', onTouchStart, { passive: true });
@@ -554,9 +677,20 @@ export function mountCinematicScroll(
   window.addEventListener('pointerdown', onPointerDown, { passive: true });
   window.addEventListener('pointerup', onPointerUp, { passive: true });
   window.addEventListener('pointercancel', onPointerUp, { passive: true });
+  window.addEventListener('pagehide', onNavigation);
+  window.addEventListener('hashchange', onNavigation);
+  window.addEventListener('click', onNavigation);
+  document.addEventListener('visibilitychange', onVisibility);
   reduced.addEventListener('change', onReduced);
   return {
     goTo,
+    snapshot,
+    refresh() {
+      const st = geometry();
+      if (!st) { cancel(); return; }
+      if (play) scrollTo(timelineY(st, play.time));
+      else if (ownership === 'ready') scrollTo(timelineY(st, readyTime));
+    },
     skip: cancel,
     destroy() {
       cancel();
@@ -570,6 +704,10 @@ export function mountCinematicScroll(
       window.removeEventListener('pointerdown', onPointerDown);
       window.removeEventListener('pointerup', onPointerUp);
       window.removeEventListener('pointercancel', onPointerUp);
+      window.removeEventListener('pagehide', onNavigation);
+      window.removeEventListener('hashchange', onNavigation);
+      window.removeEventListener('click', onNavigation);
+      document.removeEventListener('visibilitychange', onVisibility);
       reduced.removeEventListener('change', onReduced);
     }
   };
