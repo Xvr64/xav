@@ -5,7 +5,7 @@ import { advanceEncryptedLine, encryptedCharacterState, lineRevealMs, ENCRYPTED_
 const advance = (state, options = {}) => advanceEncryptedLine(
   state, options.zone ?? 1, options.below ?? false, options.above ?? false,
   options.top ?? false, options.delta ?? 0, options.ms ?? 50,
-  options.count ?? 10, options.reduced ?? false, options.entranceOnly ?? false
+  options.count ?? 10, options.reduced ?? false, options.entranceOnly
 );
 
 test('fast entrance starts encrypted, locks one character per 50ms, then rests', () => {
@@ -20,49 +20,49 @@ test('fast entrance starts encrypted, locks one character per 50ms, then rests',
   assert.equal(advance(state, { ms: 5000 }).currentP, 1);
 });
 
-test('entrance-only experiment keeps read lines resolved through exits, reversal and resize state reuse', () => {
+test('entrance-only decryption is the default and keeps read lines resolved through exits, reversal and resize state reuse', () => {
   const shown = { revealState: 'revealed', currentP: 1 };
   for (const options of [{ above: true }, { below: true }, { top: true, zone: 0.2 }, { delta: -300, zone: 0.3 }])
-    assert.deepEqual(advance(shown, { ...options, entranceOnly: true }), shown);
+    assert.deepEqual(advance(shown, options), shown);
   const initial = { revealState: 'hidden', currentP: 0 };
-  assert.deepEqual(advance(initial, { above: true, entranceOnly: true }), shown, 'fast anchor jump resolves passed text');
-  assert.deepEqual(advance(initial, { reduced: true, entranceOnly: true }), shown);
-  assert.deepEqual(advance(initial, { below: true, entranceOnly: true }), initial);
-  const entered = advance(initial, { entranceOnly: true });
+  assert.deepEqual(advance(initial, { above: true }), shown, 'fast anchor jump resolves passed text');
+  assert.deepEqual(advance(initial, { reduced: true }), shown);
+  assert.deepEqual(advance(initial, { below: true }), initial);
+  const entered = advance(initial);
   assert.equal(entered.revealState, 'revealing');
-  assert.deepEqual(advance(entered, { ms: 600, entranceOnly: true }), shown);
+  assert.deepEqual(advance(entered, { ms: 600 }), shown);
 });
 
-test('scrolling upward encrypts and erases at the lower edge, pauses, and resumes downward', () => {
+test('legacy reversible exit scrambling remains selectable via entranceOnly=false', () => {
   let state = { revealState: 'revealed', currentP: 1 };
-  state = advance(state, { zone: 0.7, delta: -40 });
+  state = advance(state, { zone: 0.7, delta: -40, entranceOnly: false });
   assert.equal(state.currentP, 0.7);
   assert.equal(state.revealState, 'exiting');
-  assert.equal(advance(state, { zone: 0.7, ms: 5000 }).currentP, 0.7);
-  state = advance(state, { zone: 0.8, delta: 10 });
+  assert.equal(advance(state, { zone: 0.7, ms: 5000, entranceOnly: false }).currentP, 0.7);
+  state = advance(state, { zone: 0.8, delta: 10, entranceOnly: false });
   assert.ok(state.currentP > 0.7);
   assert.equal(state.revealState, 'revealing');
-  state = advance(state, { zone: 0.2, delta: -50 });
+  state = advance(state, { zone: 0.2, delta: -50, entranceOnly: false });
   assert.equal(state.currentP, 0.2);
-  state = advance(state, { below: true, zone: 0 });
+  state = advance(state, { below: true, zone: 0, entranceOnly: false });
   assert.equal(state.currentP, 0);
   assert.equal(state.revealState, 'hidden');
-  assert.equal(advance(state, { delta: 300 }).revealState, 'revealing');
+  assert.equal(advance(state, { delta: 300, entranceOnly: false }).revealState, 'revealing');
 });
 
-test('reversing a partially revealed line never jumps to more readable text', () => {
+test('reversing a partially revealed line never jumps to more readable text when entranceOnly=false', () => {
   const state = { revealState: 'revealing', currentP: 0.25 };
-  assert.equal(advance(state, { zone: 0.7, delta: -20 }).currentP, 0.25);
-  assert.equal(advance(state, { zone: 0.1, delta: -20 }).currentP, 0.1);
+  assert.equal(advance(state, { zone: 0.7, delta: -20, entranceOnly: false }).currentP, 0.25);
+  assert.equal(advance(state, { zone: 0.1, delta: -20, entranceOnly: false }).currentP, 0.1);
 });
 
-test('top exit remains reversible and reduced motion resolves even off screen', () => {
+test('top exit remains reversible with entranceOnly=false and reduced motion resolves even off screen', () => {
   let state = { revealState: 'revealed', currentP: 1 };
   for (const zone of [0.8, 0.3, 0.6, 1]) {
-    state = advance(state, { top: true, zone });
+    state = advance(state, { top: true, zone, entranceOnly: false });
     assert.equal(state.currentP, zone);
   }
-  assert.equal(advance(state, { above: true }).currentP, 0);
+  assert.equal(advance(state, { above: true, entranceOnly: false }).currentP, 0);
   assert.deepEqual(advance(state, { below: true, reduced: true }), { revealState: 'revealed', currentP: 1 });
 });
 

@@ -72,7 +72,14 @@ function globe({ staleReads = false, coarse = true, ascii = false } = {}) {
   const progress = new Element(), caption = new Element(); caption.getBoundingClientRect = rect;
   let hintVisible = false;
   const hint = { classList: { toggle(_, value) { hintVisible = value; } } };
-  const doc = { ...events, body: new Element(), documentElement: { style, clientWidth: width, scrollHeight: 15000 },
+  const attrs = new Map();
+  const doc = { ...events, body: new Element(),
+    documentElement: {
+      style, clientWidth: width, scrollHeight: 15000,
+      setAttribute: (k, v) => attrs.set(k, v),
+      removeAttribute: k => attrs.delete(k),
+      getAttribute: k => attrs.get(k) ?? null
+    },
     createElement: () => canvas, hidden: false };
   const react = {
     memo: fn => fn,
@@ -136,11 +143,12 @@ function globe({ staleReads = false, coarse = true, ascii = false } = {}) {
   const endTouch = dy => emit('touchend', { touches: [], changedTouches: [{ clientY: 650 - dy, clientX: 150 }] });
   advance(16);
   return {
-    win, controller, style, samples, renders, cities, paintedLabels, advance, emit, startTouch, move, endTouch,
+    win, doc, controller, style, samples, renders, cities, paintedLabels, advance, emit, startTouch, move, endTouch,
     anchor() { const a = new Element(); a.closest = () => a; emit('click', { target: a }); },
     get blits() { return blits; }, get hint() { return hintVisible; },
     get p() { return deps['./abyssPalette'].globeScrollProgress(); },
     get end() { return geometry.start + geometry.travel; },
+    get controlledY() { return geometry.controlledY; },
     swipe(dy) { startTouch(); move(Math.sign(dy) * 2); move(dy); endTouch(dy); },
     forceNative(y) { win.scrollY = y; emit('scroll'); },
     hideObserver() { for (const cb of io) cb([{ isIntersecting: false }]); },
@@ -308,4 +316,41 @@ test('ASCII prototype retains every city, frame progress, reversal and mobile ow
     ascii.swipe(-100); ascii.advance(13000);
     assert.equal(ascii.cities.at(-1), 'doha');
   } finally { baseline.cleanup(); ascii.cleanup(); }
+});
+
+test('production Globe: sustained mobile escape past runway releases ownership instead of freezing on Doha', () => {
+  // Simulate iOS Safari UIProcess momentum ignoring window.scrollTo() for > 120ms past runway end.
+  const b = globe({ staleReads: true });
+  try {
+    b.startTouch();
+    b.move(2);
+    b.endTouch(2); // mobile owns scene in 'ready' at Doha, lock attribute set
+    assert.equal(b.controller.snapshot().owner, 'ready');
+    assert.equal(b.doc.documentElement.getAttribute('data-globe-scroll'), 'locked');
+    assert.equal(b.controller.snapshot().expectedY, 2500);
+    assert.equal(b.controller.snapshot().actualY, 2500);
+
+    // Override scrollTo to refuse moving scrollY back while native UIProcess drives document past runway
+    const origScrollTo = b.win.scrollTo;
+    b.win.scrollTo = () => {};
+    b.forceNative(b.end + 400);
+    assert.equal(b.controller.snapshot().owner, 'ready', 'single overshoot frame does not instantly drop ownership');
+    b.advance(140);
+    b.forceNative(b.end + 550);
+    assert.equal(b.controller.snapshot().owner, 'document', 'sustained out-of-bounds divergence yields ownership');
+    assert.equal(b.controlledY, null, 'controlledY cleared so Globe cannot remain frozen on Doha');
+    assert.equal(b.doc.documentElement.getAttribute('data-globe-scroll'), null, 'scroll lock attribute removed');
+    b.win.scrollTo = origScrollTo;
+  } finally { b.cleanup(); }
+});
+
+test('production Globe: stale IntersectionObserver during ready state still produces frames', () => {
+  const b = globe();
+  try {
+    b.hideObserver();
+    const before = b.renders.length;
+    b.forceNative(2500); // touch/scroll update while IO mistakenly reports out of view
+    b.advance(32);
+    assert.ok(b.renders.length > before, 'synchronous stage visibility keeps rendering despite stale observer');
+  } finally { b.cleanup(); }
 });

@@ -99,12 +99,16 @@ export interface CinematicScroll {
 export type MobileOwnership = 'document' | 'ready' | 'playing' | 'draining';
 export interface CinematicSnapshot {
   ownership: MobileOwnership | 'desktop';
+  owner: MobileOwnership | 'desktop';
   playing: boolean;
   time: number | null;
   target: number | null;
   direction: number;
   timelineY: number | null;
+  expectedY: number | null;
   documentY: number;
+  actualY: number;
+  scrollDivergencePx: number | null;
 }
 
 export const CINEMATIC_SPEED = 1.5;
@@ -187,6 +191,7 @@ export function mountCinematicScroll(
   let ownership: MobileOwnership = 'document';
   let touchDown = false;
   let readyTime = 0;
+  let escapeSince: number | null = null;
   let restoreNative: (() => void) | null = null;
   // Mobile ownership is a gesture lifecycle, not a timer. A finger already down at
   // an endpoint must lift before the next gesture can leave or start another film.
@@ -200,23 +205,36 @@ export function mountCinematicScroll(
     const restoration = window.history.scrollRestoration;
     // Keep the document scrollable by the clock (sticky geometry stays unchanged),
     // but remove native panning/scroll chaining. Never turn body into a scroll container.
+    document.documentElement.setAttribute?.('data-globe-scroll', 'locked');
     style.setProperty('overflow-y', 'hidden', 'important');
     style.setProperty('touch-action', 'none', 'important');
     style.setProperty('overscroll-behavior', 'none', 'important');
     window.history.scrollRestoration = 'manual';
     restoreNative = () => {
+      document.documentElement.removeAttribute?.('data-globe-scroll');
       for (const [p, value, priority] of saved) {
         if (value) style.setProperty(p, value, priority); else style.removeProperty(p);
       }
       window.history.scrollRestoration = restoration;
     };
   };
-  const snapshot = (): CinematicSnapshot => ({
-    ownership: mobile ? ownership : 'desktop', playing: play !== null,
-    time: play?.time ?? null, target: play?.target ?? null,
-    direction: play?.direction ?? lastDirection,
-    timelineY: expectedY, documentY: window.scrollY
-  });
+  const snapshot = (): CinematicSnapshot => {
+    const owner = mobile ? ownership : 'desktop';
+    const actualY = window.scrollY;
+    return {
+      ownership: owner,
+      owner,
+      playing: play !== null,
+      time: play?.time ?? null,
+      target: play?.target ?? null,
+      direction: play?.direction ?? lastDirection,
+      timelineY: expectedY,
+      expectedY,
+      documentY: actualY,
+      actualY,
+      scrollDivergencePx: expectedY !== null ? actualY - expectedY : null
+    };
+  };
   const publish = () => { onLockY?.(expectedY, play !== null); onSample?.(snapshot()); };
   /** Where the browser's own smooth scrolling of recent, uncaptured wheel events is heading. */
   let native: { target: number; until: number } | null = null;
@@ -232,6 +250,7 @@ export function mountCinematicScroll(
   const releaseLock = () => {
     wheelLocked = false;
     expectedY = null;
+    escapeSince = null;
     if (mobile) own('document');
     publish();
   };
@@ -525,11 +544,12 @@ export function mountCinematicScroll(
     touchY = e.touches[0].clientY;
     touchX = e.touches[0].clientX;
     const st = geometry();
-    if (st && window.scrollY >= st.y[0] - 2 && window.scrollY < st.y[st.y.length - 1] - 2) {
+    const pos = ownership !== 'document' && expectedY !== null ? expectedY : window.scrollY;
+    if (st && pos >= st.y[0] - 2 && pos < st.y[st.y.length - 1] - 2) {
       touchCaptured = true;
       if (!play) {
-        readyTime = timelineTime(st, expectedY ?? window.scrollY);
-        own('ready'); scrollTo(expectedY ?? window.scrollY);
+        readyTime = timelineTime(st, pos);
+        own('ready'); scrollTo(pos);
       }
     }
   };
@@ -539,10 +559,15 @@ export function mountCinematicScroll(
     if (ownership !== 'document' && e.cancelable) e.preventDefault();
     if (e.touches.length !== 1) { touchEligible = false; touchCaptured = false; return; }
     if (!touchEligible) return;
+    const st = geometry();
+    if (st && window.scrollY >= st.y[0] - 2 && window.scrollY < st.y[st.y.length - 1] - 2) {
+      touchCaptured = true;
+      if (e.cancelable) e.preventDefault();
+    }
     const dy = touchY - e.touches[0].clientY;
     if (Math.abs(dy) < 6 || Math.abs(dy) < Math.abs(touchX - e.touches[0].clientX)) return;
-    const st = geometry();
-    touchCaptured ||= !!st && captures(st, window.scrollY, Math.sign(dy), dy);
+    const pos = ownership !== 'document' && expectedY !== null ? expectedY : window.scrollY;
+    touchCaptured ||= !!st && captures(st, pos, Math.sign(dy), dy);
     if (touchCaptured && e.cancelable) e.preventDefault();
   };
   const onTouchEnd = (e: TouchEvent) => {
@@ -597,8 +622,28 @@ export function mountCinematicScroll(
 
     if (mobile && ownership !== 'document' && expectedY !== null) {
       // Native inertia is never interpreted as navigation while mobile owns the scene,
-      // including at Doha and for jumps beyond the runway. Explicit navigation releases below.
-      if (Math.abs(curY - expectedY) > 2) scrollTo(expectedY);
+      // including at Doha and for jumps beyond the runway. However, if native scrolling
+      // stays escaped past the runway bounds after scrollTo across sustained events (>= 120ms),
+      // release ownership instead of leaving controlledY frozen on Doha.
+      if (Math.abs(curY - expectedY) > 2) {
+        const outOfBounds = curY < first - 120 || curY > last + 120;
+        scrollTo(expectedY);
+        const afterY = window.scrollY;
+        if (!outOfBounds || Math.abs(afterY - expectedY) <= 2) {
+          escapeSince = null;
+        } else {
+          const now = performance.now();
+          if (escapeSince === null) escapeSince = now;
+          else if (now - escapeSince >= 120 && Math.abs(afterY - expectedY) > 120) {
+            escapeSince = null;
+            cancel();
+            window.scrollTo({ top: afterY, behavior: 'instant' as ScrollBehavior });
+            lastScrollY = window.scrollY;
+          }
+        }
+      } else {
+        escapeSince = null;
+      }
       return;
     }
 

@@ -11,14 +11,40 @@ export function mountGlobeDiagnostics(stage: HTMLElement) {
   let controller: CinematicSnapshot | null = null;
   let progress = 0;
   let lastPanelUpdate = -Infinity;
-  const record = (kind: string, renderedProgress?: number, cityIndex?: number, drawMs?: number) => {
-    const sample = { at: performance.now(), kind, ...controller, documentY: window.scrollY,
-      timelineProgress: progress, renderedProgress, cityIndex, drawMs,
-      dpr: window.devicePixelRatio, layoutHeight: window.innerHeight,
-      visualHeight: window.visualViewport?.height, visualScale: window.visualViewport?.scale };
+  let lastFrameCount = -1;
+  const record = (
+    kind: string,
+    renderedProgress?: number,
+    cityIndex?: number,
+    drawMs?: number,
+    city?: string,
+    frameCount?: number,
+    visibilityStale?: boolean
+  ) => {
+    const producingFrames = typeof frameCount === 'number' ? frameCount > lastFrameCount : undefined;
+    if (typeof frameCount === 'number') lastFrameCount = frameCount;
+    const sample = {
+      at: performance.now(),
+      kind,
+      ...controller,
+      documentY: window.scrollY,
+      actualY: window.scrollY,
+      timelineProgress: progress,
+      renderedProgress,
+      city,
+      cityIndex,
+      frameCount,
+      producingFrames,
+      visibilityStale,
+      drawMs,
+      dpr: window.devicePixelRatio,
+      layoutHeight: window.innerHeight,
+      visualHeight: window.visualViewport?.height,
+      visualScale: window.visualViewport?.scale
+    };
     if (samples.length === 1200) samples.shift();
     samples.push(sample);
-    if (kind === 'render' && sample.at - lastPanelUpdate >= 250) {
+    if ((kind === 'render' || kind === 'controller') && sample.at - lastPanelUpdate >= 250) {
       panel.textContent = JSON.stringify(sample, null, 1);
       lastPanelUpdate = sample.at;
     }
@@ -27,7 +53,9 @@ export function mountGlobeDiagnostics(stage: HTMLElement) {
   (window as any).__globeDiagnostics = samples;
   return {
     controller(sample: CinematicSnapshot, p: number) { controller = sample; progress = p; record('controller'); },
-    render(p: number, city: number, drawMs?: number) { record('render', p, city, drawMs); },
+    render(p: number, cityIndex: number, drawMs?: number, city?: string, frameCount?: number, visibilityStale?: boolean) {
+      record('render', p, cityIndex, drawMs, city, frameCount, visibilityStale);
+    },
     destroy() { panel.remove(); delete (window as any).__globeDiagnostics; }
   };
 }

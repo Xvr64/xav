@@ -797,7 +797,7 @@ body {
   .hero-name, .intro-name { grid-template-columns: minmax(0, 1fr); }
   .hero-name > *, .intro-name > * { grid-column: 1 / -1 !important; }
   .hero-name-last, .intro-name-last { padding-left: 1.05em; }
-  .terminal-overview { padding-top: 6vh; }
+  .terminal-overview { padding-top: max(6vh, 64px); }
   .terminal-overview { row-gap: var(--space-l); }
   .section-head { row-gap: var(--space-s); padding-bottom: var(--space-l); }
   .section-head .section-dek { padding-left: 0; }
@@ -1188,8 +1188,17 @@ body {
 .profile-shortcut:hover { text-decoration-color: currentColor; }
 .profile-shortcut:focus-visible { outline: 1px solid currentColor; outline-offset: 4px; }
 .hero-colophon-cue > span { display: inline-flex; align-items: flex-end; gap: 10px; }
-#introduction { scroll-margin-top: clamp(64px, 9vh, 96px); }
+/* Cancel html's 4.5rem scroll-padding-top so #introduction lands flush below the Globe runway;
+   .terminal-overview provides internal top padding so headings clear the fixed header. */
+#introduction { scroll-margin-top: -4.5rem; }
 #introduction:focus { outline: none; }
+html[data-globe-scroll="locked"],
+html[data-globe-scroll="locked"] body,
+html[data-globe-scroll="locked"] [data-journey-runway],
+html[data-globe-scroll="locked"] [data-journey-runway] * {
+  touch-action: none !important;
+  overscroll-behavior: none !important;
+}
 .profile-journey {
   grid-column: b / end;
   margin-block: var(--space-m);

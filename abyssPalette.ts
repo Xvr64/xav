@@ -124,7 +124,8 @@ export function buildAbyssCss(): string {
     --glass-chip-bg: rgba(255, 255, 255, 0.20);
     --glass-border: rgba(0, 0, 0, 0.10);
   }`);
-  rules.push(`html, body { background-color: var(--ocean-background); overflow-x: hidden; }`);
+  rules.push(`html, body { background-color: var(--ocean-background); overflow-x: clip; }`);
+  rules.push(`body { overflow-y: visible; }`);
   rules.push(`.glass-panel { background-color: var(--glass-bg); border: 1px solid var(--glass-border); backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px); }`);
   rules.push(`.glass-chip { background-color: var(--glass-chip-bg); border: 1px solid var(--glass-border); }`);
   rules.push(`.glass-rule { border-color: var(--glass-border) !important; }`);

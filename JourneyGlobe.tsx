@@ -545,10 +545,29 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
     const lastCityOpacities = new Float32Array(locations.length).fill(-1);
     let lastActive = Math.max(0, locations.findIndex((l) => l.id === activeIdRef.current));
 
+    const isStageActive = () => {
+      if (globeScrollGeometry.controlledY !== null || cinematicPlayingRef.current) return true;
+      if (globeInView) return true;
+      const g0 = globeScrollGeometry.start;
+      if (!Number.isFinite(g0)) return true;
+      const sy = window.scrollY;
+      const vh = window.innerHeight || H || 844;
+      return sy + vh >= g0 - 260 && sy <= g0 + runwayTravel + 260;
+    };
+
+    let frameCount = 0;
     const apply = (st: JourneyState) => {
       const drawStart = diagnostics ? performance.now() : 0;
       draw(st);
-      diagnostics?.render(st.p, st.active, performance.now() - drawStart);
+      frameCount += 1;
+      diagnostics?.render(
+        st.p,
+        st.active,
+        performance.now() - drawStart,
+        locations[st.active]?.id,
+        frameCount,
+        isStageActive() && !globeInView
+      );
       if (progressFillRef.current) progressFillRef.current.style.transform = `scaleX(${st.p.toFixed(4)})`;
       for (let idx = 0; idx < cityStopEls.length; idx++) {
         const op = 0.4 + st.reveal[idx] * 0.6;
@@ -595,7 +614,7 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
       if (!raf) raf = requestAnimationFrame(frame);
     };
     const onScroll = () => {
-      if (globeInView && !raf) raf = requestAnimationFrame(frame);
+      if (isStageActive() && !raf) raf = requestAnimationFrame(frame);
     };
     requestRenderRef.current = requestRender;
 
@@ -652,9 +671,9 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
       globeScrollGeometry.controlledY = y;
       cinematicPlayingRef.current = playing;
       syncScrollHint();
-      // Playback owns rendering too: an asynchronous/stale IntersectionObserver result
-      // must never suspend an active film. Still render on demand when the film is idle.
-      if (playing || globeInView) requestRender();
+      // Stage/controller ownership drives rendering too: an asynchronous/stale IntersectionObserver result
+      // must never suspend the Globe while ready, playing, draining, or near the runway.
+      if (playing || isStageActive()) requestRender();
     }, diagnostics ? sample => diagnostics.controller(sample, globeScrollProgress()) : undefined);
     // Travel to a city = glide to that city's checkpoint
     goToCityRef.current = (id: string) => {
@@ -684,6 +703,7 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
     requestRender();
     window.addEventListener('scroll', onScroll, { passive: true });
     window.addEventListener('resize', onResize, { passive: true });
+    window.visualViewport?.addEventListener('resize', onResize, { passive: true });
     const stopSurface = observeGlobeSurface(stage, onResize);
     // Labels use the editorial web fonts: re-measure & redraw once they are ready
     document.fonts?.ready
@@ -706,6 +726,7 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
       if (globeIo) globeIo.disconnect();
       window.removeEventListener('scroll', onScroll);
       window.removeEventListener('resize', onResize);
+      window.visualViewport?.removeEventListener('resize', onResize);
       if (raf) cancelAnimationFrame(raf);
       setGlobeZone([]);
       requestRenderRef.current = () => {};

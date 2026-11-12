@@ -28,7 +28,7 @@ export function advanceEncryptedLine(
   elapsedMs: number,
   characterCount: number,
   reduced: boolean,
-  entranceOnly = false
+  entranceOnly = true
 ): EncryptedLineState {
   if (reduced) return { revealState: 'revealed', currentP: 1 };
   if (entranceOnly) {
@@ -37,8 +37,9 @@ export function advanceEncryptedLine(
       return { revealState: 'revealed', currentP: 1 };
     if (belowEntry) return { revealState: 'hidden', currentP: 0 };
     if (previous.revealState === 'hidden') return { revealState: 'revealing', currentP: 0 };
-    const currentP = Math.min(1, previous.currentP + Math.max(0, elapsedMs) / lineRevealMs(characterCount));
-    return { revealState: currentP >= 1 ? 'revealed' : 'revealing', currentP };
+    const progress = previous.currentP + Math.max(0, elapsedMs) / lineRevealMs(characterCount);
+    const currentP = progress >= 1 - 1e-9 ? 1 : progress;
+    return { revealState: currentP === 1 ? 'revealed' : 'revealing', currentP };
   }
   if (belowEntry || aboveExit) return { revealState: 'hidden', currentP: 0 };
   if (inTopZone) return { revealState: 'exiting', currentP: zoneProgress };

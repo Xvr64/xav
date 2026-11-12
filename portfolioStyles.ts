@@ -15,7 +15,10 @@ export const GLOBAL_PORTFOLIO_CSS = `
     padding: 0;
     width: 100%;
     max-width: 100%;
-    overflow-x: hidden;
+    overflow-x: clip;
+  }
+  body {
+    overflow-y: visible;
   }
   /* Hide scrollbar visually while keeping full scroll functionality */
   html {

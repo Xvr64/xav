@@ -331,8 +331,8 @@ export const OceanIntroduction: React.FC = React.memo(() => (
     <p className="lead" data-text-rank="2"><AsciiText text={CV_DATA.heroIntroConcise} /></p>
     <p className="intro-support" data-text-rank="3"><AsciiText text={CV_DATA.heroIntroSecondary} /></p>
     <div className="profile-journey" data-ascii-preserve>
-      <p className="meta">Seven cities, one journey</p>
-      <ol aria-label="Cities in journey order">
+      <p className="meta">Seven Globe destinations — Doha to Shanghai</p>
+      <ol aria-label="Globe destinations in journey order">
         {CV_DATA.locations.map((location) => <li key={location.id}>{location.city}</li>)}
       </ol>
     </div>

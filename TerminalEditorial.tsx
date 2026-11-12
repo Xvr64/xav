@@ -10,7 +10,6 @@ import {
 import { advanceEncryptedLine, encryptedCharacterState, ENCRYPTED_CHARSET, FLIP_DELAY_MS } from './encryptedMotion';
 import { creation, HERO_TEXT_AT } from './creationTimeline';
 import { EncryptedText } from './components/ui/encrypted-text';
-import { portfolioExperiments } from './portfolioExperiments';
 import {
   disableDecodeSound,
   disposeDecodeSound,
@@ -306,8 +305,7 @@ export function useEditorialScroll() {
           scrollDelta,
           elapsedMs,
           line.characterCount,
-          isReduced,
-          !!(import.meta as any).env?.DEV && portfolioExperiments.entranceOnly
+          isReduced
         );
         line.revealState = next.revealState;
         line.currentP = next.currentP;

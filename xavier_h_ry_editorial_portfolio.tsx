@@ -205,7 +205,7 @@ export default function App() {
         {copiedEmail ? 'Email address copied to clipboard.' : downloadToast ? `Downloading ${ORIGINAL_CV_FILENAME}.` : ''}
       </p>
 
-      <main className="relative z-10 w-full max-w-[1440px] mx-auto px-4 sm:px-8 ocean-legible overflow-x-hidden">
+      <main className="relative z-10 w-full max-w-[1440px] mx-auto px-4 sm:px-8 ocean-legible overflow-x-clip">
         {/* SECTION 01: PROGRESSIVE OCEAN ENTRY (Hero Preserved) */}
         <ProgressiveOceanEntry
           onExploreDossier={handleExploreDossier}

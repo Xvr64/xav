@@ -7,7 +7,7 @@ import { CV_DATA } from './cvData.ts';
 import { observeGlobeSurface } from './globeSurface.ts';
 
 test('experiments require explicit local flags and cannot enable in production', () => {
-  const all = '?asciiGlobe=1&cityConstellation=1&textMotion=entrance';
+  const all = '?asciiGlobe=1&cityConstellation=1';
   assert.ok(Object.values(parsePortfolioExperiments(all, true)).every(Boolean));
   assert.ok(Object.values(parsePortfolioExperiments(all, false)).every(v => !v));
   assert.ok(Object.values(parsePortfolioExperiments('', true)).every(v => !v));
