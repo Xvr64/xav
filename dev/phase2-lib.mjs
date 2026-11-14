@@ -6,7 +6,8 @@ import { resolve } from 'node:path';
 import assert from 'node:assert/strict';
 
 export const task = process.argv[2] || 'shots';
-export const out = resolve('artifacts/phase2');
+// PHASE2_OUT sends captures and reports somewhere else (artifacts/ is tracked)
+export const out = resolve(process.env.PHASE2_OUT || 'artifacts/phase2');
 mkdirSync(out, { recursive: true });
 const baseRoot = process.env.PHASE2_BASE || resolve('.reference/phase2-before');
 const origins = { before: 'http://127.0.0.1:5292', after: 'http://127.0.0.1:5282' };

@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Eye, Download, X, Check } from 'lucide-react';
 import { AsciiText, useEditorialScroll } from './TerminalEditorial';
 import { mountLanternCursor } from './lanternCursor';
-import { CV_DATA } from './cvData';
+import { CV_DATA, CV_PDF_URL } from './cvData';
 import { ReadingZoneTracker } from './ReadingZoneTracker';
 import { SectionIndex } from './SectionIndex';
 import { DepthGauge } from './DepthGauge';
@@ -30,7 +30,6 @@ import {
   toTitleCase
 } from './OceanEntry';
 import { GLOBAL_PORTFOLIO_CSS } from './portfolioStyles';
-import { ChapterLine } from './ChapterLine';
 
 // ============================================================================
 // PAGE COMPOSITION — the layers and sections live in their own modules:
@@ -53,43 +52,19 @@ const RevealBlock: React.FC<RevealBlockProps> = ({ children, className = '' }) =
 const BioWords = AsciiText;
 
 interface FloatingSectionHeaderProps {
-  sectionId?: string;
   title: string;
-  description?: string;
   /** One of the three header forms on the grid's named lines (terminal.css): "benchmark" sets the
-      title from the margin with its annotation on line c, "indented" sets it in on line b,
-      "monument" spans the measure for the last word. */
+      title from the margin, "indented" sets it in on line b, "monument" spans the measure for
+      the last word. */
   layout?: 'benchmark' | 'indented' | 'monument';
-  /** A single Newsreader statement set beneath the header. */
-  asideAccent?: string;
 }
 
-const FloatingSectionHeader: React.FC<FloatingSectionHeaderProps> = ({
-  sectionId,
-  title,
-  description,
-  layout = 'benchmark',
-  asideAccent
-}) => (
+/** A section opens on its title alone: one word in the display voice, and the water around it. */
+const FloatingSectionHeader: React.FC<FloatingSectionHeaderProps> = ({ title, layout = 'benchmark' }) => (
   <header className={`section-head section-head--${layout} ed-grid relative z-10`}>
-    {/* The chapter line (ChapterLine.tsx): the threshold every chapter is entered through. Its
-        mark says where the section stands in the CV, in the Globe caption's own form; its rule
-        says the same as water travelled. Plain text, outside the word system: it stands like a
-        slate before its title emerges. */}
-    {sectionId && <ChapterLine sectionId={sectionId} />}
     <h2 className="ocean-h2 text-[#171717]">
       <BioWords text={title} />
     </h2>
-    {description && (
-      <p className="section-dek">
-        <BioWords text={description} />
-      </p>
-    )}
-    {asideAccent && (
-      <p className="section-aside">
-        <AsciiText text={asideAccent} />
-      </p>
-    )}
   </header>
 );
 
@@ -120,7 +95,7 @@ export default function App() {
     scrollToSection('experience');
   }, [scrollToSection]);
 
-  const ORIGINAL_CV_PDF_URL = '/Engl_CV_Xavier_Hery.pdf';
+  const ORIGINAL_CV_PDF_URL = CV_PDF_URL;
   const ORIGINAL_CV_FILENAME = 'Engl CV Xavier Hery.pdf';
 
   const handleDownloadOriginalCv = useCallback(() => {
@@ -244,12 +219,7 @@ export default function App() {
               cover's headline on the horizon, with its record hanging below in the water. */}
           <section id="experience" data-editorial-section className="relative">
             <RevealBlock variant="section">
-              <FloatingSectionHeader
-                sectionId="experience"
-                layout="benchmark"
-                title="Experience"
-                asideAccent="Two internships, one on the commercial side of international business and one in its operations."
-              />
+              <FloatingSectionHeader layout="benchmark" title="Experience" />
             </RevealBlock>
 
             <div className="entry-list entry-list--wide station-list">
@@ -267,25 +237,13 @@ export default function App() {
                         <BioWords text={exp.role} />
                       </p>
                     </div>
+                    {/* What the internship covered, as three plain entries on the annotation line.
+                        The CV's full wording stays in cvData (verbatimPoints) and in the PDF. */}
                     {exp.domainTag && (
-                      <div className="exp-scope">
-                        <p className="meta">
-                          <BioWords text="Scope" />
-                        </p>
-                        <ul>
-                          {exp.domainTag.split(/\s*\/\s*/).map((tag) => (
-                            <li key={tag} className="item">
-                              <BioWords text={tag} />
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                    {exp.verbatimPoints && exp.verbatimPoints.length > 0 && (
-                      <ul className="exp-what">
-                        {exp.verbatimPoints.map((pt, i) => (
-                          <li key={i} className="body-copy">
-                            <BioWords text={pt} />
+                      <ul className="exp-scope" aria-label="Scope">
+                        {exp.domainTag.split(/\s*\/\s*/).map((tag) => (
+                          <li key={tag} className="item">
+                            <BioWords text={tag} />
                           </li>
                         ))}
                       </ul>
@@ -299,11 +257,7 @@ export default function App() {
           {/* SECTION 04: SKILLS & TECHNOLOGY (Open Typographic Landscape) */}
           <section id="skills" data-editorial-section className="relative">
             <RevealBlock variant="section">
-              <FloatingSectionHeader
-                sectionId="skills"
-                layout="benchmark"
-                title="Skills & tools"
-              />
+              <FloatingSectionHeader layout="benchmark" title="Skills & tools" />
             </RevealBlock>
 
             {/* An index: each discipline's tools on one ruled row. The CV's summaries and
@@ -329,11 +283,7 @@ export default function App() {
           {/* SECTION 05: EDUCATION (Chronological Narrative Flow) */}
           <section id="education" data-editorial-section className="relative">
             <RevealBlock variant="section">
-              <FloatingSectionHeader
-                sectionId="education"
-                layout="indented"
-                title="Education"
-              />
+              <FloatingSectionHeader layout="indented" title="Education" />
             </RevealBlock>
 
             {/* Two tiers: the degree reads first as an entry; the schools before it follow as a
@@ -381,12 +331,7 @@ export default function App() {
           {/* SECTION 06: LANGUAGES (Open Typographic Matrix) */}
           <section id="languages" data-editorial-section className="relative">
             <RevealBlock variant="section">
-              <FloatingSectionHeader
-                sectionId="languages"
-                layout="benchmark"
-                title="Languages"
-                description="Six languages, from native French to first steps in Mandarin."
-              />
+              <FloatingSectionHeader layout="benchmark" title="Languages" />
             </RevealBlock>
 
             <div className="lang-list">
@@ -412,11 +357,7 @@ export default function App() {
           {/* SECTION 07: PERSONAL INTERESTS (Open Vignettes) */}
           <section id="interests" data-editorial-section className="relative">
             <RevealBlock variant="section">
-              <FloatingSectionHeader
-                sectionId="interests"
-                layout="benchmark"
-                title="Interests"
-              />
+              <FloatingSectionHeader layout="benchmark" title="Interests" />
             </RevealBlock>
 
             <div className="interest-list">
@@ -441,11 +382,7 @@ export default function App() {
           {/* Kept within one screen on desktop so the final, resting view holds the whole section */}
           <section id="contact" data-editorial-section className="relative">
             <RevealBlock variant="section">
-              <FloatingSectionHeader
-                sectionId="contact"
-                layout="monument"
-                title="Contact"
-              />
+              <FloatingSectionHeader layout="monument" title="Contact" />
             </RevealBlock>
 
             {/* The address is the last large statement of the descent, its label hanging on line a */}
@@ -465,7 +402,7 @@ export default function App() {
               </div>
             </div>
 
-            {/* The closing row, ruled like a colophon: the CV on line b, the other channels on line c */}
+            {/* The closing row, ruled like a colophon: the CV on line b, LinkedIn on line c */}
             <footer className="contact-foot ed-grid">
               <p className="contact-label meta">
                 <AsciiText text="CV" />
@@ -492,9 +429,6 @@ export default function App() {
                 <ul>
                   <li className="item">
                     <a href={CV_DATA.linkedin} target="_blank" rel="noopener noreferrer"><AsciiText text="LinkedIn" /></a>
-                  </li>
-                  <li className="item">
-                    <a href={CV_DATA.emailHref}><AsciiText text="Email" /></a>
                   </li>
                 </ul>
                 <p className="meta contact-sign">

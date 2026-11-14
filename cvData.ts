@@ -25,9 +25,6 @@ export interface LocationItem {
   lon: number;
   cvContext: string;
   documentedInstitution?: string;
-  /** What the CV records for this stretch (the school attended, the exchange), shown under the
-      city on the Globe. Left out where the CV names nothing more than the place. */
-  note?: string;
   image?: string;
   imageCaption?: string;
 }
@@ -164,8 +161,7 @@ export const CV_DATA = {
       lon: 106.8456,
       cvContext:
         'Documented in the CV profile summary and the Education section under Lycée Français de Jakarta (2012–2016).',
-      documentedInstitution: 'Lycée Français de Jakarta (2012–2016)',
-      note: 'Lycée Français de Jakarta'
+      documentedInstitution: 'Lycée Français de Jakarta (2012–2016)'
     },
     {
       id: 'moscow',
@@ -179,8 +175,7 @@ export const CV_DATA = {
       lon: 37.6173,
       cvContext:
         'Documented in the CV profile summary and the Education section under Lycée Français Alexandre Dumas de Moscou (2016–2018).',
-      documentedInstitution: 'Lycée Français Alexandre Dumas de Moscou (2016–2018)',
-      note: 'Lycée Français Alexandre Dumas'
+      documentedInstitution: 'Lycée Français Alexandre Dumas de Moscou (2016–2018)'
     },
     {
       id: 'singapore',
@@ -194,8 +189,7 @@ export const CV_DATA = {
       lon: 103.8198,
       cvContext:
         'Documented in the CV profile summary and the Education section under International French School Singapore (2018–2023).',
-      documentedInstitution: 'International French School Singapore (2018–2023)',
-      note: 'International French School'
+      documentedInstitution: 'International French School Singapore (2018–2023)'
     },
     {
       id: 'pau',
@@ -209,8 +203,7 @@ export const CV_DATA = {
       lon: -0.3708,
       cvContext:
         'Documented in the CV profile summary and the Education section under Lycée Saint-Cricq, Pau (2023–2024).',
-      documentedInstitution: 'Lycée Saint-Cricq, Pau (2023–2024)',
-      note: 'Lycée Saint-Cricq'
+      documentedInstitution: 'Lycée Saint-Cricq, Pau (2023–2024)'
     },
     {
       id: 'shanghai',
@@ -224,8 +217,7 @@ export const CV_DATA = {
       lon: 121.4737,
       cvContext:
         'International academic mobility and study semester in Shanghai (2026) within the ESSCA Bachelor curriculum.',
-      documentedInstitution: 'Shanghai, China (2026)',
-      note: 'Study semester, ESSCA'
+      documentedInstitution: 'Shanghai, China (2026)'
     }
   ] as LocationItem[],
   skills: [
@@ -408,12 +400,5 @@ export const CV_DATA = {
   ] as InterestCategory[]
 };
 
-/**
- * The credit line: who this is, in the page's quiet voice, read straight from the data above.
- * Shown on the arrival and at the foot of the cover, so the name is on screen from the first frame.
- */
-export const CV_CREDIT = {
-  name: CV_DATA.name.toLowerCase().replace(/(^|\s)(\p{L})/gu, (_, sep: string, ch: string) => sep + ch.toUpperCase()),
-  line: `${CV_DATA.education[0].degree}, ${CV_DATA.education[0].institution}`,
-  cvUrl: '/Engl_CV_Xavier_Hery.pdf'
-};
+/** The original CV, as a PDF: linked from the arrival screen and the page's fixed corner. */
+export const CV_PDF_URL = '/Engl_CV_Xavier_Hery.pdf';

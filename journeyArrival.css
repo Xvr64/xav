@@ -71,8 +71,8 @@ html[data-arrival='open'] { overflow: hidden !important; }
   padding: clamp(22px, 4.2vh, 44px) var(--page-margin, 48px) clamp(28px, 7vh, 72px);
 }
 
-/* The masthead: whose page this is, on the stage's first row in the instrument voice, and the
-   one exit that needs no journey. Present before anything is chosen. */
+/* The masthead: the stage's first row, holding the one exit that needs no journey (the CV).
+   Present before anything is chosen. */
 .journey-masthead {
   grid-column: 1 / -1;
   grid-row: 1;
@@ -88,8 +88,6 @@ html[data-arrival='open'] { overflow: hidden !important; }
   color: var(--arrival-ink-2);
   animation-delay: 0.1s;
 }
-.journey-masthead-name { color: var(--arrival-ink); letter-spacing: 0.06em; }
-.journey-masthead-dash { white-space: pre; color: var(--arrival-ink-3); }
 .journey-masthead-cv {
   flex: none;
   color: var(--arrival-ink);
@@ -398,9 +396,6 @@ html[data-handoff] .creation-scroll-hint { opacity: 0 !important; }
     font-size: clamp(48px, 14.5vw, 76px);
   }
   .journey-masthead { grid-column: 1; align-items: flex-start; }
-  .journey-masthead-dash { display: none; }
-  .journey-masthead-name, .journey-masthead-line { display: block; }
-  .journey-masthead-who { text-wrap: balance; }
   .journey-dek { grid-column: 1; grid-row: 3; padding-top: 0; font-size: 19px; }
   .journey-list { grid-column: 1; grid-row: 4; margin-top: clamp(32px, 6vh, 56px); }
   .journey {

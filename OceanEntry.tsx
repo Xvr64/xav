@@ -1,9 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { AsciiText } from './TerminalEditorial';
 import { createHeroCurrent } from './heroCurrent';
-import { CV_CREDIT, CV_DATA } from './cvData';
-import { buildItinerary } from './itinerary';
-import { ChapterLine } from './ChapterLine';
+import { CV_DATA } from './cvData';
 import {
   directWhales,
   heroZone,
@@ -78,25 +76,6 @@ export const HeroCurrentLayer: React.FC = React.memo(() => {
     const nameEl = stage.querySelector<HTMLElement>('[data-hero-name]');
     if (!nameEl) return;
 
-    // The cover's credit line yields as the headline starts to break up. While it shows, its two
-    // ends are reading text like the headline: the whales thin behind them (stage-local boxes,
-    // measured on layout changes only; the stage is pinned at the top while the credit is visible).
-    const colophon = stage.querySelector<HTMLElement>('[data-hero-colophon]');
-    let colophonShown = 1;
-    let colophonRects: { left: number; top: number; width: number; height: number }[] = [];
-    const measureColophon = () => {
-      if (!colophon) return;
-      const origin = stage.getBoundingClientRect().top;
-      colophonRects = Array.from(colophon.children, (el) => {
-        const r = el.getBoundingClientRect();
-        return { left: r.left, top: r.top - origin, width: r.width, height: r.height };
-      }).filter((r) => r.width > 0 && r.height > 0);
-    };
-    measureColophon();
-    const colophonObserver = new ResizeObserver(measureColophon);
-    if (colophon) colophonObserver.observe(colophon);
-    document.fonts?.ready.then(measureColophon, () => undefined);
-
     const handle = createHeroCurrent({
       canvas,
       section,
@@ -106,18 +85,11 @@ export const HeroCurrentLayer: React.FC = React.memo(() => {
       nameLines: Array.from(nameEl.querySelectorAll<HTMLElement>('[data-hero-name-line]')),
       horizon: stage.querySelector<HTMLElement>('[data-hero-horizon]'),
       onZones: (rects) => {
-        const zones = colophonShown > 0.05 && colophonRects.length ? [...rects, ...colophonRects] : rects;
-        if (zones.length === 0 && heroZone.rects.length === 0) return;
-        heroZone.rects = zones;
+        if (rects.length === 0 && heroZone.rects.length === 0) return;
+        heroZone.rects = rects;
         heroZone.version++;
       },
       onFrame: ({ t, stageTop, stageHeight }) => {
-        const shown = 1 - smoothStepRange(t, 0.012, 0.085);
-        if (colophon && shown !== colophonShown) {
-          colophonShown = shown;
-          colophon.style.opacity = String(shown);
-          colophon.style.visibility = shown <= 0 ? 'hidden' : '';
-        }
         // Arrival → descent → name, then the stage scrolls away as the Globe's runway rises and
         // the whales are let go, to swim on from wherever they are
         const toDescent = smoothStepRange(t, 0.04, 0.36);
@@ -134,8 +106,6 @@ export const HeroCurrentLayer: React.FC = React.memo(() => {
     });
     return () => {
       handle.destroy();
-      colophonObserver.disconnect();
-      if (colophon) { colophon.style.removeProperty('opacity'); colophon.style.removeProperty('visibility'); }
       directWhales('cover', 0, LANES_SURFACE);
     };
   }, []);
@@ -286,19 +256,6 @@ export const ProgressiveOceanEntry: React.FC<ProgressiveOceanEntryProps> = React
             <span className="hero-name-first" data-hero-name-line>Xavier</span>
             <span className="hero-name-last" data-hero-name-line>Hery</span>
           </p>
-          {/* The cover's credit: whose page this is, readable from the first frame, and the one
-              cue the cover needs. It yields as the headline starts to break up (HeroCurrentLayer). */}
-          <div className="hero-colophon" data-hero-colophon>
-            <p className="hero-colophon-who meta">
-              <span className="hero-colophon-name">{CV_CREDIT.name}</span>
-              <span className="hero-colophon-dash" aria-hidden="true"> — </span>
-              <span className="hero-colophon-line">{CV_CREDIT.line}</span>
-            </p>
-            <div className="hero-colophon-cue meta">
-              <a className="profile-shortcut" href="#introduction">Profile <span aria-hidden="true">↓</span></a>
-              <span aria-hidden="true">Scroll<span className="hero-colophon-tick" /></span>
-            </div>
-          </div>
         </div>
         {/* The page's one h1. With motion the name resolved on the stage carries it visually, so it
             is clipped (and kept out of the word system); without motion it is set as type here. */}
@@ -327,67 +284,13 @@ const INTRO_FACTS = [
   { label: 'Languages', value: CV_DATA.languages.slice(0, 3).map((l) => l.language).join(' · ') }
 ];
 
-/**
- * The itinerary (itinerary.ts): the Globe's seven cities set as one line of time, each stretch as
- * long as its years. On a wide screen the line runs across the measure, a tick and a year at every
- * arrival, drawn in the arrival screen's own glyphs (waves for water travelled, dots for years
- * the cities do not account for) and ending on the Globe's marker. Below that width it becomes a
- * tide table: years, city, and a bar of the same glyphs. The line is drawn by the scroll
- * (terminal.css) and reads as a plain ordered list to assistive technology. Its labels are plain
- * text, outside the word decode: an instrument is read, not deciphered, and every decoded word
- * costs three elements that each whole-page restyle then has to visit (the water's colour is
- * rewritten several times a second through the Globe's film).
- */
-const ITINERARY = buildItinerary(CV_DATA.locations);
-const ITINERARY_LONGEST = Math.max(1, ...ITINERARY.legs.filter((leg) => leg.kind === 'stop').map((leg) => leg.years));
-const ITINERARY_WAVE = '~'.repeat(240);
-const ITINERARY_REST = '· '.repeat(120);
-
-const Itinerary: React.FC = () => (
-  <div className="itinerary" data-ascii-preserve style={{ '--itinerary-longest': ITINERARY_LONGEST } as React.CSSProperties}>
-    <p className="itinerary-title meta">{ITINERARY.title}</p>
-    <ol aria-label="Cities lived in, in order">
-      {ITINERARY.legs.map((leg, i) => {
-        const style = { '--years': leg.years, '--a': leg.a.toFixed(4), '--b': leg.b.toFixed(4) } as React.CSSProperties;
-        if (leg.kind === 'gap') {
-          return (
-            <li key={leg.id} className="itin-leg itin-gap" style={style} aria-hidden="true">
-              <span className="itin-city" />
-              <span className="itin-rule">{ITINERARY_REST}</span>
-            </li>
-          );
-        }
-        // On the line a stretch's last year is said by the next city's tick; a stretch with no
-        // city after it (a gap follows) says its own, in short
-        const open = leg.to !== leg.from && ITINERARY.legs[i + 1]?.kind !== 'stop';
-        return (
-          <li key={leg.id} className={`itin-leg${leg.years === 0 ? ' itin-end' : ''}`} style={style}>
-            <span className="itin-city item">
-              {leg.city}
-              {leg.country && <span className="sr-only">, {leg.country}</span>}
-            </span>
-            <span className="itin-rule" aria-hidden="true">{leg.years > 0 ? ITINERARY_WAVE : ''}</span>
-            <span className="itin-when meta">
-              {leg.from}
-              {leg.to !== leg.from && <span className="itin-to">–{leg.to}</span>}
-              {open && <span className="itin-to-short" aria-hidden="true">–{String(leg.to).slice(-2)}</span>}
-            </span>
-          </li>
-        );
-      })}
-    </ol>
-  </div>
-);
-
 export const OceanIntroduction: React.FC = React.memo(() => (
   <section id="introduction" tabIndex={-1} aria-labelledby="profile-title" data-editorial-section className="terminal-overview ed-grid relative">
-    <ChapterLine sectionId="introduction" />
     <h2 id="profile-title" className="intro-kicker meta">
       <AsciiText text="Profile" />
     </h2>
     <p className="lead" data-text-rank="2"><AsciiText text={CV_DATA.heroIntroConcise} /></p>
     <p className="intro-support" data-text-rank="3"><AsciiText text={CV_DATA.heroIntroSecondary} /></p>
-    <Itinerary />
     <dl className="intro-facts">
       {INTRO_FACTS.map((fact) => (
         <div key={fact.label}>

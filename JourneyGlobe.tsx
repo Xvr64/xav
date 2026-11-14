@@ -805,12 +805,6 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
               <p className="globe-period meta mt-1 text-[#162633]">
                 <PlainText text={city.period} />
               </p>
-              {/* What the CV records for this stretch, so the film says something a recruiter can use */}
-              {city.note && (
-                <p className="globe-note">
-                  <PlainText text={city.note} />
-                </p>
-              )}
 
               {cIdx === 0 && (
                 <div

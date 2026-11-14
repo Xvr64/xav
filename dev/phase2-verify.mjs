@@ -1,4 +1,5 @@
-// Phase II acceptance in a real browser: the cinematic experience is intact and the CV reads.
+// Acceptance in a real browser: the cinematic experience is intact and the CV reads as the
+// minimalist page it is (one decode for every line, nothing in the corner but sound and CV).
 //   node dev/phase2.mjs verify [journeys,globe,mobile,cv,reduced]
 import { browser, click, jpg, save, scrollRun, server } from './phase2-lib.mjs';
 import { sleep } from './fable-cdp.mjs';
@@ -49,7 +50,7 @@ async function journeys() {
       assert.equal(state.active, false, `${id} did not finish: ${JSON.stringify(state)}`);
       const seconds = (Date.now() - t0) / 1000;
       await sleep(1200);
-      const hero = await c.evaluate(`({ y: scrollY, colophon: getComputedStyle(document.querySelector('[data-hero-colophon]')).opacity, scrollable: getComputedStyle(document.documentElement).overflowY, whales: !!document.querySelector('canvas[data-whale-renderer]'), cover: document.querySelector('.cover-title .sr-only').textContent, playback: ${JSON.stringify([...playback])} })`);
+      const hero = await c.evaluate(`({ y: scrollY, scrollable: getComputedStyle(document.documentElement).overflowY, whales: !!document.querySelector('canvas[data-whale-renderer]'), cover: document.querySelector('.cover-title .sr-only').textContent, playback: ${JSON.stringify([...playback])} })`);
       assert.equal(hero.y, 0, 'the visitor arrives at the top of the cover');
       await jpg(c, `verify/journey-${id}-hero`);
       pass(`journey ${id} → Hero`, { seconds: Math.round(seconds * 10) / 10, nudged, hero, errors: c.errors });
@@ -67,7 +68,7 @@ async function journeys() {
     for (let i = 0; i < 60; i++) { state = await c.evaluate(`window.__creation ? window.__creation.state() : { active: false }`); if (!state.active) break; await sleep(200); }
     assert.equal(state.active, false);
     await sleep(1500);
-    const hero = await c.evaluate(`({ y: scrollY, colophon: getComputedStyle(document.querySelector('[data-hero-colophon]')).opacity, controls: !!document.querySelector('.creation-controls') })`);
+    const hero = await c.evaluate(`({ y: scrollY, controls: !!document.querySelector('.creation-controls') })`);
     assert.equal(hero.controls, false);
     await jpg(c, 'verify/skip-intro-hero');
     pass('Skip intro → Hero', { at: before.time, hero, errors: c.errors });
@@ -97,15 +98,13 @@ async function globe() {
     await sleep(1500);
     const diag = await c.evaluate(`(() => { const s = window.__globeDiagnostics?.at(-1); return s ? { ownership: s.ownership, playing: s.playing, rp: s.renderedProgress } : null; })()`);
     pass('Globe desktop: Doha → Shanghai → Doha', { forward, back, diag });
-    // The profile shortcut on the cover
+    // The cover holds the headline and nothing else
     await c.evaluate(`scrollTo(0, 0)`); await sleep(900);
-    await click(c, '.profile-shortcut'); await sleep(1600);
-    const landing = await c.evaluate(`({ top: Math.round(document.querySelector('#introduction').getBoundingClientRect().top), lock: document.documentElement.dataset.globeScroll || null, mark: Math.round(document.querySelector('#introduction .section-mark').getBoundingClientRect().top) })`);
-    assert.ok(Math.abs(landing.top) <= 2, JSON.stringify(landing));
-    assert.equal(landing.lock, null);
-    await sleep(900);
-    await jpg(c, 'verify/profile-landing');
-    pass('Profile shortcut lands on the profile', { landing, errors: c.errors });
+    const cover = await c.evaluate(`({ stage: [...document.querySelector('[data-hero-stage]').children].map(e => e.className.split(' ')[0]), corner: document.querySelector('.fixed-top-controls').children.length })`);
+    assert.deepEqual(cover.stage, ['minimal-hero', 'hero-name']);
+    assert.equal(cover.corner, 2, 'the corner holds sound and CV only');
+    await jpg(c, 'verify/cover');
+    pass('Cover: headline only', { cover, errors: c.errors });
   } finally { await c.close(); }
 }
 
@@ -127,89 +126,87 @@ async function mobile() {
     const end = await c.evaluate(`(() => { const s = window.__globeDiagnostics?.at(-1); return { y: Math.round(scrollY), rp: s?.renderedProgress, ownership: s?.ownership, playing: s?.playing }; })()`);
     pass('Globe mobile-emulated touch: Doha → Shanghai → Doha', { forward, after, back, end });
 
-    // The small-screen index: seven chapters, each a direct jump that focuses its section
+    // After the Globe the page scrolls freely and the corner still holds two controls only
     await c.evaluate(`document.querySelector('#education').scrollIntoView()`); await sleep(900);
-    await click(c, '.index-toggle');
-    assert.equal(await c.evaluate(`document.querySelectorAll('.index-sheet a').length`), 7);
-    await jpg(c, 'verify/index-390');
-    const current = await c.evaluate(`document.querySelector('.index-sheet a[aria-current]')?.getAttribute('href')`);
-    const jumps = [];
-    await click(c, '.index-sheet a[href="#experience"]');
-    for (const id of ['experience', 'introduction', 'skills', 'education', 'languages', 'interests', 'contact']) {
-      if (id !== 'experience') { await click(c, '.index-toggle'); await click(c, `.index-sheet a[href="#${id}"]`); }
-      const r = await c.evaluate(`({ id: '${id}', focus: document.activeElement.id, open: !!document.querySelector('.index-sheet'), lock: document.documentElement.dataset.globeScroll || null, top: Math.round(document.querySelector('#${id}').getBoundingClientRect().top) })`);
-      assert.equal(r.focus, id); assert.equal(r.open, false); assert.equal(r.lock, null);
-      jumps.push(r);
-    }
-    pass('Mobile section index', { current, jumps, errors: c.errors });
+    const corner = await c.evaluate(`({ controls: [...document.querySelector('.fixed-top-controls').children].map(e => e.className.split(' ')[0]), lock: document.documentElement.dataset.globeScroll || null, gauge: getComputedStyle(document.querySelector('.depth-gauge')).display })`);
+    assert.deepEqual(corner.controls, ['decode-sound-toggle', 'fixed-cv-link']);
+    assert.equal(corner.lock, null);
+    assert.equal(corner.gauge, 'none', 'no gauge on a phone');
+    pass('Mobile corner: sound and CV only', { corner, errors: c.errors });
   } finally { await c.close(); }
 }
 
-/** Read the page top to bottom at each width; everything must end fully set and undecorated. */
+/** What the minimalist CV does without: none of this may be on the page. */
+const REMOVED = ['.itinerary', '.chapter-line', '.section-mark', '.index-toggle', '.index-sheet', '.reading-veil', '.hero-colophon', '.profile-shortcut', '.globe-note', '.exp-what', '.section-dek', '.section-aside', '[data-title-emergence]'];
+
+/** Words standing in the reading zone that are not plainly set (still hidden or still in glyph cells). */
+const unsetInReadingZone = (c) => c.evaluate(`(() => {
+  const vh = innerHeight;
+  return [...document.querySelectorAll('[data-editorial-section]:not(#home) .ascii-word')].filter(el => {
+    const r = el.getBoundingClientRect();
+    if (r.top < vh * 0.17 || r.top > vh * 0.8) return false;
+    return el.style.opacity !== '1' || el.querySelector('.ascii-visual').firstElementChild !== null;
+  }).length;
+})()`);
+
+/** Read the page top to bottom at each width: every line decodes out of the encrypted alphabet,
+ * rests readable in the reading zone, scrambles out at the top and comes back on the way up. */
 async function cv() {
   for (const v of [{ w: 1440, h: 900 }, { w: 1280, h: 800 }, { w: 768, h: 1024, touch: true }, { w: 390, h: 844, touch: true }, { w: 320, h: 740, touch: true }]) {
     const c = await browser({ width: v.w, height: v.h, touch: v.touch });
     try {
-      const g = await c.evaluate(`({ intro: document.querySelector('#introduction').getBoundingClientRect().top + scrollY, max: document.documentElement.scrollHeight - innerHeight })`);
-      // While scrolling, sample every frame: reading text must never show a substitute character
+      const g = await c.evaluate(`({ intro: document.querySelector('#introduction').getBoundingClientRect().top + scrollY, experience: document.querySelector('#experience').getBoundingClientRect().top + scrollY, max: document.documentElement.scrollHeight - innerHeight })`);
+      // While scrolling, sample every frame: titles, reading text and the mono labels all pass
+      // through glyph cells on their way in
       await c.evaluate(`(() => {
-        const words = [...document.querySelectorAll('[data-editorial-section]:not(#home) .ascii-word')].map(el => ({ el, visual: el.querySelector('.ascii-visual'), word: el.querySelector('.ascii-visual').dataset.word, mono: /mono/i.test(getComputedStyle(el).fontFamily.split(',')[0]), title: !!el.closest('h2.ocean-h2') }));
-        const s = window.__voices = { frames: 0, readingScrambled: 0, titleScrambled: 0, instrumentCells: 0, canvases: 0, maxCanvases: 0, partial: 0, stop: false };
+        const words = [...document.querySelectorAll('[data-editorial-section]:not(#home) .ascii-word')].map(el => ({ visual: el.querySelector('.ascii-visual'), mono: /mono/i.test(getComputedStyle(el).fontFamily.split(',')[0]), title: !!el.closest('h2.ocean-h2') }));
+        const s = window.__decode = { frames: 0, title: 0, reading: 0, mono: 0, stop: false };
         const tick = () => {
           s.frames++;
           for (const w of words) {
-            const cells = w.visual.firstElementChild !== null;
-            if (cells && w.title) s.titleScrambled++;
-            else if (cells && !w.mono) s.readingScrambled++;
-            else if (cells) s.instrumentCells++;
-            if (!cells && w.visual.textContent !== w.word) s.readingScrambled++;
+            if (w.visual.firstElementChild === null) continue;
+            if (w.title) s.title++; else if (w.mono) s.mono++; else s.reading++;
           }
-          const n = document.querySelectorAll('[data-title-emergence]').length;
-          if (n) s.canvases++;
-          s.maxCanvases = Math.max(s.maxCanvases, n);
           if (!s.stop) requestAnimationFrame(tick);
         };
         requestAnimationFrame(tick);
       })()`);
       await c.evaluate(`scrollTo(0, ${g.intro - v.h})`); await sleep(500);
       await scrollRun(c, g.intro - v.h, g.max, 700);
-      await sleep(1600);
-      const voices = await c.evaluate(`(window.__voices.stop = true, window.__voices)`);
-      assert.equal(voices.readingScrambled, 0, 'reading text never shows substitute characters');
-      assert.equal(voices.titleScrambled, 0, 'titles are never letter-scrambled');
-      assert.ok(voices.instrumentCells > 0, 'the instrument settles through figures');
-      assert.ok(voices.canvases > 0 && voices.maxCanvases <= 2, 'titles emerge, one or two at a time');
+      await sleep(6000);
+      const decode = await c.evaluate(`(window.__decode.stop = true, window.__decode)`);
+      assert.ok(decode.title > 0, 'titles decode letter by letter');
+      assert.ok(decode.reading > 0, 'reading text decodes letter by letter');
+      assert.ok(decode.mono > 0, 'the mono labels decode letter by letter');
+      // The last screen holds still, so everything on it reads
       const rest = await c.evaluate(`(() => {
         const words = [...document.querySelectorAll('[data-editorial-section]:not(#home) .ascii-word')];
-        const share = (el) => { const a = el.querySelector('.chapter-rule-reached'), b = el.querySelector('.chapter-rule-ahead'); const wa = a.getBoundingClientRect().width, wb = b ? b.getBoundingClientRect().width : 0; return Math.round(100 * wa / (wa + wb)); };
+        const visible = words.filter(el => { const r = el.getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight; });
         return {
-          w: innerWidth, scrollWidth: document.documentElement.scrollWidth,
-          words: words.length,
-          unset: words.filter(el => el.style.opacity !== '1' || el.style.transform || el.querySelector('.ascii-visual').firstElementChild).length,
-          canvases: document.querySelectorAll('[data-title-emergence]').length,
-          marks: [...document.querySelectorAll('.section-mark')].map(e => e.textContent),
-          shares: [...document.querySelectorAll('.chapter-line')].map(share),
-          ruleRight: Math.max(...[...document.querySelectorAll('.chapter-rule')].map(e => Math.round(e.getBoundingClientRect().right))),
+          w: innerWidth, scrollWidth: document.documentElement.scrollWidth, words: words.length, visible: visible.length,
+          unset: visible.filter(el => el.style.opacity !== '1' || el.querySelector('.ascii-visual').firstElementChild).length,
+          present: ${JSON.stringify(REMOVED)}.filter(sel => document.querySelector(sel)),
           nodes: document.querySelectorAll('*').length
         };
       })()`);
-      assert.equal(rest.unset, 0, 'every word ends fully set');
-      assert.equal(rest.canvases, 0, 'no emergence canvas outlives its title');
-      assert.deepEqual(rest.marks, ['01 / 07', '02 / 07', '03 / 07', '04 / 07', '05 / 07', '06 / 07', '07 / 07']);
-      assert.deepEqual(rest.shares, [14, 29, 43, 57, 71, 86, 100]);
+      assert.ok(rest.visible > 0);
+      assert.equal(rest.unset, 0, 'every word on the last screen is set');
+      assert.deepEqual(rest.present, [], 'none of the removed elements is on the page');
       assert.ok(rest.scrollWidth <= v.w, 'no horizontal overflow');
-      assert.ok(rest.ruleRight <= v.w, 'chapter rules end inside the screen');
-      // The profile's facts stay clear of the depth gauge's names
-      const clash = await c.evaluate(`(() => {
-        scrollTo(0, ${g.intro});
-        const gauge = document.querySelector('.depth-gauge');
-        if (!gauge || getComputedStyle(gauge).display === 'none') return null;
-        const labels = [...gauge.querySelectorAll('.depth-gauge-label')].map(e => e.getBoundingClientRect());
-        const facts = [...document.querySelectorAll('.intro-facts dd .ascii-word')].map(e => e.getBoundingClientRect());
-        return { labelLeft: Math.round(Math.min(...labels.map(r => r.left))), factsRight: Math.round(Math.max(...facts.map(r => r.right))) };
-      })()`);
-      if (clash) assert.ok(clash.factsRight < clash.labelLeft, `facts clear of the gauge: ${JSON.stringify(clash)}`);
-      pass(`CV read through at ${v.w}px`, { voices, rest, clash, errors: c.errors });
+      // Scroll-driven and reversible: a section read, left behind, and come back to
+      const at = g.experience - v.h * 0.18;
+      await c.evaluate(`scrollTo(0, ${at})`); await sleep(6000);
+      const read = await unsetInReadingZone(c);
+      const gone = await c.evaluate(`[...document.querySelectorAll('#introduction .ascii-word')].filter(el => el.getBoundingClientRect().top < innerHeight * 0.03 && el.style.opacity === '0').length`);
+      await scrollRun(c, at, at + v.h * 1.4, 900); await sleep(400);
+      const leaving = await c.evaluate(`[...document.querySelectorAll('#experience h2 .ascii-word')].every(el => el.style.opacity === '0')`);
+      await c.evaluate(`scrollTo(0, ${at})`); await sleep(6000);
+      const back = await unsetInReadingZone(c);
+      assert.equal(read, 0, 'the reading zone is fully set');
+      assert.ok(gone > 0, 'copy above the top of the screen has scrambled out');
+      assert.equal(leaving, true, 'a title scrolled away is gone');
+      assert.equal(back, 0, 'and it reads again on the way back');
+      pass(`CV read through at ${v.w}px`, { decode, rest, read, gone, back, errors: c.errors });
       assert.deepEqual(c.errors, []);
     } finally { await c.close(); }
   }
@@ -229,15 +226,13 @@ async function reduced() {
         const words = [...document.querySelectorAll('[data-editorial-section] .ascii-word')];
         return {
           runway: Math.round(document.querySelector('[data-journey-runway]').getBoundingClientRect().height), vh: innerHeight,
-          rule: cs('.chapter-rule', 'animationName'), datum: getComputedStyle(document.querySelector('.exp-entry'), '::before').animationName,
+          datum: getComputedStyle(document.querySelector('.exp-entry'), '::before').animationName,
           hiddenWords: words.filter(el => getComputedStyle(el).opacity !== '1').length,
-          movedWords: words.filter(el => el.style.transform).length,
-          canvases: document.querySelectorAll('[data-title-emergence]').length,
-          title: cs('#experience h2 .ascii-source', 'opacity'), sound: cs('.decode-sound-toggle', 'display'),
-          marks: document.querySelectorAll('.section-mark').length
+          cells: words.filter(el => el.querySelector('.ascii-visual').firstElementChild).length,
+          title: cs('#experience h2 .ascii-source', 'opacity'), sound: cs('.decode-sound-toggle', 'display')
         };
       })()`);
-      assert.equal(r.runway, r.vh); assert.equal(r.rule, 'none'); assert.equal(r.hiddenWords, 0); assert.equal(r.movedWords, 0); assert.equal(r.canvases, 0); assert.equal(r.marks, 7);
+      assert.equal(r.runway, r.vh); assert.equal(r.hiddenWords, 0); assert.equal(r.cells, 0); assert.equal(r.sound, 'none');
       await jpg(c, `verify/reduced-${v.w}`);
       pass(`reduced motion at ${v.w}px`, { ...r, errors: c.errors });
     } finally { await c.close(); }

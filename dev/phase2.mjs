@@ -1,9 +1,8 @@
 // Phase II QA harness. Private headless Chrome over CDP; starts and stops its own Vite servers.
 //   node dev/phase2.mjs shots  [before|after] [widths]   section captures at 1440/1280/768/390/320
 //   node dev/phase2.mjs whales [before|after|both]       matched whale frames (same pose, same scroll)
-//   node dev/phase2.mjs titles                           the chapter-title emergence, frame by frame
 //   node dev/phase2.mjs perf                             frame pacing, before vs after (alternating order)
-//   node dev/phase2.mjs verify                           journeys, Globe, reverse, skip, index, reduced motion
+//   node dev/phase2.mjs verify                           journeys, Globe, reverse, skip, the decode, reduced motion
 // "before" is the working tree as Phase II found it (.reference/phase2-before, git-ignored).
 import { browser, jpg, scrollRun, server, stopServers, task } from './phase2-lib.mjs';
 import { sleep } from './fable-cdp.mjs';

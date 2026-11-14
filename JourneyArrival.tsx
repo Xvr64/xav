@@ -6,7 +6,7 @@ import { createDissolve, measureLetters } from './arrivalDissolve';
 import { HANDOFF, endHandoff, handoff, handoffRunning } from './journeyHandoff';
 import { creation, triggerCreationGesture } from './creationTimeline';
 import { charGlyph, isDecodable } from './terminalMotion';
-import { CV_CREDIT } from './cvData';
+import { CV_PDF_URL } from './cvData';
 import './journeyArrival.css';
 
 type Phase = 'choosing' | 'leaving' | 'gone';
@@ -216,9 +216,9 @@ export function JourneyArrival() {
     >
       <canvas ref={canvas} className="journey-field" aria-hidden="true" />
       <div ref={stage} className="journey-stage">
-        {/* Whose page this is, before anything is chosen, and the one exit that needs no journey */}
+        {/* The one exit that needs no journey */}
         <p ref={masthead} className="journey-masthead">
-          <a className="journey-masthead-cv" href={CV_CREDIT.cvUrl} target="_blank" rel="noopener noreferrer">
+          <a className="journey-masthead-cv" href={CV_PDF_URL} target="_blank" rel="noopener noreferrer">
             CV <span aria-hidden="true">↗</span>
             <span className="journey-sr"> (PDF, opens in a new tab)</span>
           </a>

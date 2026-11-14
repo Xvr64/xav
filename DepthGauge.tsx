@@ -9,10 +9,9 @@ import { CV_SECTIONS } from './sections';
 // The page hides its scrollbar and runs some 13 screens deep, so after the journey the visitor
 // had no measure of it and no way to a section except scrolling. The gauge is that measure, drawn
 // as an instrument rather than a menu: a hairline in the right margin with one tick per section
-// and a marker that travels with the reading line. At rest it is only strokes. The section names
-// appear when it is approached (hover, keyboard focus) and for a moment when it first arrives,
-// which is how it introduces itself. Absent on the cover and through the Globe's film, on phones
-// and tablets (no margin to stand in) and in print. Everything it writes while scrolling is one
+// and a marker that travels with the reading line. It is only ever strokes: the section names
+// appear when it is approached (hover, keyboard focus) and at no other time. Absent on the cover
+// and through the Globe's film, on phones and tablets (no margin to stand in) and in print. Everything it writes while scrolling is one
 // transform on the marker; section positions are measured on layout changes only.
 //
 // To remove it: delete <DepthGauge /> from the page and the "Depth gauge" block in terminal.css.
@@ -26,19 +25,14 @@ export const GAUGE_STEP = 30;
 const READING_LINE = 0.4;
 /** How far the names reach to the left of the strokes (px): the longest label and its gap. */
 const LABEL_REACH = 104;
-/** How long the names show when the gauge first arrives (ms). */
-const INTRODUCTION_MS = 2800;
 
 export const DepthGauge: React.FC = () => {
   const root = useRef<HTMLElement | null>(null);
   const marker = useRef<HTMLSpanElement | null>(null);
   const [active, setActive] = useState(-1);
   const [shown, setShown] = useState(false);
-  const [introducing, setIntroducing] = useState(false);
   /** Approached by the pointer or the keyboard: the names are out */
-  const [approached, setApproached] = useState(false);
-  const labelsOut = introducing || approached;
-  const introduced = useRef(false);
+  const [labelsOut, setApproached] = useState(false);
 
   useEffect(() => {
     let tops: number[] = [];
@@ -82,15 +76,6 @@ export const DepthGauge: React.FC = () => {
       window.removeEventListener('resize', measure);
     };
   }, []);
-
-  // Its first arrival: the names show for a moment, then it is strokes again
-  useEffect(() => {
-    if (!shown || introduced.current) return;
-    introduced.current = true;
-    setIntroducing(true);
-    const timer = window.setTimeout(() => setIntroducing(false), INTRODUCTION_MS);
-    return () => window.clearTimeout(timer);
-  }, [shown]);
 
   // While it shows, its strokes are copy like any other: the whales thin behind them, and
   // behind the names too while those are out
