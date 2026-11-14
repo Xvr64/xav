@@ -1,0 +1,130 @@
+[
+  {
+    "name": "Globe mobile-emulated touch: Doha → Shanghai → Doha",
+    "ok": true,
+    "detail": {
+      "forward": [
+        "Doha",
+        "Paris",
+        "Jakarta",
+        "Moscow",
+        "Singapore",
+        "Pau",
+        "Shanghai"
+      ],
+      "after": {
+        "y": 6752,
+        "rp": 1,
+        "ownership": "document"
+      },
+      "back": [
+        "Shanghai",
+        "Pau",
+        "Singapore",
+        "Moscow",
+        "Jakarta",
+        "Paris",
+        "Doha"
+      ],
+      "end": {
+        "y": 2532,
+        "rp": 0,
+        "ownership": "document",
+        "playing": false
+      }
+    }
+  },
+  {
+    "name": "Mobile section index",
+    "ok": true,
+    "detail": {
+      "current": "#education",
+      "jumps": [
+        {
+          "id": "experience",
+          "focus": "experience",
+          "open": false,
+          "lock": null,
+          "top": 173
+        },
+        {
+          "id": "introduction",
+          "focus": "introduction",
+          "open": false,
+          "lock": null,
+          "top": 0
+        },
+        {
+          "id": "skills",
+          "focus": "skills",
+          "open": false,
+          "lock": null,
+          "top": 174
+        },
+        {
+          "id": "education",
+          "focus": "education",
+          "open": false,
+          "lock": null,
+          "top": 173
+        },
+        {
+          "id": "languages",
+          "focus": "languages",
+          "open": false,
+          "lock": null,
+          "top": 173
+        },
+        {
+          "id": "interests",
+          "focus": "interests",
+          "open": false,
+          "lock": null,
+          "top": 174
+        },
+        {
+          "id": "contact",
+          "focus": "contact",
+          "open": false,
+          "lock": null,
+          "top": 174
+        }
+      ],
+      "errors": []
+    }
+  },
+  {
+    "name": "reduced motion at 1440px",
+    "ok": true,
+    "detail": {
+      "runway": 900,
+      "vh": 900,
+      "rule": "none",
+      "datum": "none",
+      "hiddenWords": 0,
+      "movedWords": 0,
+      "canvases": 0,
+      "title": "1",
+      "sound": "none",
+      "marks": 7,
+      "errors": []
+    }
+  },
+  {
+    "name": "reduced motion at 390px",
+    "ok": true,
+    "detail": {
+      "runway": 844,
+      "vh": 844,
+      "rule": "none",
+      "datum": "none",
+      "hiddenWords": 0,
+      "movedWords": 0,
+      "canvases": 0,
+      "title": "1",
+      "sound": "none",
+      "marks": 7,
+      "errors": []
+    }
+  }
+]

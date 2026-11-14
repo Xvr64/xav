@@ -1,0 +1,306 @@
+[
+  [
+    "mcp__Claude_Browser__preview_start",
+    {
+      "name": "whales-3d"
+    }
+  ],
+  [
+    "mcp__Claude_Browser__browser_batch",
+    {
+      "actions": [
+        {
+          "name": "tabs_context",
+          "input": {}
+        },
+        {
+          "name": "computer",
+          "input": {
+            "action": "wait",
+            "duration": 3
+          }
+        },
+        {
+          "name": "computer",
+          "input": {
+            "action": "screenshot"
+          }
+        },
+        {
+          "name": "javascript_tool",
+          "input": {
+            "action": "javascript_exec",
+            "text": "({w: innerWidth, h: innerHeight, dpr: devicePixelRatio, hidden: document.hidden, arrival: document.documentElement.dataset.arrival, creation: document.documentElement.dataset.creation, gl: !!document.createElement('canvas').getContext('webgl2')})"
+          }
+        }
+      ]
+    }
+  ],
+  [
+    "ToolSearch",
+    {
+      "query": "select:WebSearch",
+      "max_results": 3
+    }
+  ],
+  [
+    "WebSearch",
+    {
+      "query": "Codrops ASCII shader WebGL tutorial case study glyph rendering scroll",
+      "mode": "standard"
+    }
+  ],
+  [
+    "WebSearch",
+    {
+      "query": "Awwwards site of the day ASCII art portfolio creative developer WebGL typography",
+      "mode": "standard"
+    }
+  ],
+  [
+    "WebSearch",
+    {
+      "query": "ertdfgcvb play.core ASCII playground live code; \"ascii\" generative art GitHub animated donut fluid morphing glyph",
+      "mode": "standard"
+    }
+  ],
+  [
+    "WebSearch",
+    {
+      "query": "editorial portfolio awwwards typography scroll storytelling case study Codrops 2026 \"portfolio\" case study creative developer",
+      "mode": "standard"
+    }
+  ],
+  [
+    "WebSearch",
+    {
+      "query": "Alex Harri \"ASCII characters are not pixels\" shape vectors ASCII rendering",
+      "mode": "standard"
+    }
+  ],
+  [
+    "WebSearch",
+    {
+      "query": "award-winning portfolio \"ASCII\" WebGL site Awwwards 2025 2026 \"ascii\" studio website case study (Lumena OR \"Unseen Studio\" OR \"Active Theory\" OR \"Lusion\")",
+      "mode": "standard"
+    }
+  ],
+  [
+    "WebSearch",
+    {
+      "query": "Codrops \"Podium\" OR \"Bisous\" case study portfolio cinematic storytelling rhythm motion restraint 2026",
+      "mode": "standard"
+    }
+  ],
+  [
+    "mcp__Claude_Browser__tabs_create",
+    {}
+  ],
+  [
+    "mcp__Claude_Browser__browser_batch",
+    {
+      "actions": [
+        {
+          "name": "navigate",
+          "input": {
+            "url": "https://alexharri.com/blog/ascii-rendering",
+            "tabId": "tab-1"
+          }
+        },
+        {
+          "name": "get_page_text",
+          "input": {
+            "tabId": "tab-1",
+            "max_chars": 9000
+          }
+        },
+        {
+          "name": "computer",
+          "input": {
+            "action": "scroll",
+            "coordinate": [
+              400,
+              300
+            ],
+            "scroll_direction": "down",
+            "scroll_amount": 10,
+            "tabId": "tab-1"
+          }
+        },
+        {
+          "name": "computer",
+          "input": {
+            "action": "screenshot",
+            "tabId": "tab-1",
+            "scale": 0.6
+          }
+        }
+      ]
+    }
+  ],
+  [
+    "mcp__Claude_Browser__browser_batch",
+    {
+      "actions": [
+        {
+          "name": "navigate",
+          "input": {
+            "url": "https://play.ertdfgcvb.xyz/",
+            "tabId": "tab-1"
+          }
+        },
+        {
+          "name": "computer",
+          "input": {
+            "action": "wait",
+            "duration": 3,
+            "tabId": "tab-1"
+          }
+        },
+        {
+          "name": "computer",
+          "input": {
+            "action": "screenshot",
+            "tabId": "tab-1",
+            "scale": 0.7
+          }
+        },
+        {
+          "name": "navigate",
+          "input": {
+            "url": "https://tympanus.net/codrops/2026/09/04/beyond-the-luminance-ramp-a-shape-aware-ascii-renderer-in-three-js/",
+            "tabId": "tab-1"
+          }
+        },
+        {
+          "name": "get_page_text",
+          "input": {
+            "tabId": "tab-1",
+            "max_chars": 6000
+          }
+        }
+      ]
+    }
+  ],
+  [
+    "mcp__Claude_Browser__browser_batch",
+    {
+      "actions": [
+        {
+          "name": "navigate",
+          "input": {
+            "url": "https://tympanus.net/codrops/?p=115958",
+            "tabId": "tab-1"
+          }
+        },
+        {
+          "name": "get_page_text",
+          "input": {
+            "tabId": "tab-1",
+            "max_chars": 5000
+          }
+        },
+        {
+          "name": "navigate",
+          "input": {
+            "url": "https://tympanus.net/codrops/2026/03/06/obys-the-small-studio-designing-big-digital-narratives/",
+            "tabId": "tab-1"
+          }
+        },
+        {
+          "name": "get_page_text",
+          "input": {
+            "tabId": "tab-1",
+            "max_chars": 4500
+          }
+        },
+        {
+          "name": "navigate",
+          "input": {
+            "url": "https://tympanus.net/codrops/2026/01/04/efecto-building-real-time-ascii-and-dithering-effects-with-webgl-shaders",
+            "tabId": "tab-1"
+          }
+        },
+        {
+          "name": "get_page_text",
+          "input": {
+            "tabId": "tab-1",
+            "max_chars": 3500
+          }
+        }
+      ]
+    }
+  ],
+  [
+    "mcp__Claude_Browser__browser_batch",
+    {
+      "actions": [
+        {
+          "name": "navigate",
+          "input": {
+            "url": "https://grids.obys.agency/",
+            "tabId": "tab-1"
+          }
+        },
+        {
+          "name": "computer",
+          "input": {
+            "action": "wait",
+            "duration": 5,
+            "tabId": "tab-1"
+          }
+        },
+        {
+          "name": "computer",
+          "input": {
+            "action": "screenshot",
+            "tabId": "tab-1",
+            "scale": 0.7
+          }
+        },
+        {
+          "name": "computer",
+          "input": {
+            "action": "scroll",
+            "coordinate": [
+              400,
+              300
+            ],
+            "scroll_direction": "down",
+            "scroll_amount": 10,
+            "tabId": "tab-1"
+          }
+        },
+        {
+          "name": "computer",
+          "input": {
+            "action": "wait",
+            "duration": 2,
+            "tabId": "tab-1"
+          }
+        },
+        {
+          "name": "computer",
+          "input": {
+            "action": "screenshot",
+            "tabId": "tab-1",
+            "scale": 0.7
+          }
+        },
+        {
+          "name": "get_page_text",
+          "input": {
+            "tabId": "tab-1",
+            "max_chars": 1500
+          }
+        }
+      ]
+    }
+  ],
+  [
+    "mcp__Claude_Browser__tabs_close",
+    {
+      "tabId": "tab-1"
+    }
+  ]
+]

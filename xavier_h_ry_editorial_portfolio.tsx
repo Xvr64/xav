@@ -30,6 +30,7 @@ import {
   toTitleCase
 } from './OceanEntry';
 import { GLOBAL_PORTFOLIO_CSS } from './portfolioStyles';
+import { ChapterLine } from './ChapterLine';
 
 // ============================================================================
 // PAGE COMPOSITION — the layers and sections live in their own modules:
@@ -64,12 +65,18 @@ interface FloatingSectionHeaderProps {
 }
 
 const FloatingSectionHeader: React.FC<FloatingSectionHeaderProps> = ({
+  sectionId,
   title,
   description,
   layout = 'benchmark',
   asideAccent
 }) => (
   <header className={`section-head section-head--${layout} ed-grid relative z-10`}>
+    {/* The chapter line (ChapterLine.tsx): the threshold every chapter is entered through. Its
+        mark says where the section stands in the CV, in the Globe caption's own form; its rule
+        says the same as water travelled. Plain text, outside the word system: it stands like a
+        slate before its title emerges. */}
+    {sectionId && <ChapterLine sectionId={sectionId} />}
     <h2 className="ocean-h2 text-[#171717]">
       <BioWords text={title} />
     </h2>

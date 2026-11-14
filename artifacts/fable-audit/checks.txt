@@ -1,0 +1,11 @@
+TypeScript: npx tsc --noEmit, exit 0.
+Unit suite: 212 passed, 0 failed, 0 skipped.
+Production build: successful; ignored cache output; tracked dist unchanged.
+Whitespace: git diff --check passed.
+Production JS search: no rejected experiment or debug identifiers found.
+All nine recovered source/test files SHA-256 unchanged; see preservation.json.
+Protected controller/renderer/timeline/experiment files have no diff from HEAD.
+Recovered index-test.mjs rerun: INDEX OK; errors [].
+New browser harness: verification, eight sequential before/after benchmark runs, and six trace/ablation runs passed.
+No new physical iPhone session.
+No commit, push, or deployment.

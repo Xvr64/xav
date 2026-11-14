@@ -1,0 +1,30 @@
+PASS journey direct → Hero {"seconds":14.6,"nudged":1,"hero":{"y":0,"colophon":"1","scrollable":"scroll","whales":true,"cover":"A journey without horizons","playback":["PAUSED","PLAYING_FORWARD"]},"errors":[]}
+PASS journey passage → Hero {"seconds":20.4,"nudged":1,"hero":{"y":0,"colophon":"1","scrollable":"scroll","whales":true,"cover":"A journey without horizons","playback":["PAUSED","PLAYING_FORWARD"]},"errors":[]}
+PASS journey odyssey → Hero {"seconds":31.7,"nudged":1,"hero":{"y":0,"colophon":"1","scrollable":"scroll","whales":true,"cover":"A journey without horizons","playback":["PAUSED","PLAYING_FORWARD"]},"errors":[]}
+PASS Skip intro → Hero {"at":0,"hero":{"y":0,"colophon":"1","controls":false},"errors":[]}
+PASS Hero entry: the name resolves {"name":"1"}
+PASS Globe desktop: Doha → Shanghai → Doha {"forward":["Doha","Paris","Jakarta","Moscow","Singapore","Pau","Shanghai"],"back":["Shanghai","Pau","Singapore","Moscow","Jakarta","Paris","Doha"],"diag":{"ownership":"desktop","playing":false,"rp":0}}
+PASS Profile shortcut lands on the profile {"landing":{"top":0,"lock":null,"mark":81},"errors":[]}
+PASS Globe mobile-emulated touch: Doha → Shanghai → Doha {"forward":["Doha","Paris","Jakarta","Moscow","Singapore","Pau","Shanghai"],"after":{"y":6752,"rp":1,"ownership":"document"},"back":["Shanghai","Pau","Singapore","Moscow","Jakarta","Paris","Doha"],"end":{"y":2532,"rp":0,"ownership":"document","playing":false}}
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
++ actual - expected
+
++ 'contact'
+- 'experience'
+
+    at Object.mobile (file:///C:/Users/Ashan/Documents/Code%20Website/dev/phase2-verify.mjs:141:14)
+    at async Module.verify (file:///C:/Users/Ashan/Documents/Code%20Website/dev/phase2-verify.mjs:252:30)
+    at async file:///C:/Users/Ashan/Documents/Code%20Website/dev/phase2.mjs:52:7 {
+  generatedMessage: true,
+  code: 'ERR_ASSERTION',
+  actual: 'contact',
+  expected: 'experience',
+  operator: 'strictEqual',
+  diff: 'simple'
+}
+
+Node.js v24.21.0

@@ -8,6 +8,21 @@ import {
   VIEWPORT_ZONES
 } from './terminalMotion';
 import { advanceEncryptedLine, encryptedCharacterState, ENCRYPTED_CHARSET, FLIP_DELAY_MS } from './encryptedMotion';
+import {
+  EMERGE_MS,
+  INSTRUMENT_CHARSET,
+  SURFACE_MS,
+  SURFACE_STEPS,
+  VOICE_MOTION,
+  settleMs,
+  surfaceOpacity,
+  surfaceRise,
+  surfaceStep,
+  titleTypeOpacity,
+  voiceFor,
+  type Motion
+} from './editorialVoices';
+import { createTitleEmergence, type TitleEmergence } from './titleEmergence';
 import { creation, HERO_TEXT_AT } from './creationTimeline';
 import { EncryptedText } from './components/ui/encrypted-text';
 import {
@@ -21,6 +36,11 @@ import {
 import './terminal.css';
 
 /**
+ * How each line arrives depends on its voice (editorialVoices.ts): a chapter title emerges from
+ * ASCII glyphs (titleEmergence.ts), the mono instrument settles through a short run of figures,
+ * and reading text surfaces with no substitute characters at all. One controller, one frame
+ * callback, the same viewport zones for all three.
+ *
  * Eligibility for the character decode, in one place:
  *  - Every `<AsciiText>` inside a `[data-editorial-section]` decodes. All ordinary page copy
  *    (headings, personal introduction, experience, education, skills, languages, interests, contact,
@@ -48,6 +68,8 @@ type Word = {
   decodable: boolean[];
   /** The enclosing link or button: a focused control always shows its real label. */
   control: Element | null;
+  /** How this word arrives (its voice's motion, editorialVoices.ts). */
+  motion: Motion;
   /** Document Y of the rendered line this word sits on, where its entry decode completes and
    * where its exit scramble begins. */
   top: number;
@@ -75,6 +97,7 @@ type Word = {
 
 type Line = {
   block: HTMLElement;
+  motion: Motion;
   characterCount: number;
   top: number;
   entryEnd: number;
@@ -110,6 +133,22 @@ export function useEditorialScroll() {
   useEffect(() => {
     const media = window.matchMedia('(prefers-reduced-motion: reduce)');
     const cache = new WeakMap<HTMLElement, Word>();
+    /** Each text's motion, read once from its face and role. */
+    const motions = new WeakMap<HTMLElement, Motion>();
+    const motionOf = (text: HTMLElement) => {
+      let motion = motions.get(text);
+      if (!motion) {
+        motion = VOICE_MOTION[voiceFor(!!text.closest('h2.ocean-h2'), getComputedStyle(text).fontFamily)];
+        motions.set(text, motion);
+      }
+      return motion;
+    };
+    /** Titles in the middle of emerging: their glyph canvas, or null where one could not be made. */
+    const emergences = new Map<HTMLElement, TitleEmergence | null>();
+    const endEmergences = () => {
+      emergences.forEach((e) => e?.dispose());
+      emergences.clear();
+    };
     let docLines: Line[] = [];
     let words: Word[] = [];
     let frame = 0;
@@ -122,6 +161,8 @@ export function useEditorialScroll() {
 
     /** Geometry only (reads). Per-word animation state survives re-measuring via the cache. */
     const measure = () => {
+      // A title caught mid-emergence is redrawn on the new layout by the next frame
+      endEmergences();
       viewport = window.innerHeight;
       const scrollY = window.scrollY;
       const maxScroll = Math.max(0, document.documentElement.scrollHeight - viewport);
@@ -132,6 +173,7 @@ export function useEditorialScroll() {
       document.querySelectorAll<HTMLElement>(ELIGIBLE).forEach((text) => {
         if (text.closest(EXCLUDED)) return;
         const blockElement = blockOf(text);
+        const motion = motionOf(text);
         text.querySelectorAll<HTMLElement>('.ascii-word').forEach((el) => {
           const visual = el.querySelector<HTMLElement>('.ascii-visual');
           const source = el.querySelector<HTMLElement>('.ascii-source');
@@ -152,6 +194,7 @@ export function useEditorialScroll() {
               chars,
               decodable: chars.map((char) => !/\s/u.test(char)),
               control: null,
+              motion,
               top: 0,
               entryEnd: 0,
               exitStart: 0,
@@ -172,6 +215,7 @@ export function useEditorialScroll() {
             cache.set(el, word);
           }
           word.control = el.closest('a,button');
+          word.motion = motion;
           word.seed = (++counter * 131) >>> 0;
           word.key = NaN;
           // Layout changed: character cells are re-measured lazily the next time they are needed
@@ -182,7 +226,8 @@ export function useEditorialScroll() {
           const top = rect.top + scrollY;
           let matchedLine: Line | undefined;
           for (const candidate of measuredLines) {
-            if (candidate.block === blockElement && Math.abs(candidate.top - top) <= 6) {
+            // A title arrives as one picture, however many lines it is set on
+            if (candidate.block === blockElement && (motion === 'emerge' || Math.abs(candidate.top - top) <= 6)) {
               matchedLine = candidate;
               break;
             }
@@ -192,6 +237,7 @@ export function useEditorialScroll() {
             const exitStart = exitStartFor(top - maxScroll, viewport);
             matchedLine = {
               block: blockElement,
+              motion,
               characterCount: 0,
               top,
               entryEnd,
@@ -305,7 +351,12 @@ export function useEditorialScroll() {
           scrollDelta,
           elapsedMs,
           line.characterCount,
-          isReduced
+          isReduced,
+          true,
+          line.motion === 'emerge' ? EMERGE_MS
+            : line.motion === 'settle' ? settleMs(line.characterCount)
+            : line.motion === 'surface' ? SURFACE_MS
+            : undefined
         );
         line.revealState = next.revealState;
         line.currentP = next.currentP;
@@ -319,28 +370,33 @@ export function useEditorialScroll() {
       }
 
       // Pass 2: Determine which words need updating in DOM this frame
-      const pending: { w: Word; p: number; entering: boolean }[] = [];
+      const pending: { w: Word; p: number; entering: boolean; lineP: number }[] = [];
       for (const w of words) {
         const forced = isReduced || (w.control !== null && w.control === focused);
         const lineP = forced ? 1 : w.currentP;
         const entering = w.revealState !== 'exiting';
         // Flip only encrypted letters, leaving the resolved prefix stable.
         const p = lineP;
-        const flip = p > 0 && p < 1 ? Math.floor(now / FLIP_DELAY_MS) : 0;
-        const key = (entering ? p : -p - 1) + flip * 4;
+        const glyphs = w.motion === 'settle' || w.motion === 'decode';
+        const flip = glyphs && p > 0 && p < 1 ? Math.floor(now / FLIP_DELAY_MS) : 0;
+        // Reading text and titles are restyled in a few steps, never once per frame
+        const shownP = glyphs || p <= 0 || p >= 1 ? p
+          : w.motion === 'surface' ? Math.min(surfaceStep(p), 1 - 1 / (2 * SURFACE_STEPS))
+          : Math.min(Math.round(titleTypeOpacity(p) * 16) / 16, 0.999);
+        const key = (entering ? shownP : -shownP - 1) + flip * 4;
         if (w.key === key) continue;
         w.key = key;
-        if (p > 0 && p < 1 && !w.cellX) measureChars(w);
-        pending.push({ w, p, entering });
+        if (glyphs && p > 0 && p < 1 && !w.cellX) measureChars(w);
+        pending.push({ w, p: shownP, entering, lineP: p });
       }
 
       // Pass 3 (DOM writes)
       let enterChanges = 0;
       let exitChanges = 0;
       let locks = 0;
-      for (const { w, p, entering } of pending) {
+      for (const { w, p, entering, lineP } of pending) {
         let changes = 0;
-        if (p >= 1) {
+        if (lineP >= 1) {
           // Readable: the overlay goes back to the plain, fully typeset word
           w.states.forEach((s, i) => {
             if (s !== RESOLVED && w.decodable[i]) {
@@ -354,7 +410,8 @@ export function useEditorialScroll() {
             w.shown = 'text';
           }
           w.el.style.opacity = '1';
-        } else if (p <= 0) {
+          if (w.el.style.transform) w.el.style.transform = '';
+        } else if (lineP <= 0) {
           // Gone: every character is back to its first glyph, nothing is drawn
           w.states.forEach((s, i) => {
             if (s !== 0 && w.decodable[i]) changes++;
@@ -366,7 +423,25 @@ export function useEditorialScroll() {
             w.shown = 'text';
           }
           w.el.style.opacity = '0';
+          if (w.el.style.transform) w.el.style.transform = '';
+        } else if (w.motion === 'surface' || w.motion === 'emerge') {
+          // No substitute characters: the word itself comes up. A title's `p` is already its
+          // type's opacity (the glyphs in front of it are titleEmergence's)
+          if (w.shown !== 'text') {
+            w.visual.textContent = w.original;
+            w.shown = 'text';
+          }
+          if (w.motion === 'surface') {
+            w.el.style.opacity = surfaceOpacity(p).toFixed(3);
+            w.el.style.transform = `translateY(${surfaceRise(p).toFixed(2)}px)`;
+          } else {
+            w.el.style.opacity = p.toFixed(3);
+          }
+          // The sound hears a line surface as it heard one decode: a few ticks, then the lock
+          changes = Math.ceil(w.chars.length / SURFACE_STEPS);
+          w.states.fill(0);
         } else {
+          const charset = w.motion === 'settle' ? INSTRUMENT_CHARSET : ENCRYPTED_CHARSET;
           if (!w.cells) buildCells(w);
           if (w.shown !== 'cells') {
             w.states.fill(-2);
@@ -383,7 +458,7 @@ export function useEditorialScroll() {
               if (state !== before) {
                 changes++;
                 if ((state === RESOLVED) !== (before === RESOLVED)) locks++;
-                cell.textContent = state === RESOLVED ? w.chars[i] : ENCRYPTED_CHARSET[state];
+                cell.textContent = state === RESOLVED ? w.chars[i] : charset[state % charset.length];
                 w.states[i] = state;
               }
             }
@@ -401,6 +476,25 @@ export function useEditorialScroll() {
 
       if (enterChanges + exitChanges > 0) {
         noteDecodeActivity(enterChanges + exitChanges, locks, exitChanges > enterChanges);
+      }
+
+      // Chapter titles: the glyphs that gather into the title, drawn at the line's own progress.
+      // After the frame's writes, so making a title's canvas never forces a layout mid-frame.
+      for (const line of docLines) {
+        if (line.motion !== 'emerge') continue;
+        const active = line.revealState === 'revealing' && line.currentP < 1 && !isReduced;
+        let emergence = emergences.get(line.block);
+        if (active) {
+          if (emergence === undefined) {
+            const host = line.block.closest<HTMLElement>('.section-head') ?? line.block.parentElement;
+            emergence = host ? createTitleEmergence(line.block, line.words.map((w) => w.source), host) : null;
+            emergences.set(line.block, emergence);
+          }
+          emergence?.draw(line.currentP);
+        } else if (emergence !== undefined) {
+          emergence?.dispose();
+          emergences.delete(line.block);
+        }
       }
 
       // Keep RAF loop running while any line is revealing
@@ -456,6 +550,7 @@ export function useEditorialScroll() {
     return () => {
       disposed = true;
       cancelAnimationFrame(frame);
+      endEmergences();
       observer.disconnect();
       mutations.disconnect();
       document.removeEventListener('visibilitychange', onVisibility);
@@ -467,6 +562,7 @@ export function useEditorialScroll() {
       media.removeEventListener('change', invalidate);
       words.forEach((w) => {
         w.el.style.removeProperty('opacity');
+        w.el.style.removeProperty('transform');
         w.visual.textContent = w.original;
       });
     };

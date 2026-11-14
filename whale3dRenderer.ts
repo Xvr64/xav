@@ -23,7 +23,7 @@
 import * as THREE from 'three';
 import { SKIN_ROWS, packSkin, type Articulation, type Quat } from './whale3dPose.ts';
 import { SPINE_NODES, buildWhaleGeometry, type V3 } from './whale3dAnatomy.ts';
-import { VEIL_KEEP_LINE, VEIL_KEEP_TONE, rasterizeVeil, type VeilRect } from './whaleVeil.ts';
+import { FIELD_DEPTH, VEIL_KEEP_LINE, VEIL_KEEP_TONE, rasterizeVeil, type VeilRect } from './whaleVeil.ts';
 
 export type AsciiMode = 'shape' | 'luminance' | 'raw';
 
@@ -543,6 +543,7 @@ uniform float uInvert;
 uniform sampler2D uVeil;
 uniform float uVeilAmount;
 uniform vec2 uVeilKeep;
+uniform float uVeilField;
 out vec4 outColor;
 void main() {
   vec2 fc = vec2(gl_FragCoord.x, uCanvasH - gl_FragCoord.y);
@@ -551,7 +552,9 @@ void main() {
   float gi = floor(c.r * 255.0 + 0.5);
   // Nothing but the glyphs: no panel and no fill. Behind a line of copy the engraving thins by
   // the reading veil (whaleVeil.ts): the tone almost clears and the contour only softens, so the
-  // silhouette stays whole while the text in front of it stays readable
+  // silhouette stays whole while the text in front of it stays readable. Across the reading
+  // water around the copy (veil up to uVeilField) the modelling eases away and the drawing is
+  // left as it is: the whale passes behind a body of text as a line drawing, whole
   if (c.g <= 0.0 || gi < 0.5) discard;
   // Line work (silhouette, contours, mouth, eye) is class 1; the body's tone cells carry their
   // engraver's level 0 … 1 below it
@@ -563,7 +566,8 @@ void main() {
   a *= 1.0 - uFarFade * c.b;
   if (uVeilAmount > 0.0) {
     float veil = texture(uVeil, fc / (uCell * vec2(textureSize(uVeil, 0)))).r * uVeilAmount;
-    a *= mix(1.0, mix(uVeilKeep.x, uVeilKeep.y, line), veil);
+    float behind = smoothstep(uVeilField, 1.0, veil);
+    a *= mix(mix(1.0, uVeilKeep.x, veil), mix(1.0, uVeilKeep.y, behind), line);
   }
   vec3 col = mix(uInk, uInkFar, c.b);
   // The drawing and the deepest shadow take the strongest ink (deeper on light water, brighter
@@ -639,7 +643,7 @@ export class WhaleAsciiRenderer {
   private veilAmount = 0;
   private veilDirty = false;
   private veilData: Uint8Array<ArrayBuffer> = new Uint8Array(1);
-  private veilScratch = new Float32Array(2);
+  private veilScratch = new Float32Array(4);
   private veilTexture = WhaleAsciiRenderer.makeVeilTexture(new Uint8Array(1), 1, 1);
   private readonly light = new THREE.Vector3(-0.42, 0.8, 0.42).normalize();
   private readonly tmp = new THREE.Vector3();
@@ -771,7 +775,8 @@ export class WhaleAsciiRenderer {
         uInvert: { value: 0 },
         uVeil: { value: null },
         uVeilAmount: { value: 0 },
-        uVeilKeep: { value: new THREE.Vector2(VEIL_KEEP_TONE, VEIL_KEEP_LINE) }
+        uVeilKeep: { value: new THREE.Vector2(VEIL_KEEP_TONE, VEIL_KEEP_LINE) },
+        uVeilField: { value: FIELD_DEPTH }
       }
     });
     this.rawMaterial = new THREE.ShaderMaterial({
@@ -871,7 +876,7 @@ export class WhaleAsciiRenderer {
     const cols = Math.ceil(W / cw), rows = Math.ceil(H / ch);
     if (this.veilData.length !== cols * rows || this.veilTexture.image.width !== cols) {
       this.veilData = new Uint8Array(cols * rows);
-      this.veilScratch = new Float32Array(cols * rows * 2);
+      this.veilScratch = new Float32Array(cols * rows * 4);
       this.veilTexture.dispose();
       this.veilTexture = WhaleAsciiRenderer.makeVeilTexture(this.veilData, cols, rows);
       this.veilDirty = true;

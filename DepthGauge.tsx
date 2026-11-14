@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { publishFixedCopy } from './oceanDirection';
 import { gaugePosition } from './gaugePosition';
+import { CV_SECTIONS } from './sections';
 
 // ============================================================================
 // DEPTH GAUGE — the sounding line: where you are in the descent, and the way to any station
@@ -16,15 +17,8 @@ import { gaugePosition } from './gaugePosition';
 //
 // To remove it: delete <DepthGauge /> from the page and the "Depth gauge" block in terminal.css.
 
-export const GAUGE_SECTIONS = [
-  { id: 'introduction', label: 'Profile' },
-  { id: 'experience', label: 'Experience' },
-  { id: 'skills', label: 'Skills' },
-  { id: 'education', label: 'Education' },
-  { id: 'languages', label: 'Languages' },
-  { id: 'interests', label: 'Interests' },
-  { id: 'contact', label: 'Contact' }
-] as const;
+/** The gauge's stations are the CV's chapters (sections.ts), one tick each. */
+export const GAUGE_SECTIONS = CV_SECTIONS;
 
 /** Distance between two ticks (px); terminal.css reads it as --gauge-step. */
 export const GAUGE_STEP = 30;

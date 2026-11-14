@@ -1,0 +1,233 @@
+[
+  {
+    "name": "CV read through at 1440px",
+    "ok": true,
+    "detail": {
+      "voices": {
+        "frames": 824,
+        "readingScrambled": 0,
+        "titleScrambled": 0,
+        "instrumentCells": 1502,
+        "canvases": 417,
+        "maxCanvases": 2,
+        "partial": 0,
+        "stop": true
+      },
+      "rest": {
+        "w": 1440,
+        "scrollWidth": 1440,
+        "words": 378,
+        "unset": 0,
+        "canvases": 0,
+        "marks": [
+          "01 / 07",
+          "02 / 07",
+          "03 / 07",
+          "04 / 07",
+          "05 / 07",
+          "06 / 07",
+          "07 / 07"
+        ],
+        "shares": [
+          14,
+          29,
+          43,
+          57,
+          71,
+          86,
+          100
+        ],
+        "ruleRight": 1365,
+        "nodes": 1727
+      },
+      "clash": {
+        "labelLeft": 1310,
+        "factsRight": 1238
+      },
+      "errors": []
+    }
+  },
+  {
+    "name": "CV read through at 1280px",
+    "ok": true,
+    "detail": {
+      "voices": {
+        "frames": 816,
+        "readingScrambled": 0,
+        "titleScrambled": 0,
+        "instrumentCells": 1590,
+        "canvases": 436,
+        "maxCanvases": 2,
+        "partial": 0,
+        "stop": true
+      },
+      "rest": {
+        "w": 1280,
+        "scrollWidth": 1280,
+        "words": 378,
+        "unset": 0,
+        "canvases": 0,
+        "marks": [
+          "01 / 07",
+          "02 / 07",
+          "03 / 07",
+          "04 / 07",
+          "05 / 07",
+          "06 / 07",
+          "07 / 07"
+        ],
+        "shares": [
+          14,
+          29,
+          43,
+          57,
+          71,
+          86,
+          100
+        ],
+        "ruleRight": 1213,
+        "nodes": 1727
+      },
+      "clash": {
+        "labelLeft": 1154,
+        "factsRight": 1091
+      },
+      "errors": []
+    }
+  },
+  {
+    "name": "CV read through at 768px",
+    "ok": true,
+    "detail": {
+      "voices": {
+        "frames": 956,
+        "readingScrambled": 0,
+        "titleScrambled": 0,
+        "instrumentCells": 1518,
+        "canvases": 478,
+        "maxCanvases": 2,
+        "partial": 0,
+        "stop": true
+      },
+      "rest": {
+        "w": 768,
+        "scrollWidth": 768,
+        "words": 378,
+        "unset": 0,
+        "canvases": 0,
+        "marks": [
+          "01 / 07",
+          "02 / 07",
+          "03 / 07",
+          "04 / 07",
+          "05 / 07",
+          "06 / 07",
+          "07 / 07"
+        ],
+        "shares": [
+          14,
+          29,
+          43,
+          57,
+          71,
+          86,
+          100
+        ],
+        "ruleRight": 728,
+        "nodes": 1719
+      },
+      "clash": null,
+      "errors": []
+    }
+  },
+  {
+    "name": "CV read through at 390px",
+    "ok": true,
+    "detail": {
+      "voices": {
+        "frames": 1110,
+        "readingScrambled": 0,
+        "titleScrambled": 0,
+        "instrumentCells": 1918,
+        "canvases": 534,
+        "maxCanvases": 2,
+        "partial": 0,
+        "stop": true
+      },
+      "rest": {
+        "w": 390,
+        "scrollWidth": 390,
+        "words": 378,
+        "unset": 0,
+        "canvases": 0,
+        "marks": [
+          "01 / 07",
+          "02 / 07",
+          "03 / 07",
+          "04 / 07",
+          "05 / 07",
+          "06 / 07",
+          "07 / 07"
+        ],
+        "shares": [
+          14,
+          29,
+          43,
+          57,
+          71,
+          86,
+          100
+        ],
+        "ruleRight": 370,
+        "nodes": 1719
+      },
+      "clash": null,
+      "errors": []
+    }
+  },
+  {
+    "name": "CV read through at 320px",
+    "ok": true,
+    "detail": {
+      "voices": {
+        "frames": 1133,
+        "readingScrambled": 0,
+        "titleScrambled": 0,
+        "instrumentCells": 1874,
+        "canvases": 504,
+        "maxCanvases": 1,
+        "partial": 0,
+        "stop": true
+      },
+      "rest": {
+        "w": 320,
+        "scrollWidth": 320,
+        "words": 378,
+        "unset": 0,
+        "canvases": 0,
+        "marks": [
+          "01 / 07",
+          "02 / 07",
+          "03 / 07",
+          "04 / 07",
+          "05 / 07",
+          "06 / 07",
+          "07 / 07"
+        ],
+        "shares": [
+          14,
+          29,
+          43,
+          57,
+          71,
+          86,
+          100
+        ],
+        "ruleRight": 300,
+        "nodes": 1719
+      },
+      "clash": null,
+      "errors": []
+    }
+  }
+]

@@ -234,13 +234,76 @@ body {
   letter-spacing: var(--tracking-body);
 }
 
+/* The chapter mark (sections.ts): "03 / 07" in the instrument voice above a section's title,
+   the Globe caption's own count carried on through the CV. Seven cities, then seven chapters. */
+.section-mark {
+  display: block;
+  margin: 0;
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: var(--text-meta);
+  font-style: normal;
+  font-weight: 400;
+  line-height: var(--leading-meta);
+  letter-spacing: var(--tracking-mono);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: var(--ink-52595E, #52595e);
+  opacity: 0.9;
+}
+/* The chapter line (ChapterLine.tsx) — the threshold of every chapter, across the whole measure:
+   the mark on the margin, then a rule set in type like the itinerary's. Waves for the chapters
+   reached, dots for those still ahead, a tick where it starts: the page's one way of saying
+   "water travelled", used for the third time (the itinerary, the small-screen index, here). The
+   straight hairlines stay what they were, datums inside a chapter; the wave is only ever a
+   crossing from one chapter to the next. It is also the progress a phone has no gauge for. */
+.chapter-line {
+  grid-column: a / end;
+  grid-row: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--space-s);
+  margin: 0;
+  min-width: 0;
+}
+.chapter-rule {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  height: 12px;
+  overflow: hidden;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 12px;
+  letter-spacing: 0;
+  color: var(--ink-2F4858, #2f4858);
+  text-shadow: none;
+}
+.chapter-rule > span { flex-basis: 0; min-width: 0; overflow: hidden; }
+.chapter-rule-reached::before { content: '|'; color: var(--ink-171717, #171717); }
+.chapter-rule-ahead { opacity: 0.55; }
+/* Drawn by the scroll from the margin as its chapter rises, like every datum on the page;
+   whole where scroll-driven animations or motion are unavailable */
+@media (prefers-reduced-motion: no-preference) {
+  @supports (animation-timeline: view()) {
+    .chapter-rule {
+      animation: itinerary-draw linear both;
+      animation-timeline: view();
+      animation-range: entry 10% cover 32%;
+    }
+  }
+}
+
 /* Section header: one structure, composed differently per section */
 .section-head {
   row-gap: var(--space-m);
   padding-bottom: var(--space-xl);
   align-items: end;
 }
-.section-head > .ocean-h2 { grid-row: 1; }
+/* The chapter line is the header's first row; it keeps the mark's old distance to the title */
+.section-head > .chapter-line { margin-bottom: calc(var(--space-s) - var(--space-m)); }
+.section-head > .ocean-h2 { grid-row: 2; position: relative; }
 .section-head .section-dek {
   font-size: var(--text-body);
   line-height: var(--leading-body);
@@ -265,11 +328,11 @@ body {
    indented   title set in on line b; dek beneath it on the same line
    monument   title from line a across ten columns; dek beneath it */
 .section-head--benchmark > .ocean-h2 { grid-column: a / span 7; }
-.section-head--benchmark > :is(.section-dek, .section-aside) { grid-column: c / end; grid-row: 1; }
+.section-head--benchmark > :is(.section-dek, .section-aside) { grid-column: c / end; grid-row: 2; }
 .section-head--indented > .ocean-h2 { grid-column: b / span 8; }
-.section-head--indented > :is(.section-dek, .section-aside) { grid-column: b / span 5; grid-row: 2; }
+.section-head--indented > :is(.section-dek, .section-aside) { grid-column: b / span 5; grid-row: 3; }
 .section-head--monument > .ocean-h2 { grid-column: a / span 10; max-width: none; }
-.section-head--monument > :is(.section-dek, .section-aside) { grid-column: a / span 5; grid-row: 2; }
+.section-head--monument > :is(.section-dek, .section-aside) { grid-column: a / span 5; grid-row: 3; }
 
 /* ---------------------------------------------------------------------------
    01 · Cover — "A journey without horizons"
@@ -431,10 +494,12 @@ body {
 /* Who and what: the statement on line b with its label hanging on line a; beneath it the
    support reads on line b while the facts a recruiter scans for answer on line c */
 .terminal-overview { row-gap: var(--space-xl); align-items: baseline; }
-.terminal-overview .intro-kicker { grid-column: a / span 2; grid-row: 1; margin: 0; }
+/* The profile's chapter line: the first thing after the journey, a short step above the statement */
+.terminal-overview > .chapter-line { margin-bottom: calc(var(--space-m) - var(--space-xl)); }
+.terminal-overview .intro-kicker { grid-column: a / span 2; grid-row: 2; margin: 0; }
 .terminal-overview .lead {
   grid-column: b / span 8;
-  grid-row: 1;
+  grid-row: 2;
   margin: 0;
   max-width: 21.5em;
   font-size: var(--text-statement);
@@ -444,14 +509,16 @@ body {
 }
 .terminal-overview .intro-support {
   grid-column: b / span 5;
-  grid-row: 2;
+  grid-row: 3;
   margin: 0;
   max-width: 44ch;
   font-size: var(--text-body);
   line-height: var(--leading-body);
   color: var(--ink-2B353B, #2B353B);
 }
-.terminal-overview .intro-facts { grid-column: c / end; grid-row: 2; margin: 0; }
+/* One column short of the margin, like the itinerary: the depth gauge's names come out over the
+   last column when it introduces itself, and the first fact used to run underneath them */
+.terminal-overview .intro-facts { grid-column: c / span 3; grid-row: 3; margin: 0; }
 .intro-facts > div + div { margin-top: var(--space-s); }
 .intro-facts dt { margin: 0; }
 .intro-facts dd { margin: var(--space-2xs) 0 0; }
@@ -760,8 +827,10 @@ body {
   .terminal-overview .lead { grid-column: b / end; }
   /* Headers: the benchmark's annotation drops beneath its title on line b */
   .section-head--benchmark > .ocean-h2 { grid-column: a / span 9; }
-  .section-head--benchmark > :is(.section-dek, .section-aside) { grid-column: b / span 6; grid-row: 2; }
+  .section-head--benchmark > :is(.section-dek, .section-aside) { grid-column: b / span 6; grid-row: 3; }
   .section-head--indented > .ocean-h2 { grid-column: b / end; }
+  /* No gauge below this width: the facts take the whole annotation line again */
+  .terminal-overview .intro-facts { grid-column: c / end; }
 }
 
 /* The last screen. Below desktop width the section before ends only a line or two above the
@@ -800,6 +869,8 @@ body {
   .terminal-overview { padding-top: max(6vh, 64px); }
   .terminal-overview { row-gap: var(--space-l); }
   .section-head { row-gap: var(--space-s); padding-bottom: var(--space-l); }
+  .section-head > .chapter-line { margin-bottom: 0; }
+  .terminal-overview > .chapter-line { margin-bottom: calc(var(--space-s) - var(--space-l)); }
   .section-head .section-dek { padding-left: 0; }
   .section-head .section-aside { margin-top: var(--space-s) !important; }
   .entry-list--wide > * + * { margin-top: var(--space-xl); }
@@ -915,8 +986,141 @@ body {
   outline-offset: 3px;
 }
 
+/* The reading veil (SectionIndex.tsx): from the profile on, the top of the screen is the water's
+   own colour, feathered downwards, so a line of copy scrolling up dissolves into it before it
+   reaches the corner controls instead of running underneath them. Above the page's copy (z 10),
+   below the controls (z 50). It never moves: one composited layer, repainted only when the
+   water's colour is rewritten (at most every 240 ms, oceanWorld.ts). */
+.reading-veil {
+  position: fixed;
+  inset: 0 0 auto 0;
+  height: clamp(88px, 12.5svh, 124px);
+  z-index: 45;
+  pointer-events: none;
+  background: linear-gradient(
+    to bottom,
+    rgb(var(--abyss-wash)) 0%,
+    rgb(var(--abyss-wash)) 44%,
+    rgba(var(--abyss-wash), 0.5) 74%,
+    rgba(var(--abyss-wash), 0) 100%
+  );
+  opacity: 0;
+  transition: opacity 0.45s ease;
+}
+.reading-veil[data-shown] { opacity: 1; }
+
+/* The index (SectionIndex.tsx): where the depth gauge has no margin to stand in, the corner
+   gains one word and the veil comes down as a sheet of the CV's seven chapters, set like the
+   arrival's journeys: a number in the instrument voice, the name in the display voice, a rule
+   of dots, and waves under the chapter being read. */
+.index-toggle { display: none; }
+@media (max-width: 1100px) {
+  .index-toggle {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    height: 32px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--ink-171717, #171717);
+    opacity: 1;
+    cursor: pointer;
+  }
+  /* A thumb's target around a small word */
+  .index-toggle::after { content: ''; position: absolute; inset: -8px -12px; }
+  .index-toggle:focus-visible { outline: 1px solid currentColor; outline-offset: 3px; }
+}
+.index-sheet {
+  position: fixed;
+  inset: 0 0 auto 0;
+  z-index: 48;
+  max-height: 100svh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: calc(clamp(22px, 3.6vh, 40px) + 60px) var(--page-margin) 72px;
+  background: linear-gradient(
+    to bottom,
+    rgba(var(--abyss-wash), 0.985) 0,
+    rgba(var(--abyss-wash), 0.985) calc(100% - 72px),
+    rgba(var(--abyss-wash), 0) 100%
+  );
+  color: var(--ink-171717, #171717);
+  text-shadow: 0 0 2px var(--abyss-halo), 0 0 9px var(--abyss-halo);
+  animation: index-sheet-in 0.42s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@media (min-width: 1101px) { .index-sheet { display: none; } }
+.index-sheet ol { list-style: none; margin: 0; padding: 0; max-width: 34rem; }
+.index-sheet li { animation: index-item-in 0.5s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.index-sheet li:nth-child(2) { animation-delay: 30ms; }
+.index-sheet li:nth-child(3) { animation-delay: 60ms; }
+.index-sheet li:nth-child(4) { animation-delay: 90ms; }
+.index-sheet li:nth-child(5) { animation-delay: 120ms; }
+.index-sheet li:nth-child(6) { animation-delay: 150ms; }
+.index-sheet li:nth-child(7) { animation-delay: 180ms; }
+.terminal-portfolio .index-sheet a {
+  position: relative;
+  display: grid;
+  grid-template-columns: 3.4rem minmax(0, 1fr);
+  align-items: baseline;
+  min-height: 48px;
+  padding: 9px 0 15px;
+  color: inherit;
+  text-decoration: none;
+}
+.index-number {
+  font-family: var(--font-mono);
+  font-size: var(--text-meta);
+  letter-spacing: var(--tracking-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-52595E, #52595e);
+}
+.index-name {
+  font-family: var(--font-display);
+  font-variation-settings: 'opsz' 72;
+  font-weight: var(--display-weight, 300);
+  font-size: clamp(26px, 6.6vw, 36px);
+  line-height: 1.1;
+  letter-spacing: var(--tracking-entry);
+  transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.index-rule {
+  position: absolute;
+  left: 3.4rem;
+  right: 0;
+  bottom: 0;
+  height: 12px;
+  overflow: hidden;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 12px;
+  letter-spacing: 0;
+  color: var(--ink-52595E, #52595e);
+  opacity: 0.45;
+  text-shadow: none;
+  pointer-events: none;
+}
+.index-sheet a[aria-current] .index-number { color: var(--ink-171717, #171717); }
+.index-sheet a[aria-current] .index-rule { color: var(--ink-2F4858, #2f4858); opacity: 0.9; }
+.index-sheet a:hover .index-name,
+.index-sheet a:focus-visible .index-name { transform: translateX(8px); }
+.terminal-portfolio .index-sheet a:focus-visible { outline: 1px solid currentColor; outline-offset: 2px; }
+@keyframes index-sheet-in {
+  from { opacity: 0; transform: translate3d(0, -12px, 0); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes index-item-in {
+  from { opacity: 0; transform: translate3d(0, 8px, 0); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .reading-veil, .index-name { transition: none; }
+  .index-sheet, .index-sheet li { animation: none; }
+}
+
 @media print {
-  .fixed-top-controls { display: none !important; }
+  .fixed-top-controls, .reading-veil, .index-sheet { display: none !important; }
 }
 
 /* ---------------------------------------------------------------------------
@@ -1199,26 +1403,137 @@ html[data-globe-scroll="locked"] [data-journey-runway] * {
   touch-action: none !important;
   overscroll-behavior: none !important;
 }
-.profile-journey {
-  grid-column: b / end;
-  margin-block: var(--space-m);
-  color: var(--ink-171717);
-  grid-row: 3;
+/* ---------------------------------------------------------------------------
+   The itinerary (OceanEntry.tsx, itinerary.ts) — the seven cities as one line of time, under
+   the profile. Each stretch is as long as its years (--years; --a and --b are where it starts
+   and ends on the axis, 0..1). The rule is type, not a border: the arrival screen's own glyphs,
+   waves for water travelled and dots for the years the cities do not account for, with a tick at
+   every arrival and the Globe's marker where the line ends.
+   From 1280px: one horizontal line across the measure, city above, year below (below that
+   width a single year of the line is narrower than its own labels).
+   Narrower: a tide table, one row per city (years, city, a bar of the same glyphs).
+   --------------------------------------------------------------------------- */
+.itinerary {
+  /* One column short of the margin, clear of the depth gauge's names when they are out */
+  grid-column: b / span 9;
+  grid-row: 4;
+  margin-top: var(--space-m);
 }
-.profile-journey > p { margin: 0 0 12px; color: var(--ink-52595E, var(--ink-muted)); }
-.profile-journey ol {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 0;
-  margin: 0;
-  padding: 0;
-  list-style: none;
+.itinerary-title { margin: 0 0 var(--space-m); }
+.itinerary ol { display: flex; margin: 0; padding: 0; list-style: none; }
+.itin-leg {
+  flex: var(--years) 1 0;
+  min-width: 0;
+  display: grid;
+  /* A fixed first row, so the gap (which names no city) keeps its year on the same line */
+  grid-template-rows: calc(var(--text-item) * 1.3) 12px auto;
+  row-gap: 7px;
+}
+.itin-city { display: block; white-space: nowrap; }
+.itin-when { display: block; white-space: nowrap; opacity: 1; }
+.itin-rule {
+  display: block;
+  height: 12px;
+  overflow: hidden;
+  white-space: nowrap;
   font-family: var(--font-mono);
-  font-size: var(--text-meta);
-  line-height: 1.8;
+  font-size: 10px;
+  line-height: 12px;
+  letter-spacing: 0;
+  color: var(--ink-2F4858, #2f4858);
 }
-.profile-journey li { white-space: nowrap; }
-.profile-journey li:not(:last-child)::after { content: ' / '; padding-inline: 0.65em; opacity: 0.45; }
+.itin-leg:not(.itin-end) .itin-rule::before { content: '|'; color: var(--ink-171717, #171717); }
+.itin-gap .itin-rule { opacity: 0.6; }
+/* On the line a stretch's last year is the next one's first: said once, by the next tick
+   (.itin-to-short says it where no city follows; the table below shows every period in full) */
+.itin-to {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+/* The last stop is a point: no length of its own, its labels set back from the end of the line
+   over the gap before it, and the Globe's own marker (a dot in a ring) where the line stops */
+.itin-end { flex: 0 0 0px; width: 0; }
+.itin-end > * { width: max-content; transform: translateX(-100%); }
+.itin-end .itin-rule { overflow: visible; position: relative; width: 0; transform: none; }
+.itin-end .itin-rule::before,
+.itin-end .itin-rule::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 0;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+}
+.itin-end .itin-rule::before { width: 7px; height: 7px; background: var(--ink-171717, #171717); }
+.itin-end .itin-rule::after { width: 17px; height: 17px; border: 1px solid var(--ink-2F4858, #2f4858); opacity: 0.7; }
+.itin-end .itin-city, .itin-end .itin-when { padding-right: 14px; }
+
+/* The line is drawn by the scroll, like every datum on the page: each stretch from its own
+   arrival, one after the other in the order they were lived, so the whole line travels from the
+   first city to the last as it rises. Reversible; whole where scroll-driven animations or
+   motion are unavailable. */
+@media (prefers-reduced-motion: no-preference) {
+  @supports (animation-timeline: view()) {
+    .itinerary ol { view-timeline-name: --itinerary; }
+    .itin-rule {
+      animation: itinerary-draw linear both;
+      animation-timeline: --itinerary;
+      animation-range: cover calc(8% + var(--a) * 26%) cover calc(8% + var(--b) * 26%);
+    }
+    .itin-end .itin-rule {
+      animation-name: itinerary-land;
+      animation-range: cover 32% cover 37%;
+    }
+  }
+}
+@keyframes itinerary-draw {
+  from { clip-path: inset(0 100% 0 0); }
+  to { clip-path: inset(0 0 0 0); }
+}
+@keyframes itinerary-land {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@media (max-width: 1279px) {
+  .itinerary ol { display: grid; row-gap: var(--space-xs); }
+  .itin-leg {
+    display: grid;
+    grid-template-rows: none;
+    grid-template-columns: 5.9rem 6.4rem minmax(0, 1fr);
+    column-gap: var(--space-s);
+    align-items: baseline;
+  }
+  .itin-gap { display: none; }
+  .itin-when { order: 1; }
+  .itin-city { order: 2; }
+  .itin-rule {
+    order: 3;
+    /* Keep the original scale where it fits. In a narrow column, compress the common year
+       unit so the longest leg fits too; shorter durations retain their relative lengths. */
+    width: calc(var(--years) * min(3ch, (100% - 1ch) / var(--itinerary-longest)) + 1ch);
+    align-self: center;
+  }
+  .itin-to { position: static; width: auto; height: auto; overflow: visible; clip-path: none; }
+  .itin-to-short { display: none; }
+  .itin-end { width: auto; }
+  .itin-end > * { width: auto; transform: none; }
+  .itin-end .itin-city, .itin-end .itin-when { padding-right: 0; }
+  .itin-end .itin-rule { width: 0; margin-left: 9px; }
+  @media (prefers-reduced-motion: no-preference) {
+    @supports (animation-timeline: view()) {
+      .itin-rule,
+      .itin-end .itin-rule {
+        animation-timeline: view();
+        animation-range: entry 20% cover 28%;
+      }
+    }
+  }
+}
 @media (max-width: 767px) {
   .hero-colophon { flex-wrap: wrap; gap: 12px; }
   .hero-colophon-cue { width: 100%; justify-content: space-between; }

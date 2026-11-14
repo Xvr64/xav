@@ -28,7 +28,9 @@ export function advanceEncryptedLine(
   elapsedMs: number,
   characterCount: number,
   reduced: boolean,
-  entranceOnly = true
+  entranceOnly = true,
+  /** How long this line takes to arrive; by default the letter-lock's own pace. */
+  durationMs: number = lineRevealMs(characterCount)
 ): EncryptedLineState {
   if (reduced) return { revealState: 'revealed', currentP: 1 };
   if (entranceOnly) {
@@ -37,7 +39,7 @@ export function advanceEncryptedLine(
       return { revealState: 'revealed', currentP: 1 };
     if (belowEntry) return { revealState: 'hidden', currentP: 0 };
     if (previous.revealState === 'hidden') return { revealState: 'revealing', currentP: 0 };
-    const progress = previous.currentP + Math.max(0, elapsedMs) / lineRevealMs(characterCount);
+    const progress = previous.currentP + Math.max(0, elapsedMs) / Math.max(1, durationMs);
     const currentP = progress >= 1 - 1e-9 ? 1 : progress;
     return { revealState: currentP === 1 ? 'revealed' : 'revealing', currentP };
   }
@@ -48,7 +50,7 @@ export function advanceEncryptedLine(
     return { revealState: 'exiting', currentP: Math.min(previous.currentP, zoneProgress) };
   }
   if (previous.revealState === 'hidden') return { revealState: 'revealing', currentP: 0 };
-  const progress = previous.currentP + Math.max(0, elapsedMs) / lineRevealMs(characterCount);
+  const progress = previous.currentP + Math.max(0, elapsedMs) / Math.max(1, durationMs);
   const currentP = progress >= 1 - 1e-9 ? 1 : progress;
   return { revealState: currentP === 1 ? 'revealed' : 'revealing', currentP };
 }

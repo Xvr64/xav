@@ -1,0 +1,7 @@
+Recovered research provenance, 13 November 2026. Full source material remains in Fable's original session log.
+
+Alex Harri: article read and page scrolled; no recorded dragging of the interactive demos. Shape-aware character selection and edge contrast are relevant to future whale-contour refinement.
+ertdfgcvb Play: visited and screenshot captured; no recorded editing of code or controls. Relevant to treating glyphs as a material rather than decorative particles.
+Obys Grids: visited, scrolled, and screenshots captured. Relevant to editorial hierarchy and chapter markers.
+Codrops shape-aware ASCII, Efecto, and Obys articles: text research, not validation of their live demo performance.
+Exact URLs and navigation calls are preserved in research-tools.json.

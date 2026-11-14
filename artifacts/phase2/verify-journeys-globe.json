@@ -1,0 +1,158 @@
+[
+  {
+    "name": "journey direct → Hero",
+    "ok": true,
+    "detail": {
+      "seconds": 14.6,
+      "nudged": 1,
+      "hero": {
+        "y": 0,
+        "colophon": "1",
+        "scrollable": "scroll",
+        "whales": true,
+        "cover": "A journey without horizons",
+        "playback": [
+          "PAUSED",
+          "PLAYING_FORWARD"
+        ]
+      },
+      "errors": []
+    }
+  },
+  {
+    "name": "journey passage → Hero",
+    "ok": true,
+    "detail": {
+      "seconds": 20.4,
+      "nudged": 1,
+      "hero": {
+        "y": 0,
+        "colophon": "1",
+        "scrollable": "scroll",
+        "whales": true,
+        "cover": "A journey without horizons",
+        "playback": [
+          "PAUSED",
+          "PLAYING_FORWARD"
+        ]
+      },
+      "errors": []
+    }
+  },
+  {
+    "name": "journey odyssey → Hero",
+    "ok": true,
+    "detail": {
+      "seconds": 31.7,
+      "nudged": 1,
+      "hero": {
+        "y": 0,
+        "colophon": "1",
+        "scrollable": "scroll",
+        "whales": true,
+        "cover": "A journey without horizons",
+        "playback": [
+          "PAUSED",
+          "PLAYING_FORWARD"
+        ]
+      },
+      "errors": []
+    }
+  },
+  {
+    "name": "Skip intro → Hero",
+    "ok": true,
+    "detail": {
+      "at": 0,
+      "hero": {
+        "y": 0,
+        "colophon": "1",
+        "controls": false
+      },
+      "errors": []
+    }
+  },
+  {
+    "name": "Hero entry: the name resolves",
+    "ok": true,
+    "detail": {
+      "name": "1"
+    }
+  },
+  {
+    "name": "Globe desktop: Doha → Shanghai → Doha",
+    "ok": true,
+    "detail": {
+      "forward": [
+        "Doha",
+        "Paris",
+        "Jakarta",
+        "Moscow",
+        "Singapore",
+        "Pau",
+        "Shanghai"
+      ],
+      "back": [
+        "Shanghai",
+        "Pau",
+        "Singapore",
+        "Moscow",
+        "Jakarta",
+        "Paris",
+        "Doha"
+      ],
+      "diag": {
+        "ownership": "desktop",
+        "playing": false,
+        "rp": 0
+      }
+    }
+  },
+  {
+    "name": "Profile shortcut lands on the profile",
+    "ok": true,
+    "detail": {
+      "landing": {
+        "top": 0,
+        "lock": null,
+        "mark": 81
+      },
+      "errors": []
+    }
+  },
+  {
+    "name": "Globe mobile-emulated touch: Doha → Shanghai → Doha",
+    "ok": true,
+    "detail": {
+      "forward": [
+        "Doha",
+        "Paris",
+        "Jakarta",
+        "Moscow",
+        "Singapore",
+        "Pau",
+        "Shanghai"
+      ],
+      "after": {
+        "y": 6752,
+        "rp": 1,
+        "ownership": "document"
+      },
+      "back": [
+        "Shanghai",
+        "Pau",
+        "Singapore",
+        "Moscow",
+        "Jakarta",
+        "Paris",
+        "Doha"
+      ],
+      "end": {
+        "y": 2532,
+        "rp": 0,
+        "ownership": "document",
+        "playing": false
+      }
+    }
+  }
+]

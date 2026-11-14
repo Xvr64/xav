@@ -55,8 +55,12 @@ export const GLOBAL_PORTFOLIO_CSS = `
   }
   .globe-caption-in { animation: globeCaptionIn 0.6s cubic-bezier(0.22, 1, 0.36, 1) both; }
 
-  /* Depth legibility: a halo around all page text in the colour of the water behind it */
-  .ocean-legible {
+  /* Depth legibility: a halo around all page text in the colour of the water behind it.
+     The Globe's runway states the same halo itself, from the same value: while its stage is the
+     whole screen the water's colour is written on the runway alone (oceanWorld.ts), and a halo
+     inherited ready-made from <main> would not follow it. */
+  .ocean-legible,
+  .ocean-legible [data-journey-runway] {
     text-shadow:
       0 0 2px var(--abyss-halo),
       0 0 9px var(--abyss-halo);

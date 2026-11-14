@@ -1,0 +1,82 @@
+PASS journey direct film 18.9s, released 16.4s, stages EARTH_APPROACH>ATMOSPHERIC_DESCENT>OCEAN_ENTRY>WHALE_HANDOFF>COMPLETE
+PASS journey passage film 24.6s, released 22.0s, stages EYE>STAR_TUNNEL>EARTH_APPROACH>ATMOSPHERIC_DESCENT>OCEAN_ENTRY>WHALE_HANDOFF>COMPLETE
+PASS journey odyssey film 36.3s, released 33.2s, stages EYE>CREATION>BIG_BANG>GALAXY>BLACK_HOLE>SPACE_EXIT>EARTH_APPROACH>ATMOSPHERIC_DESCENT>OCEAN_ENTRY>WHALE_HANDOFF>COMPLETE
+PASS skip intro at t=91
+
+PASS journey direct film 18.9s, released 16.4s, stages EARTH_APPROACH>ATMOSPHERIC_DESCENT>OCEAN_ENTRY>WHALE_HANDOFF>COMPLETE
+PASS journey passage film 24.6s, released 22.0s, stages EYE>STAR_TUNNEL>EARTH_APPROACH>ATMOSPHERIC_DESCENT>OCEAN_ENTRY>WHALE_HANDOFF>COMPLETE
+PASS journey odyssey film 36.3s, released 33.2s, stages EYE>CREATION>BIG_BANG>GALAXY>BLACK_HOLE>SPACE_EXIT>EARTH_APPROACH>ATMOSPHERIC_DESCENT>OCEAN_ENTRY>WHALE_HANDOFF>COMPLETE
+PASS skip intro at t=91
+Shell cwd was reset to C:\Users\Ashan\Documents\Code Website
+
+PASS journey direct film 18.9s, released 16.4s, stages EARTH_APPROACH>ATMOSPHERIC_DESCENT>OCEAN_ENTRY>WHALE_HANDOFF>COMPLETE
+PASS journey passage film 24.6s, released 22.0s, stages EYE>STAR_TUNNEL>EARTH_APPROACH>ATMOSPHERIC_DESCENT>OCEAN_ENTRY>WHALE_HANDOFF>COMPLETE
+PASS journey odyssey film 36.3s, released 33.2s, stages EYE>CREATION>BIG_BANG>GALAXY>BLACK_HOLE>SPACE_EXIT>EARTH_APPROACH>ATMOSPHERIC_DESCENT>OCEAN_ENTRY>WHALE_HANDOFF>COMPLETE
+PASS skip intro at t=91
+
+PASS journey direct film 18.9s, released 16.4s, stages EARTH_APPROACH>ATMOSPHERIC_DESCENT>OCEAN_ENTRY>WHALE_HANDOFF>COMPLETE
+PASS journey passage film 24.6s, released 22.0s, stages EYE>STAR_TUNNEL>EARTH_APPROACH>ATMOSPHERIC_DESCENT>OCEAN_ENTRY>WHALE_HANDOFF>COMPLETE
+PASS journey odyssey film 36.3s, released 33.2s, stages EYE>CREATION>BIG_BANG>GALAXY>BLACK_HOLE>SPACE_EXIT>EARTH_APPROACH>ATMOSPHERIC_DESCENT>OCEAN_ENTRY>WHALE_HANDOFF>COMPLETE
+PASS skip intro at t=91
+Shell cwd was reset to C:\Users\Ashan\Documents\Code Website
+
+PASS reverse playback mid-film reversal, rest at start, replay, reopen from the Hero
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+
+null !== 1
+
+    at file:///C:/Users/Ashan/AppData/Local/Temp/claude/989e9e3dab0a6b9a/4c07d5e9-cc69-42d0-b68e-26e1211e1caa/scratchpad/regress.mjs:122:12 {
+  generatedMessage: true,
+  code: 'ERR_ASSERTION',
+  actual: null,
+  expected: 1,
+  operator: 'strictEqual',
+  diff: 'simple'
+}
+
+Node.js v24.21.0
+Shell cwd was reset to C:\Users\Ashan\Documents\Code Website
+
+PASS globe desktop forward Doha>Paris>Jakarta>Moscow>Singapore>Pau>Shanghai; reverse to Doha; Profile shortcut lands at 0px
+PASS mobile entry (Direct by tap) film 20.3s
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: {"y":2532,"city":"Doha","own":"ready","playing":false,"rp":0}Doha
+
+'Doha' !== 'Shanghai'
+
+    at file:///C:/Users/Ashan/AppData/Local/Temp/claude/989e9e3dab0a6b9a/4c07d5e9-cc69-42d0-b68e-26e1211e1caa/scratchpad/regress.mjs:166:12 {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: 'Doha',
+  expected: 'Shanghai',
+  operator: 'strictEqual',
+  diff: 'simple'
+}
+
+Node.js v24.21.0
+Shell cwd was reset to C:\Users\Ashan\Documents\Code Website
+
+--- BASELINE
+PASS mobile entry (Direct by tap) film 20.3s
+  arrived at the Globe {"y":2532,"city":"Doha","own":"ready","playing":false,"rp":0}
+PASS mobile globe forward Doha>Paris>Jakarta>Moscow>Singapore>Pau>Shanghai; on into the CV; reverse back to Doha (renderedProgress 0)
+PASS mobile entry (Direct by tap) film 20.3s
+PASS mobile globe forward Doha>Paris>Jakarta>Moscow>Singapore>Pau>Shanghai; on into the CV; reverse back to Doha (renderedProgress 0)
+--- NEW
+PASS mobile entry (Direct by tap) film 20.3s
+  arrived at the Globe {"y":2532,"city":"Doha","own":"ready","playing":false,"rp":0}
+PASS mobile globe forward Doha>Paris>Jakarta>Moscow>Singapore>Pau>Shanghai; on into the CV; reverse back to Doha (renderedProgress 0)
+PASS reduced motion desktop {"clip":"none","anim":"none","runwayH":900,"vh":900,"hidden":0,"veil":"1","mark":"02 / 07"}
+PASS reduced motion mobile {"clip":"none","anim":"none","runwayH":844,"vh":844,"hidden":0,"veil":"1","mark":"02 / 07"}
+PASS mobile entry (Direct by tap) film 20.3s
+PASS mobile globe forward Doha>Paris>Jakarta>Moscow>Singapore>Pau>Shanghai; on into the CV; reverse back to Doha (renderedProgress 0)
+PASS reduced motion desktop {"clip":"none","anim":"none","runwayH":900,"vh":900,"hidden":0,"veil":"1","mark":"02 / 07"}
+PASS reduced motion mobile {"clip":"none","anim":"none","runwayH":844,"vh":844,"hidden":0,"veil":"1","mark":"02 / 07"}
+Shell cwd was reset to C:\Users\Ashan\Documents\Code Website

@@ -21,7 +21,7 @@ export const whaleStrength = (weight: number, ink: number): number =>
   1 - (0.06 + DEEP_READING_RECESSION * Math.max(0, Math.min(1, ink))) * Math.max(0, Math.min(1, weight));
 
 /** Viewport line boxes of the page's reading text, shared by the fluid clear map and the whales. */
-export const readingZones: { read: () => readonly { left: number; top: number; width: number; height: number }[] } = {
+export const readingZones: { read: () => readonly { left: number; top: number; width: number; height: number; field?: boolean }[] } = {
   read: () => []
 };
 

@@ -1,0 +1,670 @@
+[
+  {
+    "w": 320,
+    "h": 740,
+    "scrollWidth": 320,
+    "marks": [
+      "01 / 07",
+      "02 / 07",
+      "03 / 07",
+      "04 / 07",
+      "05 / 07",
+      "06 / 07",
+      "07 / 07"
+    ],
+    "toggle": "flex",
+    "veil": "1",
+    "markerAnimations": 0,
+    "sheet": {
+      "h": 527,
+      "scrollHeight": 527,
+      "locked": null,
+      "current": "#experience"
+    },
+    "itinerary": {
+      "width": 280,
+      "overflow": [
+        {
+          "city": "Doha, Qatar",
+          "right": 281.90625
+        },
+        {
+          "city": "Paris, France",
+          "right": 281.90625
+        },
+        {
+          "city": "Jakarta, Indonesia",
+          "right": 290.953125
+        },
+        {
+          "city": "Moscow, Russia",
+          "right": 272.859375
+        },
+        {
+          "city": "Singapore",
+          "right": 300
+        },
+        {
+          "city": "Pau, France",
+          "right": 263.8125
+        },
+        {
+          "city": "Shanghai, China",
+          "right": 257.78125
+        }
+      ],
+      "motion": 1
+    }
+  },
+  {
+    "w": 375,
+    "h": 812,
+    "scrollWidth": 375,
+    "marks": [
+      "01 / 07",
+      "02 / 07",
+      "03 / 07",
+      "04 / 07",
+      "05 / 07",
+      "06 / 07",
+      "07 / 07"
+    ],
+    "toggle": "flex",
+    "veil": "1",
+    "markerAnimations": 0,
+    "sheet": {
+      "h": 529,
+      "scrollHeight": 529,
+      "locked": null,
+      "current": "#experience"
+    },
+    "itinerary": {
+      "width": 335,
+      "overflow": [
+        {
+          "city": "Doha, Qatar",
+          "right": 308.78125
+        },
+        {
+          "city": "Paris, France",
+          "right": 308.78125
+        },
+        {
+          "city": "Jakarta, Indonesia",
+          "right": 326.78125
+        },
+        {
+          "city": "Moscow, Russia",
+          "right": 290.78125
+        },
+        {
+          "city": "Singapore",
+          "right": 344.78125
+        },
+        {
+          "city": "Pau, France",
+          "right": 272.78125
+        },
+        {
+          "city": "Shanghai, China",
+          "right": 257.78125
+        }
+      ],
+      "motion": 1
+    }
+  },
+  {
+    "w": 390,
+    "h": 844,
+    "scrollWidth": 390,
+    "marks": [
+      "01 / 07",
+      "02 / 07",
+      "03 / 07",
+      "04 / 07",
+      "05 / 07",
+      "06 / 07",
+      "07 / 07"
+    ],
+    "toggle": "flex",
+    "veil": "1",
+    "markerAnimations": 0,
+    "sheet": {
+      "h": 531,
+      "scrollHeight": 531,
+      "locked": null,
+      "current": "#experience"
+    },
+    "itinerary": {
+      "width": 349,
+      "overflow": [
+        {
+          "city": "Doha, Qatar",
+          "right": 309.046875
+        },
+        {
+          "city": "Paris, France",
+          "right": 309.046875
+        },
+        {
+          "city": "Jakarta, Indonesia",
+          "right": 327.046875
+        },
+        {
+          "city": "Moscow, Russia",
+          "right": 291.046875
+        },
+        {
+          "city": "Singapore",
+          "right": 345.046875
+        },
+        {
+          "city": "Pau, France",
+          "right": 273.046875
+        },
+        {
+          "city": "Shanghai, China",
+          "right": 258.046875
+        }
+      ],
+      "motion": 1
+    }
+  },
+  {
+    "w": 768,
+    "h": 1024,
+    "scrollWidth": 768,
+    "marks": [
+      "01 / 07",
+      "02 / 07",
+      "03 / 07",
+      "04 / 07",
+      "05 / 07",
+      "06 / 07",
+      "07 / 07"
+    ],
+    "toggle": "flex",
+    "veil": "1",
+    "markerAnimations": 0,
+    "sheet": {
+      "h": 614,
+      "scrollHeight": 614,
+      "locked": null,
+      "current": "#experience"
+    },
+    "itinerary": {
+      "width": 512,
+      "overflow": [
+        {
+          "city": "Doha, Qatar",
+          "right": 446.0625
+        },
+        {
+          "city": "Paris, France",
+          "right": 446.0625
+        },
+        {
+          "city": "Jakarta, Indonesia",
+          "right": 464.0625
+        },
+        {
+          "city": "Moscow, Russia",
+          "right": 428.0625
+        },
+        {
+          "city": "Singapore",
+          "right": 482.0625
+        },
+        {
+          "city": "Pau, France",
+          "right": 410.0625
+        },
+        {
+          "city": "Shanghai, China",
+          "right": 395.0625
+        }
+      ],
+      "motion": 1
+    }
+  },
+  {
+    "w": 900,
+    "h": 900,
+    "scrollWidth": 900,
+    "marks": [
+      "01 / 07",
+      "02 / 07",
+      "03 / 07",
+      "04 / 07",
+      "05 / 07",
+      "06 / 07",
+      "07 / 07"
+    ],
+    "toggle": "flex",
+    "veil": "1",
+    "markerAnimations": 0,
+    "sheet": {
+      "h": 610,
+      "scrollHeight": 610,
+      "locked": null,
+      "current": "#experience"
+    },
+    "itinerary": {
+      "width": 601,
+      "overflow": [
+        {
+          "city": "Doha, Qatar",
+          "right": 472.828125
+        },
+        {
+          "city": "Paris, France",
+          "right": 472.828125
+        },
+        {
+          "city": "Jakarta, Indonesia",
+          "right": 490.828125
+        },
+        {
+          "city": "Moscow, Russia",
+          "right": 454.828125
+        },
+        {
+          "city": "Singapore",
+          "right": 508.828125
+        },
+        {
+          "city": "Pau, France",
+          "right": 436.828125
+        },
+        {
+          "city": "Shanghai, China",
+          "right": 421.828125
+        }
+      ],
+      "motion": 1
+    }
+  },
+  {
+    "w": 1100,
+    "h": 900,
+    "scrollWidth": 1100,
+    "marks": [
+      "01 / 07",
+      "02 / 07",
+      "03 / 07",
+      "04 / 07",
+      "05 / 07",
+      "06 / 07",
+      "07 / 07"
+    ],
+    "toggle": "flex",
+    "veil": "1",
+    "markerAnimations": 0,
+    "sheet": {
+      "h": 610,
+      "scrollHeight": 610,
+      "locked": null,
+      "current": "#experience"
+    },
+    "itinerary": {
+      "width": 734,
+      "overflow": [
+        {
+          "city": "Doha, Qatar",
+          "right": 513.71875
+        },
+        {
+          "city": "Paris, France",
+          "right": 513.71875
+        },
+        {
+          "city": "Jakarta, Indonesia",
+          "right": 531.71875
+        },
+        {
+          "city": "Moscow, Russia",
+          "right": 495.71875
+        },
+        {
+          "city": "Singapore",
+          "right": 549.71875
+        },
+        {
+          "city": "Pau, France",
+          "right": 477.71875
+        },
+        {
+          "city": "Shanghai, China",
+          "right": 462.71875
+        }
+      ],
+      "motion": 1
+    }
+  },
+  {
+    "w": 1101,
+    "h": 900,
+    "scrollWidth": 1101,
+    "marks": [
+      "01 / 07",
+      "02 / 07",
+      "03 / 07",
+      "04 / 07",
+      "05 / 07",
+      "06 / 07",
+      "07 / 07"
+    ],
+    "toggle": "none",
+    "veil": "1",
+    "markerAnimations": 0,
+    "itinerary": {
+      "width": 735,
+      "overflow": [
+        {
+          "city": "Doha, Qatar",
+          "right": 513.921875
+        },
+        {
+          "city": "Paris, France",
+          "right": 513.921875
+        },
+        {
+          "city": "Jakarta, Indonesia",
+          "right": 531.921875
+        },
+        {
+          "city": "Moscow, Russia",
+          "right": 495.921875
+        },
+        {
+          "city": "Singapore",
+          "right": 549.921875
+        },
+        {
+          "city": "Pau, France",
+          "right": 477.921875
+        },
+        {
+          "city": "Shanghai, China",
+          "right": 462.921875
+        }
+      ],
+      "motion": 1
+    }
+  },
+  {
+    "w": 1180,
+    "h": 900,
+    "scrollWidth": 1180,
+    "marks": [
+      "01 / 07",
+      "02 / 07",
+      "03 / 07",
+      "04 / 07",
+      "05 / 07",
+      "06 / 07",
+      "07 / 07"
+    ],
+    "toggle": "none",
+    "veil": "1",
+    "markerAnimations": 0,
+    "itinerary": {
+      "width": 787,
+      "overflow": [
+        {
+          "city": "Doha, Qatar",
+          "right": 530.078125
+        },
+        {
+          "city": "Paris, France",
+          "right": 530.078125
+        },
+        {
+          "city": "Jakarta, Indonesia",
+          "right": 548.078125
+        },
+        {
+          "city": "Moscow, Russia",
+          "right": 512.078125
+        },
+        {
+          "city": "Singapore",
+          "right": 566.078125
+        },
+        {
+          "city": "Pau, France",
+          "right": 494.078125
+        },
+        {
+          "city": "Shanghai, China",
+          "right": 479.078125
+        }
+      ],
+      "motion": 1
+    }
+  },
+  {
+    "w": 1280,
+    "h": 900,
+    "scrollWidth": 1280,
+    "marks": [
+      "01 / 07",
+      "02 / 07",
+      "03 / 07",
+      "04 / 07",
+      "05 / 07",
+      "06 / 07",
+      "07 / 07"
+    ],
+    "toggle": "none",
+    "veil": "1",
+    "markerAnimations": 0,
+    "itinerary": {
+      "width": 854,
+      "overflow": [
+        {
+          "city": "Doha, Qatar",
+          "right": 389.859375
+        },
+        {
+          "city": "Paris, France",
+          "right": 517.984375
+        },
+        {
+          "city": "Jakarta, Indonesia",
+          "right": 688.796875
+        },
+        {
+          "city": "Moscow, Russia",
+          "right": 774.203125
+        },
+        {
+          "city": "Singapore",
+          "right": 987.734375
+        },
+        {
+          "city": "Pau, France",
+          "right": 1045.984375
+        },
+        {
+          "city": "Shanghai, China",
+          "right": 1115.84375
+        }
+      ],
+      "motion": 1
+    }
+  },
+  {
+    "w": 1440,
+    "h": 900,
+    "scrollWidth": 1440,
+    "marks": [
+      "01 / 07",
+      "02 / 07",
+      "03 / 07",
+      "04 / 07",
+      "05 / 07",
+      "06 / 07",
+      "07 / 07"
+    ],
+    "toggle": "none",
+    "veil": "1",
+    "markerAnimations": 0,
+    "itinerary": {
+      "width": 961,
+      "overflow": [
+        {
+          "city": "Doha, Qatar",
+          "right": 438.59375
+        },
+        {
+          "city": "Paris, France",
+          "right": 582.71875
+        },
+        {
+          "city": "Jakarta, Indonesia",
+          "right": 774.890625
+        },
+        {
+          "city": "Moscow, Russia",
+          "right": 870.96875
+        },
+        {
+          "city": "Singapore",
+          "right": 1111.1875
+        },
+        {
+          "city": "Pau, France",
+          "right": 1169.4375
+        },
+        {
+          "city": "Shanghai, China",
+          "right": 1255.3125
+        }
+      ],
+      "motion": 1
+    }
+  },
+  {
+    "w": 844,
+    "h": 390,
+    "scrollWidth": 844,
+    "marks": [
+      "01 / 07",
+      "02 / 07",
+      "03 / 07",
+      "04 / 07",
+      "05 / 07",
+      "06 / 07",
+      "07 / 07"
+    ],
+    "toggle": "flex",
+    "veil": "1",
+    "markerAnimations": 0,
+    "sheet": {
+      "h": 390,
+      "scrollHeight": 599,
+      "locked": null,
+      "current": "#experience"
+    },
+    "itinerary": {
+      "width": 563,
+      "overflow": [
+        {
+          "city": "Doha, Qatar",
+          "right": 461.359375
+        },
+        {
+          "city": "Paris, France",
+          "right": 461.359375
+        },
+        {
+          "city": "Jakarta, Indonesia",
+          "right": 479.359375
+        },
+        {
+          "city": "Moscow, Russia",
+          "right": 443.359375
+        },
+        {
+          "city": "Singapore",
+          "right": 497.359375
+        },
+        {
+          "city": "Pau, France",
+          "right": 425.359375
+        },
+        {
+          "city": "Shanghai, China",
+          "right": 410.359375
+        }
+      ],
+      "motion": 1
+    }
+  },
+  {
+    "id": "introduction",
+    "focus": "introduction",
+    "top": 0,
+    "markTop": 64,
+    "open": false,
+    "lock": null
+  },
+  {
+    "id": "experience",
+    "focus": "experience",
+    "top": 173.265625,
+    "markTop": 173.265625,
+    "open": false,
+    "lock": null
+  },
+  {
+    "id": "skills",
+    "focus": "skills",
+    "top": 173.078125,
+    "markTop": 173.078125,
+    "open": false,
+    "lock": null
+  },
+  {
+    "id": "education",
+    "focus": "education",
+    "top": 173.5625,
+    "markTop": 173.5625,
+    "open": false,
+    "lock": null
+  },
+  {
+    "id": "languages",
+    "focus": "languages",
+    "top": 172.765625,
+    "markTop": 172.765625,
+    "open": false,
+    "lock": null
+  },
+  {
+    "id": "interests",
+    "focus": "interests",
+    "top": 173.171875,
+    "markTop": 173.171875,
+    "open": false,
+    "lock": null
+  },
+  {
+    "id": "contact",
+    "focus": "contact",
+    "top": 173.21875,
+    "markTop": 272.875,
+    "open": false,
+    "lock": null
+  },
+  {
+    "reduced": {
+      "sheet": "none",
+      "items": "none",
+      "rule": "none",
+      "veil": "0s"
+    },
+    "errors": []
+  }
+]

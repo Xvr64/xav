@@ -7,6 +7,7 @@ import {
   applyWaterColor,
   depthAtDocument,
   depthAtScroll,
+  globeStageFillsScreen,
   glyphsAt,
   inkAt,
   waterAt,
@@ -391,7 +392,7 @@ export function createAsciiOcean(canvas: HTMLCanvasElement): AsciiOcean {
     // currents only need 30 fps
     if (moved || (!reduce && now - lastDraw >= 1000 / IDLE_FPS - 2)) {
       measure();
-      applyWaterColor(depthAtScroll(scroll, geometry), depthAtDocument(scroll + 0.8 * geometry.viewHeight, geometry));
+      applyWaterColor(depthAtScroll(scroll, geometry), depthAtDocument(scroll + 0.8 * geometry.viewHeight, geometry), globeStageFillsScreen(scroll, geometry));
       if (!qaPaused) draw(scroll);
       lastDraw = now;
       lastScroll = scroll;
@@ -433,7 +434,7 @@ export function createAsciiOcean(canvas: HTMLCanvasElement): AsciiOcean {
       if (resizePending) applyResize();
       measure();
       const t0 = performance.now();
-      applyWaterColor(depthAtScroll(window.scrollY, geometry), depthAtDocument(window.scrollY + 0.8 * geometry.viewHeight, geometry));
+      applyWaterColor(depthAtScroll(window.scrollY, geometry), depthAtDocument(window.scrollY + 0.8 * geometry.viewHeight, geometry), globeStageFillsScreen(window.scrollY, geometry));
       draw(window.scrollY);
       gl?.finish();
       return { ms: performance.now() - t0, image: canvas.toDataURL('image/jpeg', 0.85) };

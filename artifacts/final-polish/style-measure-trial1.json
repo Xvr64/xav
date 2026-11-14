@@ -1,0 +1,66 @@
+[
+  {
+    "mode": "desktop",
+    "variant": "before",
+    "frames": {
+      "frames": 579,
+      "mean": 15.552677029360968,
+      "p50": 8.5,
+      "p95": 50,
+      "max": 100.20000000000073,
+      "over34": 42
+    },
+    "styleMs": 1455.653,
+    "layoutMs": 442.572,
+    "errors": [],
+    "endCity": "Shanghai"
+  },
+  {
+    "mode": "desktop",
+    "variant": "after",
+    "frames": {
+      "frames": 660,
+      "mean": 13.64409090909091,
+      "p50": 8.5,
+      "p95": 24.799999999999272,
+      "max": 100.20000000000073,
+      "over34": 12
+    },
+    "styleMs": 621.514,
+    "layoutMs": 220.512,
+    "errors": [],
+    "endCity": "Shanghai"
+  },
+  {
+    "mode": "mobile",
+    "variant": "before",
+    "frames": {
+      "frames": 740,
+      "mean": 12.169054054054055,
+      "p50": 8.399999999999636,
+      "p95": 41.600000000000364,
+      "max": 92,
+      "over34": 39
+    },
+    "styleMs": 1379.4930000000002,
+    "layoutMs": 423.62899999999996,
+    "errors": [],
+    "endCity": "Shanghai"
+  },
+  {
+    "mode": "mobile",
+    "variant": "after",
+    "frames": {
+      "frames": 832,
+      "mean": 10.8234375,
+      "p50": 8.399999999999636,
+      "p95": 16.799999999999272,
+      "max": 83.29999999999927,
+      "over34": 12
+    },
+    "styleMs": 618.333,
+    "layoutMs": 179.303,
+    "errors": [],
+    "endCity": "Shanghai"
+  }
+]

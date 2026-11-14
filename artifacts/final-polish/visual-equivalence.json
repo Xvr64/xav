@@ -1,0 +1,92 @@
+[
+  {
+    "mode": "desktop",
+    "restStops": 12,
+    "restDifferences": [],
+    "restNoiseFloor": 0,
+    "filmSamples": 69,
+    "filmWorstVsBefore": {
+      "delta": 13,
+      "key": "caption",
+      "y": 5536,
+      "nearY": 5566,
+      "a": "rgba(58, 127, 216, 0.82) 0px 0px 2px, rgba(58, 127, 216, 0.82) 0px 0px 9px",
+      "b": "rgba(69, 140, 221, 0.82) 0px 0px 2px, rgba(69, 140, 221, 0.82) 0px 0px 9px"
+    },
+    "filmNoiseFloor": {
+      "delta": 21,
+      "key": "caption",
+      "y": 6905,
+      "nearY": 6914,
+      "a": "rgba(27, 47, 121, 0.82) 0px 0px 2px, rgba(27, 47, 121, 0.82) 0px 0px 9px",
+      "b": "rgba(30, 60, 142, 0.82) 0px 0px 2px, rgba(30, 60, 142, 0.82) 0px 0px 9px"
+    },
+    "consumersOutOfStep": {
+      "before": 0,
+      "after": 0
+    },
+    "overridesAfterFilm": [
+      "",
+      "",
+      "",
+      "var(--ocean-background, #FFFFFF)",
+      ""
+    ],
+    "overridesAtDoha": [
+      "",
+      "",
+      "",
+      "var(--ocean-background, #FFFFFF)",
+      ""
+    ],
+    "rootHeldAtDoha": true,
+    "dohaAfterReverseMatches": true,
+    "returnMatches": true,
+    "errors": []
+  },
+  {
+    "mode": "mobile",
+    "restStops": 12,
+    "restDifferences": [],
+    "restNoiseFloor": 0,
+    "filmSamples": 75,
+    "filmWorstVsBefore": {
+      "delta": 41,
+      "key": "veilLow",
+      "y": 6018,
+      "nearY": 6041,
+      "a": "linear-gradient(0deg, rgba(37, 97, 202, 0.52) 0%, rgba(37, 97, 202, 0.28) 65%, rgba(37, 97, 202, 0) 100%)",
+      "b": "linear-gradient(0deg, rgba(32, 71, 161, 0.52) 0%, rgba(32, 71, 161, 0.28) 65%, rgba(32, 71, 161, 0) 100%)"
+    },
+    "filmNoiseFloor": {
+      "delta": 51,
+      "key": "veilLow",
+      "y": 6047,
+      "nearY": 6041,
+      "a": "linear-gradient(0deg, rgba(37, 97, 202, 0.52) 0%, rgba(37, 97, 202, 0.28) 65%, rgba(37, 97, 202, 0) 100%)",
+      "b": "linear-gradient(0deg, rgba(31, 65, 151, 0.52) 0%, rgba(31, 65, 151, 0.28) 65%, rgba(31, 65, 151, 0) 100%)"
+    },
+    "consumersOutOfStep": {
+      "before": 0,
+      "after": 0
+    },
+    "overridesAfterFilm": [
+      "",
+      "",
+      "",
+      "var(--ocean-background, #FFFFFF)",
+      ""
+    ],
+    "overridesAtDoha": [
+      "",
+      "",
+      "",
+      "var(--ocean-background, #FFFFFF)",
+      ""
+    ],
+    "rootHeldAtDoha": true,
+    "dohaAfterReverseMatches": true,
+    "returnMatches": true,
+    "errors": []
+  }
+]

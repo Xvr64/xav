@@ -13,8 +13,9 @@ export const READING_SELECTOR = 'main h1, main h2, main h3, main p, main li, mai
 
 export const ReadingZoneTracker: React.FC = React.memo(() => {
   useEffect(() => {
-    let docRects: { left: number; top: number; width: number; height: number }[] = [];
-    let viewRects: { left: number; top: number; width: number; height: number }[] = [];
+    // `field`: copy of the CV, which the whales' reading water gathers around (whaleVeil.ts)
+    let docRects: { left: number; top: number; width: number; height: number; field?: boolean }[] = [];
+    let viewRects: { left: number; top: number; width: number; height: number; field?: boolean }[] = [];
     let generation = 0;
     let readGeneration = -1;
     let readScrollY = NaN;
@@ -37,7 +38,7 @@ export const ReadingZoneTracker: React.FC = React.memo(() => {
             line.width = right - line.left;
             line.height = Math.max(line.height, r.height);
           } else {
-            lines.push({ left: r.left, top: r.top + sy, width: r.width, height: r.height });
+            lines.push({ left: r.left, top: r.top + sy, width: r.width, height: r.height, field: true });
           }
         }
         next.push(...lines);
@@ -63,7 +64,7 @@ export const ReadingZoneTracker: React.FC = React.memo(() => {
       for (const r of docRects) {
         const top = r.top - sy;
         if (top > vh + 48 || top + r.height < -48) continue;
-        viewRects.push({ left: r.left, top, width: r.width, height: r.height });
+        viewRects.push({ left: r.left, top, width: r.width, height: r.height, field: r.field });
       }
       // The pinned hero supplies its own live rects (headline, then the gathering name)
       for (const r of heroZone.rects) viewRects.push(r);

@@ -148,10 +148,14 @@ export function glyphsAt(depth: number) {
 }
 
 const css = ([r, g, b]: RGB) => `${Math.round(r * 255)}, ${Math.round(g * 255)}, ${Math.round(b * 255)}`;
+/** What is on screen now (wherever it was written), and what the document root holds. */
 let lastWater = '';
 let lastLow = '';
+let rootWater = '';
+let rootLow = '';
 let wantWater = '';
 let wantLow = '';
+let wantStageOnly = false;
 let lastWaterWrite = -Infinity;
 let waterTimer: ReturnType<typeof setTimeout> | 0 = 0;
 /**
@@ -166,19 +170,101 @@ let waterTimer: ReturnType<typeof setTimeout> | 0 = 0;
 export const WATER_CSS_INTERVAL_MS = 240;
 /** Whether a write is due `now`, given the last one (pure, for tests). */
 export const waterWriteDue = (now: number, last: number) => now - last >= WATER_CSS_INTERVAL_MS;
+
+/**
+ * WHO IS READING THE WATER'S COLOUR — the Globe's stage alone, for the length of its film.
+ *
+ * Even at one write every 240 ms the root write is the film's periodic hitch: the halo is an
+ * inherited text-shadow on <main>, so each new colour restyles every element of the CV (some
+ * 1,500 of them, 36-46 ms measured), although through the film none of that copy is on screen.
+ * The Globe's runway is 600vh with a pinned stage: while it covers the viewport, the only things
+ * showing the water's colour are the stage itself (caption halo, caption veils), the corner
+ * controls, and the page background behind the ocean's canvas.
+ *
+ * So while the stage is the whole screen (`globeStageFillsScreen`) the same values, at the same
+ * cadence, are written on those few elements only: custom properties on the runway and the
+ * controls (nearer than the root's, so they win inside), the background colour itself on the
+ * three elements that paint it. The root keeps the colour it had. The moment the film comes
+ * within a quarter screen of either end of the runway the overrides are taken off and the root is
+ * brought up to date in the same task, well before anything else can be seen, and from then on
+ * the root is written as it always was.
+ * Nothing on screen ever holds a colour older than it would have before; what is skipped is only
+ * the restyling of copy that is not there to be seen.
+ */
+/** How much of a screen from either end of the runway the root is written as before. The copy
+ *  beyond each end (the cover above Doha, the profile below Shanghai) must already carry the
+ *  current halo before its first line can be scrolled into view: a browser paints the page just
+ *  outside the screen ahead of time and scrolls it in without asking the page first. So the root
+ *  is always current while the film rests on Doha or on Shanghai and for a quarter screen of
+ *  travel beside them; only the stretch between is the stage's alone. The stage is also 100svh,
+ *  shorter than the viewport on a phone with its toolbar away, which the same margin covers. */
+export const STAGE_RELEASE_MARGIN = 0.25;
+export function globeStageFillsScreen(scroll: number, g: OceanGeometry): boolean {
+  if (!Number.isFinite(g.journeyStart) || !(g.viewHeight > 0)) return false;
+  const margin = STAGE_RELEASE_MARGIN * g.viewHeight;
+  // Reduced motion collapses the runway to one still screen: there is no film to protect
+  if (!(g.journeyTravel > g.viewHeight + 2 * margin)) return false;
+  return scroll >= g.journeyStart + margin && scroll <= g.journeyStart + g.journeyTravel - margin;
+}
+
+type WaterValue = 'wash' | 'halo' | 'low' | 'background';
+interface StageTarget { style: CSSStyleDeclaration; props: [name: string, value: WaterValue][]; saved: string[] }
+/** The stage's own consumers while they carry the colour themselves; null while the root does. */
+let stageTargets: StageTarget[] | null = null;
+
+const waterValue = (kind: WaterValue) =>
+  kind === 'wash' ? wantWater : kind === 'low' ? wantLow : kind === 'halo' ? `rgba(${wantWater}, 0.82)` : `rgb(${wantWater})`;
+
+const findStageTargets = (): StageTarget[] | null => {
+  const runway = document.querySelector<HTMLElement>('[data-journey-runway]');
+  if (!runway) return null;
+  const targets: StageTarget[] = [
+    { style: runway.style, props: [['--abyss-wash', 'wash'], ['--abyss-halo', 'halo'], ['--abyss-wash-low', 'low']], saved: [] }
+  ];
+  const controls = document.querySelector<HTMLElement>('.fixed-top-controls');
+  if (controls) targets.push({ style: controls.style, props: [['--abyss-halo', 'halo']], saved: [] });
+  // The water behind the ocean's canvas: what shows if that canvas is ever lost
+  const painted = [document.documentElement, document.body, document.querySelector<HTMLElement>('.terminal-portfolio')];
+  for (const el of painted) if (el) targets.push({ style: el.style, props: [['background-color', 'background']], saved: [] });
+  for (const t of targets) t.saved = t.props.map(([name]) => t.style.getPropertyValue(name));
+  return targets;
+};
+const releaseStageTargets = () => {
+  if (!stageTargets) return;
+  for (const t of stageTargets) {
+    t.props.forEach(([name], i) => {
+      if (t.saved[i]) t.style.setProperty(name, t.saved[i]);
+      else t.style.removeProperty(name);
+    });
+  }
+  stageTargets = null;
+};
+
 const writeWater = (now: number) => {
   lastWaterWrite = now;
+  if (wantStageOnly) {
+    stageTargets ??= findStageTargets();
+    if (stageTargets) {
+      for (const t of stageTargets) for (const [name, kind] of t.props) t.style.setProperty(name, waterValue(kind));
+      lastWater = wantWater;
+      lastLow = wantLow;
+      return;
+    }
+  }
+  releaseStageTargets();
   const root = document.documentElement.style;
-  if (wantWater !== lastWater) {
-    lastWater = wantWater;
+  if (wantWater !== rootWater) {
+    rootWater = wantWater;
     root.setProperty('--ocean-background', `rgb(${wantWater})`);
     root.setProperty('--abyss-wash', wantWater);
     root.setProperty('--abyss-halo', `rgba(${wantWater}, 0.82)`);
   }
-  if (wantLow !== lastLow) {
-    lastLow = wantLow;
+  if (wantLow !== rootLow) {
+    rootLow = wantLow;
     root.setProperty('--abyss-wash-low', wantLow);
   }
+  lastWater = wantWater;
+  lastLow = wantLow;
 };
 /**
  * The page's own water (body background, text halos, caption veils, the phone menu) takes the
@@ -186,12 +272,21 @@ const writeWater = (now: number) => {
  * The water deepens down the screen, so washes that sit low (the phone Globe caption's veil)
  * take `--abyss-wash-low`, the colour four fifths of the way down, `lowDepth`.
  * Called every drawn frame; the document is only restyled every WATER_CSS_INTERVAL_MS.
+ * `stageOnly`: the Globe's pinned stage is all of the page that is on screen (see above).
  */
-export function applyWaterColor(depth: number, lowDepth = depth) {
+export function applyWaterColor(depth: number, lowDepth = depth, stageOnly = false) {
   wantWater = css(waterAt(depth));
   wantLow = css(waterAt(lowDepth));
-  if (wantWater === lastWater && wantLow === lastLow) return;
+  wantStageOnly = stageOnly;
   const now = performance.now();
+  if (stageTargets && !stageOnly) {
+    // The stage has stopped being the whole screen: the rest of the page takes the colour now,
+    // not at the next interval, so no line of it is ever seen under an older halo
+    if (waterTimer) { clearTimeout(waterTimer); waterTimer = 0; }
+    writeWater(now);
+    return;
+  }
+  if (wantWater === lastWater && wantLow === lastLow) return;
   if (waterWriteDue(now, lastWaterWrite)) {
     if (waterTimer) { clearTimeout(waterTimer); waterTimer = 0; }
     writeWater(now);
