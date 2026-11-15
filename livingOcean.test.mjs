@@ -8,24 +8,26 @@ import { CV_SECTIONS } from './sections.ts';
 
 // --- The switches ---------------------------------------------------------------------------
 
-test('the production build never reads the address bar', () => {
-  for (const search of ['?ocean=all', '?ocean=wake', '?ocean=-inertia', '']) {
-    assert.deepEqual(parseOceanEffects(search, false), OCEAN_EFFECT_DEFAULTS);
+test('the shipped ocean has all four behaviours on, and no parameter means the shipped ocean', () => {
+  assert.deepEqual(OCEAN_EFFECT_DEFAULTS, { inertia: true, flow: true, wake: true, sea: true });
+  for (const search of ['', '?other=1', '?ocean=', '?ocean=nonsense', '?ocean=nonsense,stuff']) {
+    assert.deepEqual(parseOceanEffects(search), OCEAN_EFFECT_DEFAULTS);
   }
 });
 
-test('in development each behaviour can be judged alone, together, or taken out', () => {
+test('each behaviour can be compared alone, together, or taken out, from the address bar', () => {
   const none = { inertia: false, flow: false, wake: false, sea: false };
-  assert.deepEqual(parseOceanEffects('?ocean=none', true), none);
-  assert.ok(Object.values(parseOceanEffects('?ocean=all', true)).every(Boolean));
-  for (const effect of OCEAN_EFFECTS) assert.deepEqual(parseOceanEffects(`?ocean=${effect}`, true), { ...none, [effect]: true });
-  assert.deepEqual(parseOceanEffects('?ocean=inertia,flow', true), { ...none, inertia: true, flow: true });
+  for (const word of ['none', 'original', 'off', 'ORIGINAL']) assert.deepEqual(parseOceanEffects(`?ocean=${word}`), none);
+  assert.deepEqual(parseOceanEffects('?ocean=all', none), OCEAN_EFFECT_DEFAULTS);
+  for (const effect of OCEAN_EFFECTS) assert.deepEqual(parseOceanEffects(`?ocean=${effect}`), { ...none, [effect]: true });
+  assert.deepEqual(parseOceanEffects('?ocean=inertia,flow'), { ...none, inertia: true, flow: true });
+  // A typo beside a real name does not disturb the real name
+  assert.deepEqual(parseOceanEffects('?ocean=flow,wak'), { ...none, flow: true });
   // Signed entries adjust whatever ships
-  const all = { inertia: true, flow: true, wake: true, sea: true };
-  assert.deepEqual(parseOceanEffects('?ocean=-wake', true, all), { ...all, wake: false });
-  assert.deepEqual(parseOceanEffects('?ocean=%2Bsea', true, none), { ...none, sea: true });
-  assert.deepEqual(parseOceanEffects('?ocean=nonsense', true, all), none);
-  assert.deepEqual(parseOceanEffects('?other=1', true, all), all);
+  assert.deepEqual(parseOceanEffects('?ocean=-wake'), { ...OCEAN_EFFECT_DEFAULTS, wake: false });
+  assert.deepEqual(parseOceanEffects('?ocean=-wake,-sea'), { ...OCEAN_EFFECT_DEFAULTS, wake: false, sea: false });
+  assert.deepEqual(parseOceanEffects('?ocean=%2Bsea', none), { ...none, sea: true });
+  assert.deepEqual(parseOceanEffects('?ocean=-wake', none), none);
 });
 
 // --- Water inertia --------------------------------------------------------------------------

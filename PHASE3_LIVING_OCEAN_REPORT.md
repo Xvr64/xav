@@ -2,6 +2,8 @@
 
 15 November 2026. Working tree only: nothing committed, pushed or deployed.
 
+**Update, 15 November 2026:** all four behaviours are now on by default (`OCEAN_EFFECT_DEFAULTS` in `oceanExperiments.ts`) and the `?ocean=` parameter works on the live site too: `?ocean=original` shows the previous ocean, `?ocean=-wake` drops one behaviour, `?ocean=flow,sea` shows exactly those. The sections below describe the state when the effects were still off by default.
+
 ## Summary
 
 Four behaviours were added to the ocean renderer, each behind its own development flag and **all off by default**. With no flag set the site draws exactly the ocean it drew before (measured, see section 7).
