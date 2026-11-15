@@ -1,7 +1,7 @@
 // Acceptance in a real browser: the cinematic experience is intact and the CV reads as the
 // minimalist page it is (one decode for every line, nothing in the corner but sound and CV).
 //   node dev/phase2.mjs verify [journeys,globe,mobile,cv,reduced]
-import { browser, click, jpg, save, scrollRun, server } from './phase2-lib.mjs';
+import { browser, click, jpg, save, scrollRun, server, withOcean } from './phase2-lib.mjs';
 import { sleep } from './fable-cdp.mjs';
 import assert from 'node:assert/strict';
 
@@ -217,7 +217,7 @@ async function reduced() {
     const c = await browser({ width: v.w, height: v.h, touch: v.touch, source: '' });
     try {
       await c.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] });
-      await c.goto((await c.evaluate('location.origin')) + '/');
+      await c.goto((await c.evaluate('location.origin')) + withOcean('/'));
       for (let i = 0; i < 80; i++) { if (await c.evaluate(`!!document.querySelector('#journey')`)) break; await sleep(250); }
       await c.evaluate('document.fonts.ready'); await sleep(2200);
       await c.evaluate(`document.querySelector('#experience').scrollIntoView()`); await sleep(700);

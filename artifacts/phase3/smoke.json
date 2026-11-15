@@ -1,0 +1,554 @@
+[
+  {
+    "view": "320",
+    "config": "none",
+    "effects": {
+      "inertia": false,
+      "flow": false,
+      "wake": false,
+      "sea": false
+    },
+    "living": false,
+    "compileMs": 2.2,
+    "firstDrawMs": 0.6,
+    "glReady": true,
+    "grid": {
+      "cols": 46,
+      "rows": 64
+    },
+    "drawn": {
+      "cells": 774,
+      "total": 2944
+    },
+    "errors": []
+  },
+  {
+    "view": "320",
+    "config": "inertia",
+    "effects": {
+      "inertia": true,
+      "flow": false,
+      "wake": false,
+      "sea": false
+    },
+    "living": false,
+    "compileMs": 2.6,
+    "firstDrawMs": 0.4,
+    "glReady": true,
+    "grid": {
+      "cols": 46,
+      "rows": 64
+    },
+    "drawn": {
+      "cells": 770,
+      "total": 2944
+    },
+    "errors": []
+  },
+  {
+    "view": "320",
+    "config": "flow",
+    "effects": {
+      "inertia": false,
+      "flow": true,
+      "wake": false,
+      "sea": false
+    },
+    "living": true,
+    "compileMs": 4,
+    "firstDrawMs": 0.4,
+    "glReady": true,
+    "grid": {
+      "cols": 46,
+      "rows": 64
+    },
+    "drawn": {
+      "cells": 771,
+      "total": 2944
+    },
+    "errors": []
+  },
+  {
+    "view": "320",
+    "config": "wake",
+    "effects": {
+      "inertia": false,
+      "flow": false,
+      "wake": true,
+      "sea": false
+    },
+    "living": true,
+    "compileMs": 4.7,
+    "firstDrawMs": 0.4,
+    "glReady": true,
+    "grid": {
+      "cols": 46,
+      "rows": 64
+    },
+    "drawn": {
+      "cells": 817,
+      "total": 2944
+    },
+    "errors": []
+  },
+  {
+    "view": "320",
+    "config": "sea",
+    "effects": {
+      "inertia": false,
+      "flow": false,
+      "wake": false,
+      "sea": true
+    },
+    "living": true,
+    "compileMs": 3.4,
+    "firstDrawMs": 0.5,
+    "glReady": true,
+    "grid": {
+      "cols": 46,
+      "rows": 64
+    },
+    "drawn": {
+      "cells": 894,
+      "total": 2944
+    },
+    "errors": []
+  },
+  {
+    "view": "320",
+    "config": "all",
+    "effects": {
+      "inertia": true,
+      "flow": true,
+      "wake": true,
+      "sea": true
+    },
+    "living": true,
+    "compileMs": 9.6,
+    "firstDrawMs": 0.5,
+    "glReady": true,
+    "grid": {
+      "cols": 46,
+      "rows": 64
+    },
+    "drawn": {
+      "cells": 941,
+      "total": 2944
+    },
+    "errors": []
+  },
+  {
+    "view": "390",
+    "config": "none",
+    "effects": {
+      "inertia": false,
+      "flow": false,
+      "wake": false,
+      "sea": false
+    },
+    "living": false,
+    "compileMs": 2.6,
+    "firstDrawMs": 0.5,
+    "glReady": true,
+    "grid": {
+      "cols": 56,
+      "rows": 73
+    },
+    "drawn": {
+      "cells": 913,
+      "total": 4088
+    },
+    "errors": []
+  },
+  {
+    "view": "390",
+    "config": "inertia",
+    "effects": {
+      "inertia": true,
+      "flow": false,
+      "wake": false,
+      "sea": false
+    },
+    "living": false,
+    "compileMs": 2.2,
+    "firstDrawMs": 0.6,
+    "glReady": true,
+    "grid": {
+      "cols": 56,
+      "rows": 73
+    },
+    "drawn": {
+      "cells": 913,
+      "total": 4088
+    },
+    "errors": []
+  },
+  {
+    "view": "390",
+    "config": "flow",
+    "effects": {
+      "inertia": false,
+      "flow": true,
+      "wake": false,
+      "sea": false
+    },
+    "living": true,
+    "compileMs": 4,
+    "firstDrawMs": 0.5,
+    "glReady": true,
+    "grid": {
+      "cols": 56,
+      "rows": 73
+    },
+    "drawn": {
+      "cells": 912,
+      "total": 4088
+    },
+    "errors": []
+  },
+  {
+    "view": "390",
+    "config": "wake",
+    "effects": {
+      "inertia": false,
+      "flow": false,
+      "wake": true,
+      "sea": false
+    },
+    "living": true,
+    "compileMs": 4.9,
+    "firstDrawMs": 0.5,
+    "glReady": true,
+    "grid": {
+      "cols": 56,
+      "rows": 73
+    },
+    "drawn": {
+      "cells": 1007,
+      "total": 4088
+    },
+    "errors": []
+  },
+  {
+    "view": "390",
+    "config": "sea",
+    "effects": {
+      "inertia": false,
+      "flow": false,
+      "wake": false,
+      "sea": true
+    },
+    "living": true,
+    "compileMs": 3.1,
+    "firstDrawMs": 0.5,
+    "glReady": true,
+    "grid": {
+      "cols": 56,
+      "rows": 73
+    },
+    "drawn": {
+      "cells": 1056,
+      "total": 4088
+    },
+    "errors": []
+  },
+  {
+    "view": "390",
+    "config": "all",
+    "effects": {
+      "inertia": true,
+      "flow": true,
+      "wake": true,
+      "sea": true
+    },
+    "living": true,
+    "compileMs": 12,
+    "firstDrawMs": 0.5,
+    "glReady": true,
+    "grid": {
+      "cols": 56,
+      "rows": 73
+    },
+    "drawn": {
+      "cells": 1125,
+      "total": 4088
+    },
+    "errors": []
+  },
+  {
+    "view": "768",
+    "config": "none",
+    "effects": {
+      "inertia": false,
+      "flow": false,
+      "wake": false,
+      "sea": false
+    },
+    "living": false,
+    "compileMs": 2.7,
+    "firstDrawMs": 0.6,
+    "glReady": true,
+    "grid": {
+      "cols": 93,
+      "rows": 76
+    },
+    "drawn": {
+      "cells": 1660,
+      "total": 7068
+    },
+    "errors": []
+  },
+  {
+    "view": "768",
+    "config": "inertia",
+    "effects": {
+      "inertia": true,
+      "flow": false,
+      "wake": false,
+      "sea": false
+    },
+    "living": false,
+    "compileMs": 2.5,
+    "firstDrawMs": 0.5,
+    "glReady": true,
+    "grid": {
+      "cols": 93,
+      "rows": 76
+    },
+    "drawn": {
+      "cells": 1661,
+      "total": 7068
+    },
+    "errors": []
+  },
+  {
+    "view": "768",
+    "config": "flow",
+    "effects": {
+      "inertia": false,
+      "flow": true,
+      "wake": false,
+      "sea": false
+    },
+    "living": true,
+    "compileMs": 3.5,
+    "firstDrawMs": 0.6,
+    "glReady": true,
+    "grid": {
+      "cols": 93,
+      "rows": 76
+    },
+    "drawn": {
+      "cells": 1664,
+      "total": 7068
+    },
+    "errors": []
+  },
+  {
+    "view": "768",
+    "config": "wake",
+    "effects": {
+      "inertia": false,
+      "flow": false,
+      "wake": true,
+      "sea": false
+    },
+    "living": true,
+    "compileMs": 4.8,
+    "firstDrawMs": 0.6,
+    "glReady": true,
+    "grid": {
+      "cols": 93,
+      "rows": 76
+    },
+    "drawn": {
+      "cells": 1848,
+      "total": 7068
+    },
+    "errors": []
+  },
+  {
+    "view": "768",
+    "config": "sea",
+    "effects": {
+      "inertia": false,
+      "flow": false,
+      "wake": false,
+      "sea": true
+    },
+    "living": true,
+    "compileMs": 3.3,
+    "firstDrawMs": 0.6,
+    "glReady": true,
+    "grid": {
+      "cols": 93,
+      "rows": 76
+    },
+    "drawn": {
+      "cells": 1888,
+      "total": 7068
+    },
+    "errors": []
+  },
+  {
+    "view": "768",
+    "config": "all",
+    "effects": {
+      "inertia": true,
+      "flow": true,
+      "wake": true,
+      "sea": true
+    },
+    "living": true,
+    "compileMs": 11.2,
+    "firstDrawMs": 0.5,
+    "glReady": true,
+    "grid": {
+      "cols": 93,
+      "rows": 76
+    },
+    "drawn": {
+      "cells": 2066,
+      "total": 7068
+    },
+    "errors": []
+  },
+  {
+    "view": "1440",
+    "config": "none",
+    "effects": {
+      "inertia": false,
+      "flow": false,
+      "wake": false,
+      "sea": false
+    },
+    "living": false,
+    "compileMs": 2.9,
+    "firstDrawMs": 0.6,
+    "glReady": true,
+    "grid": {
+      "cols": 173,
+      "rows": 67
+    },
+    "drawn": {
+      "cells": 2719,
+      "total": 11591
+    },
+    "errors": []
+  },
+  {
+    "view": "1440",
+    "config": "inertia",
+    "effects": {
+      "inertia": true,
+      "flow": false,
+      "wake": false,
+      "sea": false
+    },
+    "living": false,
+    "compileMs": 2.4,
+    "firstDrawMs": 0.5,
+    "glReady": true,
+    "grid": {
+      "cols": 173,
+      "rows": 67
+    },
+    "drawn": {
+      "cells": 2719,
+      "total": 11591
+    },
+    "errors": []
+  },
+  {
+    "view": "1440",
+    "config": "flow",
+    "effects": {
+      "inertia": false,
+      "flow": true,
+      "wake": false,
+      "sea": false
+    },
+    "living": true,
+    "compileMs": 3.5,
+    "firstDrawMs": 0.5,
+    "glReady": true,
+    "grid": {
+      "cols": 173,
+      "rows": 67
+    },
+    "drawn": {
+      "cells": 2719,
+      "total": 11591
+    },
+    "errors": []
+  },
+  {
+    "view": "1440",
+    "config": "wake",
+    "effects": {
+      "inertia": false,
+      "flow": false,
+      "wake": true,
+      "sea": false
+    },
+    "living": true,
+    "compileMs": 5.2,
+    "firstDrawMs": 0.8,
+    "glReady": true,
+    "grid": {
+      "cols": 173,
+      "rows": 67
+    },
+    "drawn": {
+      "cells": 3177,
+      "total": 11591
+    },
+    "errors": []
+  },
+  {
+    "view": "1440",
+    "config": "sea",
+    "effects": {
+      "inertia": false,
+      "flow": false,
+      "wake": false,
+      "sea": true
+    },
+    "living": true,
+    "compileMs": 3.9,
+    "firstDrawMs": 0.5,
+    "glReady": true,
+    "grid": {
+      "cols": 173,
+      "rows": 67
+    },
+    "drawn": {
+      "cells": 3452,
+      "total": 11591
+    },
+    "errors": []
+  },
+  {
+    "view": "1440",
+    "config": "all",
+    "effects": {
+      "inertia": true,
+      "flow": true,
+      "wake": true,
+      "sea": true
+    },
+    "living": true,
+    "compileMs": 10.1,
+    "firstDrawMs": 0.6,
+    "glReady": true,
+    "grid": {
+      "cols": 173,
+      "rows": 67
+    },
+    "drawn": {
+      "cells": 3866,
+      "total": 11591
+    },
+    "errors": []
+  }
+]

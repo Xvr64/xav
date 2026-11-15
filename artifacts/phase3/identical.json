@@ -1,0 +1,52 @@
+[
+  {
+    "view": "1440",
+    "frame": 0,
+    "byteIdentical": false
+  },
+  {
+    "view": "1440",
+    "frame": 1,
+    "byteIdentical": false
+  },
+  {
+    "view": "1440",
+    "frame": 2,
+    "byteIdentical": false
+  },
+  {
+    "view": "1440",
+    "frame": 3,
+    "byteIdentical": false
+  },
+  {
+    "view": "1440",
+    "frame": 4,
+    "byteIdentical": false
+  },
+  {
+    "view": "390",
+    "frame": 0,
+    "byteIdentical": true
+  },
+  {
+    "view": "390",
+    "frame": 1,
+    "byteIdentical": false
+  },
+  {
+    "view": "390",
+    "frame": 2,
+    "byteIdentical": false
+  },
+  {
+    "view": "390",
+    "frame": 3,
+    "byteIdentical": false
+  },
+  {
+    "view": "390",
+    "frame": 4,
+    "byteIdentical": false
+  }
+]

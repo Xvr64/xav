@@ -41,12 +41,15 @@ export async function server(variant) {
 }
 export const stopServers = () => servers.forEach((s) => s.kill());
 
+export const withOcean = (path) => (process.env.PHASE2_OCEAN ? path + (path.includes('?') ? '&' : '?') + 'ocean=' + process.env.PHASE2_OCEAN : path);
+
 /** A page past the opening (the visitor has "seen" it), fonts ready, loops warm. */
 export async function browser({ variant = 'after', width = 1440, height = 900, touch = false, dsf = 1, intro = false, source = '', path = '/' } = {}) {
   const c = await launch({ port: port++, profile: `phase2-${task}-${Date.now()}-${port}` });
   if (touch) await c.mobile(width, height, dsf); else await c.desktop(width, height, dsf);
   await c.send('Page.addScriptToEvaluateOnNewDocument', { source: `${intro ? '' : "sessionStorage.setItem('xh-creation-seen-v1','1');"}${source}` });
-  await c.goto(origins[variant] + path);
+  // PHASE2_OCEAN=all runs every check with the living ocean on (oceanExperiments.ts, development flags)
+  await c.goto(origins[variant] + withOcean(path));
   for (let i = 0; i < 160; i++) {
     if (await c.evaluate(`!!document.querySelector('#journey')`)) break;
     await sleep(250);

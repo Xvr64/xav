@@ -13,6 +13,11 @@ import {
   waterAt,
   type OceanGeometry
 } from './oceanWorld';
+import { ambientWhalesLive } from './oceanDirection';
+import { oceanEffects, type OceanEffects } from './oceanExperiments';
+import { newWaterInertia, resetWaterInertia, stepWaterInertia, waterSettling } from './waterInertia';
+import { SEA_MAX_EDGES, SEA_MAX_STATES, layoutSea, packSea, type SeaSection } from './seaState';
+import { WAKE, WAKE_BODIES, newWakeTracker, oceanWake, trackWake } from './oceanWake';
 
 // ============================================================================
 // ASCII OCEAN — GradientASCII's glyph pipeline, rendered in document space
@@ -27,9 +32,22 @@ import {
 //      cell's glyph from the GradientASCII atlas inked over it. Opaque: this is the water.
 // Depth samples (colour, ink, glyph density) are evaluated in JS once per frame for a column of
 // points down the screen, so the CSS water and the WebGL water come from the same numbers.
+//
+// THE LIVING OCEAN (oceanExperiments.ts) adds four behaviours, each on its own switch. With all
+// of them off the two passes above are exactly the shaders below, untouched. With any of them on
+// the cell pass is `livingCells`: the same currents, read at a point the wake has moved, in the
+// sea state of the section they lie in, with glyphs that take the current's direction; and a
+// third, tiny pass (WAKE_STEP) keeps the water's memory of the whales, thirty times a second.
 
+const DEV = !!(import.meta as any).env?.DEV;
 const SAMPLES = 24;
 const CHARACTERS = ' .·:-~=+≈';
+/** The ramp, then the two strokes of a current that leaves the level (indices 9 and 10). */
+const FLOW_CHARACTERS = CHARACTERS + '/\\';
+/** How often the water's memory of the whales advances (the ocean's resting cadence). */
+const WAKE_HZ = 30;
+/** Wake steps the ocean keeps simulating after the last whale has moved it: long enough to fade. */
+const WAKE_LINGER = 6 * WAKE_HZ;
 const FONT = "'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
 const IDLE_FPS = 30;
 /** CSS px per unit of the currents' noise: the size of one swell. */
@@ -153,6 +171,268 @@ void main() {
   outColor = vec4(clamp(color, 0.0, 1.0), 1.0);
 }`;
 
+/**
+ * The cell pass of the living ocean. The currents are the ones above, written as a function so
+ * that they can be read in a sea state (SEA), at a point the wake has moved (WAKE) and at two
+ * neighbouring points, which give the direction the water runs in (FLOW).
+ *
+ * Nothing here has a memory or a clock of its own beyond `uTime`: a glyph is a pure function of
+ * its place on the page, the time and the wake under it, so it never flickers between frames.
+ */
+const livingCells = (fx: OceanEffects) => `#version 300 es
+${fx.flow ? '#define FLOW' : ''}
+${fx.wake ? '#define WAKE' : ''}
+${fx.sea ? '#define SEA' : ''}
+precision highp float;
+uniform vec2 uCellPx;
+uniform float uOffsetX;
+uniform float uScrollPx;
+uniform float uFirstRow;
+uniform float uViewH;
+uniform float uUnit;
+uniform float uTime;
+uniform float uCount;
+uniform vec4 uGlyph[${SAMPLES}];
+#ifdef SEA
+// Per state: grain, reach, pace, ripple · warp, crossing angle, shimmer, set (seaState.ts)
+uniform vec4 uSeaA[${SEA_MAX_STATES}];
+uniform vec4 uSeaB[${SEA_MAX_STATES}];
+// Where state i meets state i + 1 (px from the top of the page), and half the water they share
+uniform vec2 uSeaEdge[${SEA_MAX_EDGES}];
+#endif
+#ifdef WAKE
+uniform sampler2D uWake;
+// Rows the page has moved since the wake was last stepped
+uniform float uWakeRow;
+// How far moved water carries the currents (px), its say in a glyph's direction, and how much
+// it brings out the glyphs (how many, how heavy)
+uniform vec4 uWakeGain;
+#endif
+out vec4 outCell;
+${COMMON}
+// The two sea states that hold this cell and how far it lies from the first into the second.
+// Without SEA there is one: the ocean as it has always been.
+vec4 seaA0 = vec4(1.0, 1.0, 1.0, 0.32);
+vec4 seaB0 = vec4(1.7, 0.0, 1.0, 1.7);
+vec4 seaA1 = vec4(1.0, 1.0, 1.0, 0.32);
+vec4 seaB1 = vec4(1.7, 0.0, 1.0, 1.7);
+float seaMix = 0.0;
+
+// One state's currents at a point of the page (px): long swells near the surface (stretched
+// sideways), rounder water in the deep, warped by a slower flow so nothing repeats
+float currents(vec2 at, float stretch, float t, vec4 a, vec4 b) {
+  float ts = t * a.z;
+  vec2 p = at / uUnit;
+  vec2 shape = vec2(1.0 / (stretch * a.y), 1.0) * (1.7 * a.x);
+  float c = cos(b.y);
+  float s = sin(b.y);
+  vec2 q = vec2(c * p.x + s * p.y, c * p.y - s * p.x) * shape;
+  vec2 warp = (vec2(
+    noise(p * shape * 0.5 + vec2(ts * 0.031, 1.7)),
+    noise(p * shape * 0.5 + vec2(5.2, -ts * 0.027))
+  ) - 0.5) * b.x;
+  q += warp;
+  float swell = noise(q + vec2(ts * 0.085, -ts * 0.018));
+  if (b.y > 0.0) {
+    // A second set of currents, leaning the other way, crossing the first
+    vec2 r = vec2(c * p.x - s * p.y, c * p.y + s * p.x) * shape + warp + vec2(31.7, 11.3);
+    float other = noise(r + vec2(-ts * 0.07, ts * 0.021));
+    swell = clamp(0.5 + (swell + other - 1.0) * 0.72, 0.0, 1.0);
+  }
+  float ripple = noise(q * 2.3 + vec2(-ts * 0.14, ts * 0.045));
+  // Whatever the share of ripple, the water keeps the contrast it has at the usual 0.32, so a
+  // state changes how the currents move and never how many glyphs there are
+  float contrast = sqrt(0.5648 / ((1.0 - a.w) * (1.0 - a.w) + a.w * a.w));
+  return clamp(0.5 + (swell * (1.0 - a.w) + ripple * a.w - 0.5) * contrast, 0.0, 1.0);
+}
+
+float water(vec2 at, float stretch, float t) {
+  float f = currents(at, stretch, t, seaA0, seaB0);
+#ifdef SEA
+  // Two waters meeting: their values crossfade (never their settings, which would shear the
+  // drift), and keep their contrast through the middle
+  float g = currents(at, stretch, t, seaA1, seaB1);
+  float keep = inversesqrt(seaMix * seaMix + (1.0 - seaMix) * (1.0 - seaMix));
+  f = clamp(0.5 + (mix(f, g, seaMix) - 0.5) * keep, 0.0, 1.0);
+#endif
+  return f;
+}
+
+void main() {
+  // The cell's place on the page: column, and row counted from the top of the document
+  vec2 cell = vec2(floor(gl_FragCoord.x), uFirstRow + floor(gl_FragCoord.y));
+  vec2 centre = vec2(uOffsetX + (cell.x + 0.5) * uCellPx.x, (cell.y + 0.5) * uCellPx.y);
+  float s = clamp((centre.y - uScrollPx) / uViewH, 0.0, 1.0) * ${SAMPLES - 1}.0;
+  int i = int(floor(s));
+  vec4 g = mix(uGlyph[i], uGlyph[min(i + 1, ${SAMPLES - 1})], fract(s));
+  float t = uTime;
+  float shimmer = 1.0;
+
+#ifdef SEA
+  int edge = 0;
+  float nearest = 1.0e12;
+  for (int j = 0; j < ${SEA_MAX_EDGES}; j++) {
+    float away = abs(centre.y - uSeaEdge[j].x);
+    if (away < nearest) { nearest = away; edge = j; }
+  }
+  seaMix = smoothstep(uSeaEdge[edge].x - uSeaEdge[edge].y, uSeaEdge[edge].x + uSeaEdge[edge].y, centre.y);
+  seaA0 = uSeaA[edge];
+  seaB0 = uSeaB[edge];
+  seaA1 = uSeaA[edge + 1];
+  seaB1 = uSeaB[edge + 1];
+  shimmer = mix(seaB0.z, seaB1.z, seaMix);
+#endif
+
+  vec2 at = centre;
+  vec2 wake = vec2(0.0);
+  float churn = 0.0;
+  // How strongly the water here has been moved, and how much of that shows in the glyphs
+  float moved = 0.0;
+  float stirred = 0.0;
+#ifdef WAKE
+  ivec2 spot = ivec2(gl_FragCoord.xy) + ivec2(0, int(uWakeRow));
+  ivec2 size = textureSize(uWake, 0);
+  if (spot.y >= 0 && spot.y < size.y && spot.x < size.x) {
+    vec4 memory = texelFetch(uWake, spot, 0);
+    wake = (memory.rg * 255.0 - 128.0) / 127.0;
+    churn = memory.b;
+  }
+  moved = length(wake);
+  stirred = smoothstep(0.04, 0.5, moved);
+  // Water a whale has moved carries the currents with it, so they bend along its path
+  at -= wake * uWakeGain.x;
+#endif
+
+  float field = water(at, g.z, t);
+  float v = smoothstep(0.38, 0.72, field);
+  float pick = hash12(cell + 0.37);
+  float level = hash12(cell * 1.73 + 4.1);
+  // Each cell retunes its glyph slowly, at its own moment: a shimmer, never a flicker
+  float tick = floor(t * 1.6 * shimmer + level * 7.0);
+  float wobble = (hash12(cell * 2.31 + tick * 17.7) - 0.5) * 0.16;
+#ifdef WAKE
+  // Moved water shows: a few more glyphs, a little heavier, fading out cell by cell as it settles
+  float tone = clamp(v + wobble + churn * 0.1 + stirred * uWakeGain.w, 0.0, 1.0);
+#else
+  float tone = clamp(v + wobble, 0.0, 1.0);
+#endif
+  float index = clamp(floor(tone * (uCount - 1.0) + 0.5), 1.0, uCount - 1.0);
+
+#ifdef FLOW
+  // The water runs sideways, the way the swell drifts (the state's set), and the field bends
+  // it: the field is the stream function of what it adds, so the water runs along its lines of
+  // equal height, a quarter turn from the slope, and never piles up.
+  float probe = uCellPx.y;
+  vec2 slope = vec2(water(at + vec2(probe, 0.0), g.z, t) - field, water(at + vec2(0.0, probe), g.z, t) - field) * (uUnit / probe);
+  vec2 run = vec2(mix(seaB0.w, seaB1.w, seaMix) + slope.y, -slope.x);
+  // Kept as a direction without an arrow (the doubled angle), so that two flows add up whichever
+  // way each is said to point
+  vec2 line = vec2(run.x * run.x - run.y * run.y, 2.0 * run.x * run.y) / max(length(run), 1.0e-4);
+#ifdef WAKE
+  line += vec2(wake.x * wake.x - wake.y * wake.y, 2.0 * wake.x * wake.y) / max(moved, 1.0e-4) * uWakeGain.y;
+#endif
+  vec2 heading = line / max(length(line), 1.0e-4);
+  // Each cell leans a little its own way, so the border between two strokes is never a line
+  float levelness = heading.x + (hash12(cell * 3.17 + 9.2) - 0.5) * 0.2;
+  // Below this tone the water is quiet and keeps its dots ( . · : ); above it a glyph is a stroke:
+  // slack water where there is no slope to speak of, level strokes by weight ( - ~ ≈ ), or a lean
+  if (tone >= 0.4375) {
+    if (length(slope) < 0.3 && tone < 0.6) index = 3.0;
+    else if (levelness > 0.5) index = tone < 0.6 ? 4.0 : (tone < 0.82 ? 5.0 : 8.0);
+    else index = heading.y > 0.0 ? 10.0 : 9.0;
+  }
+#endif
+
+#ifdef WAKE
+  float present = step(pick, g.x * (0.3 + v) + stirred * uWakeGain.z);
+  float alpha = present * g.y * max(smoothstep(0.06, 0.42, v), stirred * 0.85) * mix(0.5, 1.0, level);
+#else
+  float present = step(pick, g.x * (0.3 + v));
+  float alpha = present * g.y * smoothstep(0.06, 0.42, v) * mix(0.5, 1.0, level);
+#endif
+  outCell = vec4(index / 255.0, alpha, field, 1.0);
+}`;
+
+/**
+ * The water's memory of the whales: one texel per glyph cell, on the cells' own lattice. Red and
+ * green hold the flow a whale has given the water (128 is rest), blue how churned it is. Each
+ * step the moved water drifts on along its own direction, spreads a little and fades; where a
+ * whale's body is (oceanWake.ts) the water takes the flow around it. Every other step the stored
+ * values are rounded toward rest, so however slowly the flow fades it always comes back to rest
+ * exactly, three or four seconds after the whale has gone.
+ */
+const WAKE_STEP = `#version 300 es
+precision highp float;
+uniform sampler2D uPrev;
+uniform vec2 uCellPx;
+// Rows the page has moved since the last step
+uniform float uRowShift;
+// Flow kept per step, churn kept, drift (px per step at full flow), spread
+uniform vec4 uKeep;
+// How far the water under a body takes its flow in one step, and whether this step rounds the
+// stored flow toward rest (1) or to the nearest value (0)
+uniform vec2 uTake;
+// Centre (cells), radius (px), strength · unit direction, churn
+uniform vec4 uBody[${WAKE_BODIES}];
+uniform vec4 uMove[${WAKE_BODIES}];
+out vec4 outWake;
+const vec4 REST = vec4(128.0 / 255.0, 128.0 / 255.0, 0.0, 1.0);
+
+vec4 before(vec2 at) {
+  vec2 uv = (at + vec2(0.0, uRowShift)) / vec2(textureSize(uPrev, 0));
+  if (uv.x <= 0.0 || uv.x >= 1.0 || uv.y <= 0.0 || uv.y >= 1.0) return REST;
+  return texture(uPrev, uv);
+}
+
+void main() {
+  vec2 cell = gl_FragCoord.xy;
+  vec2 drift = (before(cell).rg * 255.0 - 128.0) / 127.0;
+  vec2 from = cell - drift * uKeep.z / uCellPx;
+  vec4 was = before(from);
+  vec4 around = (before(from + vec2(1.0, 0.0)) + before(from - vec2(1.0, 0.0)) + before(from + vec2(0.0, 1.0)) + before(from - vec2(0.0, 1.0))) * 0.25;
+  was = mix(was, around, uKeep.w);
+  vec2 flow = (was.rg * 255.0 - 128.0) / 127.0 * uKeep.x;
+  float churn = was.b * uKeep.y;
+
+  vec2 px = cell * uCellPx;
+  for (int i = 0; i < ${WAKE_BODIES}; i++) {
+    vec4 body = uBody[i];
+    if (body.w <= 0.0) continue;
+    vec2 d = px - body.xy * uCellPx;
+    float d2 = dot(d, d);
+    float r2 = d2 / (body.z * body.z);
+    if (r2 >= ${(WAKE.reach * WAKE.reach).toFixed(1)}) continue;
+    vec2 along = uMove[i].xy;
+    vec2 want = along;
+    float within = 1.0;
+    float share = 1.0;
+    if (r2 > 1.0) {
+      // Outside the body the water is pushed on and slips around it: between a doublet and the
+      // body's own heading (oceanWake.ts), fading with distance
+      vec2 n = d * inversesqrt(d2);
+      want = mix(2.0 * dot(along, n) * n - along, along, ${WAKE.along.toFixed(2)});
+      within = 1.0 - smoothstep(${(WAKE.reach * WAKE.reach * 0.45).toFixed(2)}, ${(WAKE.reach * WAKE.reach).toFixed(1)}, r2);
+      share = within / r2;
+    }
+    flow = mix(flow, want * (body.w * share), uTake.x * within);
+    churn = max(churn, uMove[i].z * exp(-r2 * 0.9));
+  }
+
+  float speed = length(flow);
+  if (speed > 1.0) flow /= speed;
+  vec2 steps = sign(flow) * floor(abs(flow) * 127.0 + 0.5 * (1.0 - uTake.y));
+  outWake = vec4((128.0 + steps) / 255.0, floor(clamp(churn, 0.0, 1.0) * 255.0) / 255.0, 1.0);
+}`;
+
+/** What one wake step keeps and takes (WAKE_STEP's uKeep and uTake), at WAKE_HZ. */
+const WAKE_KEEP = { flow: 0.98, churn: 0.95, drift: 1.3, spread: 0.2, take: 0.13 };
+/**
+ * How the wake shows in the cells: currents carried up to this many cell heights, its weight in a
+ * glyph's direction, and how much fully moved water adds to the share of cells that hold a glyph
+ * and to their weight. Never to their ink: a wake is more of the same water, not a light.
+ */
+const WAKE_SHOW = { carry: 2.2, direction: 6, density: 0.38, weight: 0.36 };
+
 export interface AsciiOcean {
   destroy: () => void;
 }
@@ -186,19 +466,89 @@ export function createAsciiOcean(canvas: HTMLCanvasElement): AsciiOcean {
   let resizePending = true;
   let opening: CreationRenderer | null = null;
   let openingWait = 0;
+  // The living ocean: which behaviours are on, and what each one keeps between frames
+  const fx: OceanEffects = { ...oceanEffects };
+  const living = () => fx.flow || fx.wake || fx.sea;
+  const characters = () => (fx.flow ? FLOW_CHARACTERS : CHARACTERS);
+  const inertia = newWaterInertia();
+  /** How far the water is ahead of the page this frame (CSS px). */
+  let lead = 0;
+  let sea = packSea(layoutSea([], 1), 1);
+  const wakeTracker = newWakeTracker();
+  const wakeBodies = new Float32Array(WAKE_BODIES * 4);
+  const wakeMoves = new Float32Array(WAKE_BODIES * 4);
+  /** Seconds since the last wake step, the lattice row it was stepped at, and steps left to fade. */
+  let wakeClock = 0;
+  let wakeRow = 0;
+  let wakeLive = 0;
+  let wakeFront = 0;
+  let wakeSteps = 0;
+  const stats = { compileMs: 0, firstDrawMs: -1, living: false };
 
   const water = new Float32Array(SAMPLES * 3);
   const ink = new Float32Array(SAMPLES * 3);
   const glyphs = new Float32Array(SAMPLES * 4);
 
   // --- WebGL resources ----------------------------------------------------------------------
-  const cells = gl ? link(gl, CELLS) : null;
+  let cells: ReturnType<typeof link> = null;
+  let wakeStep: ReturnType<typeof link> = null;
+  /** Link the cell pass for the behaviours that are on; if the living ocean cannot be built here, the ocean as it was. */
+  const build = () => {
+    if (!gl) return;
+    const started = performance.now();
+    if (cells) gl.deleteProgram(cells.program);
+    if (wakeStep) gl.deleteProgram(wakeStep.program);
+    cells = link(gl, living() ? livingCells(fx) : CELLS);
+    wakeStep = fx.wake && cells ? link(gl, WAKE_STEP) : null;
+    if (living() && (!cells || (fx.wake && !wakeStep))) {
+      if (cells) gl.deleteProgram(cells.program);
+      if (wakeStep) gl.deleteProgram(wakeStep.program);
+      fx.flow = fx.wake = fx.sea = false;
+      wakeStep = null;
+      cells = link(gl, CELLS);
+    }
+    stats.compileMs = performance.now() - started;
+    stats.firstDrawMs = -1;
+    stats.living = living();
+  };
+  build();
   const screen = gl ? link(gl, SCREEN) : null;
   let vao: WebGLVertexArrayObject | null = null;
   let cellTexture: WebGLTexture | null = null;
   let cellFramebuffer: WebGLFramebuffer | null = null;
   const cellGrid = { cols: 0, rows: 0 };
   let atlas: Atlas | null = null;
+  const wakeTextures: (WebGLTexture | null)[] = [null, null];
+  const wakeFramebuffers: (WebGLFramebuffer | null)[] = [null, null];
+  /** The wake's two textures, on the cells' lattice, at rest. */
+  const allocateWake = () => {
+    if (!gl || !fx.wake || !cellGrid.cols) return;
+    for (let i = 0; i < 2; i++) {
+      wakeTextures[i] ??= gl.createTexture();
+      wakeFramebuffers[i] ??= gl.createFramebuffer();
+      gl.bindTexture(gl.TEXTURE_2D, wakeTextures[i]);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, cellGrid.cols, cellGrid.rows, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, wakeFramebuffers[i]);
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, wakeTextures[i], 0);
+      gl.clearColor(128 / 255, 128 / 255, 0, 1);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+    }
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    wakeLive = 0;
+  };
+  /** Where each section of the CV begins, for the sea states. Read when the layout changes, never per frame. */
+  const measureSea = () => {
+    if (!fx.sea) return;
+    const sections: SeaSection[] = [];
+    document.querySelectorAll<HTMLElement>('[data-editorial-section][id]').forEach((el) => {
+      sections.push({ id: el.id, top: el.getBoundingClientRect().top + window.scrollY });
+    });
+    sea = packSea(layoutSea(sections, window.innerHeight), view.ratio);
+  };
 
   if (gl && cells && screen) {
     vao = gl.createVertexArray();
@@ -209,12 +559,12 @@ export function createAsciiOcean(canvas: HTMLCanvasElement): AsciiOcean {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
     cellFramebuffer = gl.createFramebuffer();
-    atlas = buildAtlas(gl, CHARACTERS, FONT);
-    document.fonts?.load?.(`300 64px ${FONT}`, CHARACTERS).then(
+    atlas = buildAtlas(gl, characters(), FONT);
+    document.fonts?.load?.(`300 64px ${FONT}`, characters()).then(
       () => {
         if (disposed || !glReady) return;
         if (atlas) gl.deleteTexture(atlas.texture);
-        atlas = buildAtlas(gl, CHARACTERS, FONT);
+        atlas = buildAtlas(gl, characters(), FONT);
         lastScroll = NaN;
         schedule();
       },
@@ -284,8 +634,10 @@ export function createAsciiOcean(canvas: HTMLCanvasElement): AsciiOcean {
         gl.bindFramebuffer(gl.FRAMEBUFFER, cellFramebuffer);
         gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, cellTexture, 0);
         gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+        allocateWake();
       }
     }
+    measureSea();
     lastScroll = NaN;
   };
 
@@ -300,17 +652,64 @@ export function createAsciiOcean(canvas: HTMLCanvasElement): AsciiOcean {
     }
   };
 
-  const draw = (scroll: number) => {
+  /**
+   * One step of the water's memory of the whales: where they are now and how they move through
+   * the water (`water`: the lattice's scroll, CSS px), relaxed into the wake's texture.
+   */
+  const stepWake = (elapsed: number, water: number, firstRow: number, cellW: number, cellH: number, offsetX: number) => {
+    if (!gl || !wakeStep || !wakeTextures[0]) return;
+    const swimming = !reduce && !creation.active;
+    trackWake(wakeTracker, ambientWhalesLive.spines, swimming ? ambientWhalesLive.presence : 0, water, elapsed, view.height);
+    if (oceanWake.count) wakeLive = WAKE_LINGER;
+    else if (wakeLive > 0) wakeLive--;
+    if (wakeLive <= 0) {
+      // Still water: nothing to step, and nothing in the texture to keep in place
+      wakeRow = firstRow;
+      return;
+    }
+    wakeBodies.fill(0);
+    wakeMoves.fill(0);
+    for (let i = 0; i < oceanWake.count; i++) {
+      const body = oceanWake.bodies[i];
+      wakeBodies.set([(body.x * view.ratio - offsetX) / cellW, ((body.y + water) * view.ratio) / cellH - firstRow, body.r * view.ratio, body.strength], i * 4);
+      wakeMoves.set([body.ux, body.uy, body.churn, 0], i * 4);
+    }
+    const back = 1 - wakeFront;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, wakeFramebuffers[back]);
+    gl.viewport(0, 0, cellGrid.cols, cellGrid.rows);
+    gl.useProgram(wakeStep.program);
+    const wu = wakeStep.uniforms;
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, wakeTextures[wakeFront]);
+    gl.uniform1i(wu.uPrev, 0);
+    gl.uniform2f(wu.uCellPx, cellW, cellH);
+    gl.uniform1f(wu.uRowShift, firstRow - wakeRow);
+    gl.uniform4f(wu.uKeep, WAKE_KEEP.flow, WAKE_KEEP.churn, WAKE_KEEP.drift * view.ratio, WAKE_KEEP.spread);
+    gl.uniform2f(wu.uTake, WAKE_KEEP.take, wakeSteps++ % 2);
+    gl.uniform4fv(wu.uBody, wakeBodies);
+    gl.uniform4fv(wu.uMove, wakeMoves);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    wakeFront = back;
+    wakeRow = firstRow;
+  };
+
+  /** `scroll` is the page; `lattice` is where the ocean's glyph lattice is (the page, plus the water's own momentum). */
+  const draw = (scroll: number, lattice = scroll) => {
     if (!gl || !glReady || !cells || !screen || !atlas) return;
     sampleDepths(scroll);
     const cellH = view.cellCss * view.ratio;
     const cellW = cellH * 0.6;
-    const scrollPx = scroll * view.ratio;
+    const scrollPx = lattice * view.ratio;
     const firstRow = Math.floor(scrollPx / cellH);
     const offsetX = (canvas.width - cellGrid.cols * cellW) / 2;
 
     gl.bindVertexArray(vao);
     gl.disable(gl.BLEND);
+
+    if (fx.wake && wakeClock >= 1 / WAKE_HZ - 0.003) {
+      stepWake(wakeClock, lattice, firstRow, cellW, cellH, offsetX);
+      wakeClock = 0;
+    }
 
     gl.bindFramebuffer(gl.FRAMEBUFFER, cellFramebuffer);
     gl.viewport(0, 0, cellGrid.cols, cellGrid.rows);
@@ -323,8 +722,22 @@ export function createAsciiOcean(canvas: HTMLCanvasElement): AsciiOcean {
     gl.uniform1f(cu.uViewH, canvas.height);
     gl.uniform1f(cu.uUnit, WORLD_UNIT * view.ratio);
     gl.uniform1f(cu.uTime, time);
-    gl.uniform1f(cu.uCount, atlas.count);
+    // The ramp's own length: with flow-aligned glyphs the atlas also holds the strokes
+    gl.uniform1f(cu.uCount, fx.flow ? [...CHARACTERS].length : atlas.count);
     gl.uniform4fv(cu.uGlyph, glyphs);
+    if (fx.sea) {
+      gl.uniform4fv(cu.uSeaA, sea.a);
+      gl.uniform4fv(cu.uSeaB, sea.b);
+      gl.uniform2fv(cu.uSeaEdge, sea.edges);
+    }
+    if (fx.wake) {
+      gl.activeTexture(gl.TEXTURE2);
+      gl.bindTexture(gl.TEXTURE_2D, wakeTextures[wakeFront]);
+      gl.uniform1i(cu.uWake, 2);
+      gl.uniform1f(cu.uWakeRow, firstRow - wakeRow);
+      gl.uniform4f(cu.uWakeGain, WAKE_SHOW.carry * cellH, WAKE_SHOW.direction, WAKE_SHOW.density, WAKE_SHOW.weight);
+      gl.activeTexture(gl.TEXTURE0);
+    }
     gl.drawArrays(gl.TRIANGLES, 0, 3);
 
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
@@ -369,6 +782,7 @@ export function createAsciiOcean(canvas: HTMLCanvasElement): AsciiOcean {
     const dt = last ? Math.min(0.1, (now - last) / 1000) : 0;
     last = now;
     if (!reduce) time += dt;
+    wakeClock = Math.min(0.25, wakeClock + dt);
     if (creation.active && !creation.ready) {
       openingWait += dt;
       if (openingWait > 25) finishCreation('loading-timeout');
@@ -379,7 +793,7 @@ export function createAsciiOcean(canvas: HTMLCanvasElement): AsciiOcean {
     const prevCreationTime = creation.time;
     advanceCreation(dt);
     const creationMoved = creation.active && Math.abs(creation.time - prevCreationTime) > 1e-5;
-    if ((import.meta as any).env?.DEV && creation.active) {
+    if (DEV && creation.active) {
       canvas.dataset.creationTime = creation.time.toFixed(3);
       canvas.dataset.creationReady = String(creation.ready);
     }
@@ -387,13 +801,28 @@ export function createAsciiOcean(canvas: HTMLCanvasElement): AsciiOcean {
     // and every frame while it does
     const handingOff = tickHandoff(now, !!opening && creation.active && creation.ready && opening.canDraw(creation.time), creation.active);
     const scroll = window.scrollY;
-    const moved = scroll !== lastScroll || creationMoved || handingOff;
+    // The water's own momentum: only the lattice the ocean draws on, never the page
+    const lastLead = lead;
+    if (fx.inertia && !reduce && !creation.active) lead = stepWaterInertia(inertia, scroll, dt, geometry.viewHeight);
+    else {
+      if (waterSettling(inertia) || inertia.scroll !== null) resetWaterInertia(inertia);
+      lead = 0;
+    }
+    const moved = scroll !== lastScroll || creationMoved || handingOff || lead !== lastLead;
     // Scrolling redraws on every frame so the water moves with the page; at rest the
     // currents only need 30 fps
     if (moved || (!reduce && now - lastDraw >= 1000 / IDLE_FPS - 2)) {
       measure();
       applyWaterColor(depthAtScroll(scroll, geometry), depthAtDocument(scroll + 0.8 * geometry.viewHeight, geometry), globeStageFillsScreen(scroll, geometry));
-      if (!qaPaused) draw(scroll);
+      if (!qaPaused) {
+        if (DEV && stats.firstDrawMs < 0 && gl && glReady) {
+          // Development only: a driver may leave part of a shader's compile to its first draw
+          const started = performance.now();
+          draw(scroll, scroll + lead);
+          gl.finish();
+          stats.firstDrawMs = performance.now() - started;
+        } else draw(scroll, scroll + lead);
+      }
       lastDraw = now;
       lastScroll = scroll;
       frameSeed = (frameSeed + 1) % 97;
@@ -420,6 +849,7 @@ export function createAsciiOcean(canvas: HTMLCanvasElement): AsciiOcean {
   // The document grows and shrinks as sections lay out: keep the depth scale on its real length
   const pageObserver = new ResizeObserver(() => {
     geometry.maxScroll = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
+    measureSea();
     lastScroll = NaN;
     schedule();
   });
@@ -435,7 +865,7 @@ export function createAsciiOcean(canvas: HTMLCanvasElement): AsciiOcean {
       measure();
       const t0 = performance.now();
       applyWaterColor(depthAtScroll(window.scrollY, geometry), depthAtDocument(window.scrollY + 0.8 * geometry.viewHeight, geometry), globeStageFillsScreen(window.scrollY, geometry));
-      draw(window.scrollY);
+      draw(window.scrollY, window.scrollY + lead);
       gl?.finish();
       return { ms: performance.now() - t0, image: canvas.toDataURL('image/jpeg', 0.85) };
     },
@@ -453,6 +883,42 @@ export function createAsciiOcean(canvas: HTMLCanvasElement): AsciiOcean {
       cells: { ...cellGrid }
     })
   };
+  if (DEV) {
+    // Development only: judge each behaviour of the living ocean on its own
+    Object.assign((window as unknown as { __asciiOcean: object }).__asciiOcean, {
+      effects: () => ({ ...fx }),
+      stats: () => ({ ...stats, lead, inertia: { ...inertia }, wake: { live: wakeLive, bodies: oceanWake.bodies.slice(0, oceanWake.count).map((b) => ({ ...b })) }, sea: { edges: Array.from(sea.edges), count: sea.count } }),
+      /** Switch behaviours without reloading: the cell pass is relinked for the new set. */
+      set: (next: Partial<OceanEffects>) => {
+        Object.assign(fx, next);
+        build();
+        if (gl && glReady) {
+          if (atlas) gl.deleteTexture(atlas.texture);
+          atlas = buildAtlas(gl, characters(), FONT);
+          allocateWake();
+        }
+        measureSea();
+        lastScroll = NaN;
+        schedule();
+        return { ...fx };
+      },
+      /** The glyph index and ink of every cell on screen (rows from the top), and the wake under them. */
+      read: () => {
+        if (!gl || !glReady) return null;
+        const pixels = new Uint8Array(cellGrid.cols * cellGrid.rows * 4);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, cellFramebuffer);
+        gl.readPixels(0, 0, cellGrid.cols, cellGrid.rows, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+        let moved: Uint8Array | null = null;
+        if (fx.wake && wakeFramebuffers[wakeFront]) {
+          moved = new Uint8Array(pixels.length);
+          gl.bindFramebuffer(gl.FRAMEBUFFER, wakeFramebuffers[wakeFront]);
+          gl.readPixels(0, 0, cellGrid.cols, cellGrid.rows, gl.RGBA, gl.UNSIGNED_BYTE, moved);
+        }
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+        return { cols: cellGrid.cols, rows: cellGrid.rows, cells: pixels, wake: moved, characters: characters() };
+      }
+    });
+  }
   document.addEventListener('visibilitychange', onVisibility);
   motionQuery.addEventListener('change', onMotion);
   resize();
@@ -473,6 +939,9 @@ export function createAsciiOcean(canvas: HTMLCanvasElement): AsciiOcean {
         if (atlas) gl.deleteTexture(atlas.texture);
         gl.deleteTexture(cellTexture);
         gl.deleteFramebuffer(cellFramebuffer);
+        wakeTextures.forEach((texture) => gl.deleteTexture(texture));
+        wakeFramebuffers.forEach((framebuffer) => gl.deleteFramebuffer(framebuffer));
+        if (wakeStep) gl.deleteProgram(wakeStep.program);
         gl.deleteVertexArray(vao);
         if (cells) gl.deleteProgram(cells.program);
         if (screen) gl.deleteProgram(screen.program);

@@ -4,6 +4,7 @@ import { createAsciiJellyfishField } from './asciiOceanLife';
 import { playSonarPing, setSoundDepth } from './decodeAudio';
 import { createGlyphBatchGL } from './glyphBatchGL';
 import { MAX_PINGS, arrivalTime, echoStrength, isOpenWaterClick, pingRadius, pingStrength } from './sonarPing';
+import { driftSnow, oceanWake, wakeFlowAt } from './oceanWake';
 import { waterShade } from './terminalMotion';
 import {
   applyAbyssPalette,
@@ -548,6 +549,11 @@ export const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.m
         alpha: 0.38 + r(677.1) * 0.5
       };
     });
+    // What a passing whale has done to each fleck: carried off its path, drifting back to it
+    // (oceanWake.ts). All zero, and never read, while no whale is moving the water.
+    const snowDrift = new Float32Array(MARINE_SNOW.length * 2);
+    const snowFlow: [number, number] = [0, 0];
+    const snowOffset: [number, number] = [0, 0];
 
     // Anatomical ASCII jellyfish (3 species, 3 parallax depth planes).
     // Rendered by this component's single RAF loop through pre-baked glyph atlases
@@ -2592,8 +2598,19 @@ export const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.m
         for (let i = 0; i < snowCount; i++) {
           const f = MARINE_SNOW[i];
           const span = h + 40;
-          const y = ((((f.ny * span - scrollNow * f.par + time * f.sink) % span) + span) % span) - 20;
-          const x = (f.nx * w + Math.sin(time * f.swayF + f.phase) * f.sway + w) % w;
+          let y = ((((f.ny * span - scrollNow * f.par + time * f.sink) % span) + span) % span) - 20;
+          let x = (f.nx * w + Math.sin(time * f.swayF + f.phase) * f.sway + w) % w;
+          if (oceanWake.count || snowDrift[i * 2] !== 0 || snowDrift[i * 2 + 1] !== 0) {
+            // The wake carries the fleck with the water around the whale; it eases home afterwards
+            snowOffset[0] = snowDrift[i * 2];
+            snowOffset[1] = snowDrift[i * 2 + 1];
+            wakeFlowAt(x + snowOffset[0], y + snowOffset[1], snowFlow);
+            driftSnow(snowOffset, snowFlow[0], snowFlow[1], dt);
+            snowDrift[i * 2] = Math.abs(snowOffset[0]) < 0.02 ? 0 : snowOffset[0];
+            snowDrift[i * 2 + 1] = Math.abs(snowOffset[1]) < 0.02 ? 0 : snowOffset[1];
+            x += snowDrift[i * 2];
+            y += snowDrift[i * 2 + 1];
+          }
           let behindText = false;
           for (let k = 0; k < lines.length; k++) {
             const r = lines[k];

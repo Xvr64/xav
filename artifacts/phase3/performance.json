@@ -1,0 +1,1682 @@
+[
+  {
+    "view": "1440",
+    "config": "none",
+    "trial": 1,
+    "compileMs": 3,
+    "cv": {
+      "frames": 320,
+      "mean": 16.95,
+      "p50": 16.6,
+      "p95": 50,
+      "p99": 75,
+      "max": 100.1,
+      "over34": 22
+    },
+    "cvCost": {
+      "script": 1984,
+      "style": 874,
+      "layout": 669,
+      "task": 5514
+    },
+    "hero": {
+      "frames": 351,
+      "mean": 10.25,
+      "p50": 8.4,
+      "p95": 16.8,
+      "p99": 41.6,
+      "max": 41.8,
+      "over34": 4
+    },
+    "globe": {
+      "frames": 734,
+      "mean": 12.26,
+      "p50": 8.4,
+      "p95": 16.8,
+      "p99": 41.7,
+      "max": 100,
+      "over34": 8
+    },
+    "endCity": "Shanghai",
+    "idle": {
+      "frames": 480,
+      "mean": 8.35,
+      "p50": 8.3,
+      "p95": 8.5,
+      "p99": 8.7,
+      "max": 9.2,
+      "over34": 0
+    },
+    "idleCost": {
+      "script": 1141,
+      "style": 55,
+      "layout": 0,
+      "task": 2108
+    },
+    "stopGo": {
+      "frames": 474,
+      "mean": 10.56,
+      "p50": 8.4,
+      "p95": 16.8,
+      "p99": 49.9,
+      "max": 83.3,
+      "over34": 9
+    },
+    "oceanDrawMs": {
+      "median": 0.1,
+      "p95": 0.3
+    },
+    "heapMB": 14.2,
+    "errors": []
+  },
+  {
+    "view": "1440",
+    "config": "inertia",
+    "trial": 1,
+    "compileMs": 2.9,
+    "cv": {
+      "frames": 317,
+      "mean": 17.11,
+      "p50": 16.6,
+      "p95": 50.2,
+      "p99": 67.2,
+      "max": 75.2,
+      "over34": 21
+    },
+    "cvCost": {
+      "script": 2007,
+      "style": 920,
+      "layout": 679,
+      "task": 5620
+    },
+    "hero": {
+      "frames": 310,
+      "mean": 11.63,
+      "p50": 8.4,
+      "p95": 25,
+      "p99": 50.1,
+      "max": 58.5,
+      "over34": 8
+    },
+    "globe": {
+      "frames": 728,
+      "mean": 12.37,
+      "p50": 8.4,
+      "p95": 16.8,
+      "p99": 41.6,
+      "max": 83.5,
+      "over34": 9
+    },
+    "endCity": "Shanghai",
+    "idle": {
+      "frames": 480,
+      "mean": 8.35,
+      "p50": 8.3,
+      "p95": 8.5,
+      "p99": 8.8,
+      "max": 9,
+      "over34": 0
+    },
+    "idleCost": {
+      "script": 1083,
+      "style": 57,
+      "layout": 0,
+      "task": 2030
+    },
+    "stopGo": {
+      "frames": 481,
+      "mean": 10.39,
+      "p50": 8.4,
+      "p95": 16.8,
+      "p99": 49.7,
+      "max": 58.4,
+      "over34": 10
+    },
+    "oceanDrawMs": {
+      "median": 0.1,
+      "p95": 0.2
+    },
+    "heapMB": 16.5,
+    "errors": []
+  },
+  {
+    "view": "1440",
+    "config": "flow",
+    "trial": 1,
+    "compileMs": 3.4,
+    "cv": {
+      "frames": 294,
+      "mean": 18.45,
+      "p50": 16.7,
+      "p95": 50.2,
+      "p99": 75.2,
+      "max": 91.8,
+      "over34": 23
+    },
+    "cvCost": {
+      "script": 1984,
+      "style": 903,
+      "layout": 697,
+      "task": 5590
+    },
+    "hero": {
+      "frames": 320,
+      "mean": 11.27,
+      "p50": 8.4,
+      "p95": 17.2,
+      "p99": 41.8,
+      "max": 50.3,
+      "over34": 8
+    },
+    "globe": {
+      "frames": 731,
+      "mean": 12.32,
+      "p50": 8.4,
+      "p95": 16.8,
+      "p99": 41.6,
+      "max": 84,
+      "over34": 8
+    },
+    "endCity": "Shanghai",
+    "idle": {
+      "frames": 480,
+      "mean": 8.35,
+      "p50": 8.3,
+      "p95": 8.5,
+      "p99": 8.8,
+      "max": 9.3,
+      "over34": 0
+    },
+    "idleCost": {
+      "script": 1052,
+      "style": 59,
+      "layout": 0,
+      "task": 1963
+    },
+    "stopGo": {
+      "frames": 494,
+      "mean": 10.12,
+      "p50": 8.4,
+      "p95": 16.8,
+      "p99": 41.8,
+      "max": 58.3,
+      "over34": 7
+    },
+    "oceanDrawMs": {
+      "median": 0.1,
+      "p95": 0.2
+    },
+    "heapMB": 16.9,
+    "errors": []
+  },
+  {
+    "view": "1440",
+    "config": "wake",
+    "trial": 1,
+    "compileMs": 5,
+    "cv": {
+      "frames": 327,
+      "mean": 16.59,
+      "p50": 16.6,
+      "p95": 41.7,
+      "p99": 66.8,
+      "max": 91.7,
+      "over34": 21
+    },
+    "cvCost": {
+      "script": 2035,
+      "style": 877,
+      "layout": 691,
+      "task": 5659
+    },
+    "hero": {
+      "frames": 349,
+      "mean": 10.33,
+      "p50": 8.4,
+      "p95": 16.8,
+      "p99": 33.4,
+      "max": 41.8,
+      "over34": 1
+    },
+    "globe": {
+      "frames": 604,
+      "mean": 14.92,
+      "p50": 16.6,
+      "p95": 25,
+      "p99": 50,
+      "max": 108.4,
+      "over34": 8
+    },
+    "endCity": "Shanghai",
+    "idle": {
+      "frames": 479,
+      "mean": 8.35,
+      "p50": 8.3,
+      "p95": 8.5,
+      "p99": 8.7,
+      "max": 8.9,
+      "over34": 0
+    },
+    "idleCost": {
+      "script": 1131,
+      "style": 59,
+      "layout": 0,
+      "task": 2117
+    },
+    "stopGo": {
+      "frames": 477,
+      "mean": 10.48,
+      "p50": 8.4,
+      "p95": 16.8,
+      "p99": 41.8,
+      "max": 83.4,
+      "over34": 9
+    },
+    "oceanDrawMs": {
+      "median": 0.2,
+      "p95": 0.3
+    },
+    "heapMB": 21.4,
+    "errors": []
+  },
+  {
+    "view": "1440",
+    "config": "sea",
+    "trial": 1,
+    "compileMs": 3.5,
+    "cv": {
+      "frames": 310,
+      "mean": 17.5,
+      "p50": 16.6,
+      "p95": 49.9,
+      "p99": 75.1,
+      "max": 83.5,
+      "over34": 23
+    },
+    "cvCost": {
+      "script": 1989,
+      "style": 907,
+      "layout": 695,
+      "task": 5618
+    },
+    "hero": {
+      "frames": 321,
+      "mean": 11.23,
+      "p50": 8.4,
+      "p95": 24.9,
+      "p99": 41.8,
+      "max": 59.1,
+      "over34": 9
+    },
+    "globe": {
+      "frames": 702,
+      "mean": 12.83,
+      "p50": 8.4,
+      "p95": 16.8,
+      "p99": 41.6,
+      "max": 83.6,
+      "over34": 8
+    },
+    "endCity": "Shanghai",
+    "idle": {
+      "frames": 479,
+      "mean": 8.35,
+      "p50": 8.3,
+      "p95": 8.5,
+      "p99": 8.7,
+      "max": 8.9,
+      "over34": 0
+    },
+    "idleCost": {
+      "script": 1076,
+      "style": 57,
+      "layout": 0,
+      "task": 2002
+    },
+    "stopGo": {
+      "frames": 490,
+      "mean": 10.22,
+      "p50": 8.4,
+      "p95": 16.8,
+      "p99": 41.6,
+      "max": 58.5,
+      "over34": 7
+    },
+    "oceanDrawMs": {
+      "median": 0.1,
+      "p95": 0.2
+    },
+    "heapMB": 17.6,
+    "errors": []
+  },
+  {
+    "view": "1440",
+    "config": "all",
+    "trial": 1,
+    "compileMs": 10.1,
+    "cv": {
+      "frames": 332,
+      "mean": 16.31,
+      "p50": 16.6,
+      "p95": 41.7,
+      "p99": 66.8,
+      "max": 83.5,
+      "over34": 22
+    },
+    "cvCost": {
+      "script": 2045,
+      "style": 870,
+      "layout": 675,
+      "task": 5574
+    },
+    "hero": {
+      "frames": 309,
+      "mean": 11.67,
+      "p50": 8.4,
+      "p95": 16.8,
+      "p99": 49.9,
+      "max": 66.8,
+      "over34": 6
+    },
+    "globe": {
+      "frames": 667,
+      "mean": 13.51,
+      "p50": 16.4,
+      "p95": 17.3,
+      "p99": 41.8,
+      "max": 91.7,
+      "over34": 8
+    },
+    "endCity": "Shanghai",
+    "idle": {
+      "frames": 480,
+      "mean": 8.35,
+      "p50": 8.3,
+      "p95": 8.5,
+      "p99": 8.8,
+      "max": 8.9,
+      "over34": 0
+    },
+    "idleCost": {
+      "script": 1263,
+      "style": 58,
+      "layout": 0,
+      "task": 2304
+    },
+    "stopGo": {
+      "frames": 473,
+      "mean": 10.57,
+      "p50": 8.4,
+      "p95": 16.8,
+      "p99": 50,
+      "max": 75,
+      "over34": 9
+    },
+    "oceanDrawMs": {
+      "median": 0.1,
+      "p95": 0.2
+    },
+    "heapMB": 18,
+    "errors": []
+  },
+  {
+    "view": "1440",
+    "config": "all",
+    "trial": 2,
+    "compileMs": 10.9,
+    "cv": {
+      "frames": 319,
+      "mean": 16.98,
+      "p50": 16.6,
+      "p95": 41.8,
+      "p99": 66.7,
+      "max": 91.7,
+      "over34": 22
+    },
+    "cvCost": {
+      "script": 2064,
+      "style": 886,
+      "layout": 682,
+      "task": 5624
+    },
+    "hero": {
+      "frames": 355,
+      "mean": 10.16,
+      "p50": 8.4,
+      "p95": 16.8,
+      "p99": 33.4,
+      "max": 41.7,
+      "over34": 2
+    },
+    "globe": {
+      "frames": 697,
+      "mean": 12.93,
+      "p50": 8.4,
+      "p95": 16.8,
+      "p99": 41.8,
+      "max": 92,
+      "over34": 9
+    },
+    "endCity": "Shanghai",
+    "idle": {
+      "frames": 480,
+      "mean": 8.35,
+      "p50": 8.3,
+      "p95": 8.5,
+      "p99": 8.8,
+      "max": 8.9,
+      "over34": 0
+    },
+    "idleCost": {
+      "script": 1121,
+      "style": 55,
+      "layout": 0,
+      "task": 2046
+    },
+    "stopGo": {
+      "frames": 484,
+      "mean": 10.33,
+      "p50": 8.4,
+      "p95": 16.7,
+      "p99": 49.9,
+      "max": 50.1,
+      "over34": 9
+    },
+    "oceanDrawMs": {
+      "median": 0.1,
+      "p95": 0.2
+    },
+    "heapMB": 16,
+    "errors": []
+  },
+  {
+    "view": "1440",
+    "config": "sea",
+    "trial": 2,
+    "compileMs": 3.8,
+    "cv": {
+      "frames": 313,
+      "mean": 17.3,
+      "p50": 16.6,
+      "p95": 41.8,
+      "p99": 66.8,
+      "max": 83.5,
+      "over34": 25
+    },
+    "cvCost": {
+      "script": 2034,
+      "style": 878,
+      "layout": 676,
+      "task": 5587
+    },
+    "hero": {
+      "frames": 314,
+      "mean": 11.46,
+      "p50": 8.4,
+      "p95": 17,
+      "p99": 50.1,
+      "max": 58.5,
+      "over34": 6
+    },
+    "globe": {
+      "frames": 705,
+      "mean": 12.77,
+      "p50": 8.4,
+      "p95": 16.8,
+      "p99": 50.1,
+      "max": 91.8,
+      "over34": 9
+    },
+    "endCity": "Shanghai",
+    "idle": {
+      "frames": 479,
+      "mean": 8.35,
+      "p50": 8.3,
+      "p95": 8.5,
+      "p99": 8.7,
+      "max": 9.2,
+      "over34": 0
+    },
+    "idleCost": {
+      "script": 1015,
+      "style": 57,
+      "layout": 0,
+      "task": 1903
+    },
+    "stopGo": {
+      "frames": 482,
+      "mean": 10.37,
+      "p50": 8.4,
+      "p95": 16.8,
+      "p99": 41.7,
+      "max": 66.8,
+      "over34": 10
+    },
+    "oceanDrawMs": {
+      "median": 0.1,
+      "p95": 0.3
+    },
+    "heapMB": 15,
+    "errors": []
+  },
+  {
+    "view": "1440",
+    "config": "wake",
+    "trial": 2,
+    "compileMs": 4.7,
+    "cv": {
+      "frames": 303,
+      "mean": 17.93,
+      "p50": 16.6,
+      "p95": 41.8,
+      "p99": 66.8,
+      "max": 91.7,
+      "over34": 25
+    },
+    "cvCost": {
+      "script": 1988,
+      "style": 881,
+      "layout": 705,
+      "task": 5620
+    },
+    "hero": {
+      "frames": 315,
+      "mean": 11.45,
+      "p50": 8.4,
+      "p95": 17.3,
+      "p99": 50,
+      "max": 58.4,
+      "over34": 6
+    },
+    "globe": {
+      "frames": 678,
+      "mean": 13.28,
+      "p50": 8.5,
+      "p95": 24.7,
+      "p99": 50,
+      "max": 100.2,
+      "over34": 9
+    },
+    "endCity": "Shanghai",
+    "idle": {
+      "frames": 479,
+      "mean": 8.35,
+      "p50": 8.3,
+      "p95": 8.5,
+      "p99": 8.7,
+      "max": 8.9,
+      "over34": 0
+    },
+    "idleCost": {
+      "script": 1096,
+      "style": 63,
+      "layout": 0,
+      "task": 2067
+    },
+    "stopGo": {
+      "frames": 493,
+      "mean": 10.14,
+      "p50": 8.4,
+      "p95": 16.8,
+      "p99": 41.8,
+      "max": 58.5,
+      "over34": 9
+    },
+    "oceanDrawMs": {
+      "median": 0.1,
+      "p95": 0.2
+    },
+    "heapMB": 19.2,
+    "errors": []
+  },
+  {
+    "view": "1440",
+    "config": "flow",
+    "trial": 2,
+    "compileMs": 3.9,
+    "cv": {
+      "frames": 313,
+      "mean": 17.3,
+      "p50": 16.6,
+      "p95": 50.1,
+      "p99": 75.2,
+      "max": 91.9,
+      "over34": 26
+    },
+    "cvCost": {
+      "script": 1989,
+      "style": 926,
+      "layout": 720,
+      "task": 5595
+    },
+    "hero": {
+      "frames": 306,
+      "mean": 11.78,
+      "p50": 8.4,
+      "p95": 17.4,
+      "p99": 41.8,
+      "max": 50,
+      "over34": 9
+    },
+    "globe": {
+      "frames": 696,
+      "mean": 12.94,
+      "p50": 8.4,
+      "p95": 16.8,
+      "p99": 41.7,
+      "max": 91.9,
+      "over34": 8
+    },
+    "endCity": "Shanghai",
+    "idle": {
+      "frames": 479,
+      "mean": 8.35,
+      "p50": 8.3,
+      "p95": 8.5,
+      "p99": 8.8,
+      "max": 9,
+      "over34": 0
+    },
+    "idleCost": {
+      "script": 1108,
+      "style": 59,
+      "layout": 0,
+      "task": 2080
+    },
+    "stopGo": {
+      "frames": 466,
+      "mean": 10.75,
+      "p50": 8.4,
+      "p95": 16.8,
+      "p99": 58.3,
+      "max": 66.8,
+      "over34": 11
+    },
+    "oceanDrawMs": {
+      "median": 0.2,
+      "p95": 0.3
+    },
+    "heapMB": 18.5,
+    "errors": []
+  },
+  {
+    "view": "1440",
+    "config": "inertia",
+    "trial": 2,
+    "compileMs": 2.7,
+    "cv": {
+      "frames": 305,
+      "mean": 17.81,
+      "p50": 16.6,
+      "p95": 50.1,
+      "p99": 75.3,
+      "max": 100.1,
+      "over34": 23
+    },
+    "cvCost": {
+      "script": 2024,
+      "style": 913,
+      "layout": 704,
+      "task": 5662
+    },
+    "hero": {
+      "frames": 305,
+      "mean": 11.79,
+      "p50": 8.4,
+      "p95": 25,
+      "p99": 50,
+      "max": 58.4,
+      "over34": 10
+    },
+    "globe": {
+      "frames": 708,
+      "mean": 12.73,
+      "p50": 8.4,
+      "p95": 16.8,
+      "p99": 41.6,
+      "max": 83.7,
+      "over34": 8
+    },
+    "endCity": "Shanghai",
+    "idle": {
+      "frames": 480,
+      "mean": 8.35,
+      "p50": 8.3,
+      "p95": 8.5,
+      "p99": 8.6,
+      "max": 8.7,
+      "over34": 0
+    },
+    "idleCost": {
+      "script": 1045,
+      "style": 56,
+      "layout": 0,
+      "task": 1969
+    },
+    "stopGo": {
+      "frames": 488,
+      "mean": 10.24,
+      "p50": 8.4,
+      "p95": 16.8,
+      "p99": 41.7,
+      "max": 66.7,
+      "over34": 9
+    },
+    "oceanDrawMs": {
+      "median": 0.1,
+      "p95": 0.2
+    },
+    "heapMB": 15.9,
+    "errors": []
+  },
+  {
+    "view": "1440",
+    "config": "none",
+    "trial": 2,
+    "compileMs": 2.4,
+    "cv": {
+      "frames": 318,
+      "mean": 17.03,
+      "p50": 16.6,
+      "p95": 41.9,
+      "p99": 66.9,
+      "max": 91.7,
+      "over34": 22
+    },
+    "cvCost": {
+      "script": 1956,
+      "style": 872,
+      "layout": 674,
+      "task": 5517
+    },
+    "hero": {
+      "frames": 312,
+      "mean": 11.56,
+      "p50": 8.4,
+      "p95": 25,
+      "p99": 50,
+      "max": 58.5,
+      "over34": 10
+    },
+    "globe": {
+      "frames": 704,
+      "mean": 12.8,
+      "p50": 8.4,
+      "p95": 16.9,
+      "p99": 41.7,
+      "max": 83.4,
+      "over34": 9
+    },
+    "endCity": "Shanghai",
+    "idle": {
+      "frames": 479,
+      "mean": 8.35,
+      "p50": 8.3,
+      "p95": 8.5,
+      "p99": 8.9,
+      "max": 9.1,
+      "over34": 0
+    },
+    "idleCost": {
+      "script": 1052,
+      "style": 58,
+      "layout": 0,
+      "task": 1961
+    },
+    "stopGo": {
+      "frames": 488,
+      "mean": 10.24,
+      "p50": 8.4,
+      "p95": 16.8,
+      "p99": 41.7,
+      "max": 58.6,
+      "over34": 9
+    },
+    "oceanDrawMs": {
+      "median": 0.1,
+      "p95": 0.2
+    },
+    "heapMB": 18.9,
+    "errors": []
+  },
+  {
+    "view": "390",
+    "config": "none",
+    "trial": 1,
+    "compileMs": 2.5,
+    "cv": {
+      "frames": 451,
+      "mean": 12.75,
+      "p50": 8.4,
+      "p95": 33.3,
+      "p99": 50.1,
+      "max": 74.8,
+      "over34": 18
+    },
+    "cvCost": {
+      "script": 1950,
+      "style": 792,
+      "layout": 674,
+      "task": 5642
+    },
+    "hero": {
+      "frames": 348,
+      "mean": 9.71,
+      "p50": 8.4,
+      "p95": 16.7,
+      "p99": 33.4,
+      "max": 33.4,
+      "over34": 0
+    },
+    "globe": {
+      "frames": 750,
+      "mean": 12.02,
+      "p50": 8.4,
+      "p95": 17,
+      "p99": 33.3,
+      "max": 83.4,
+      "over34": 6
+    },
+    "endCity": "Shanghai",
+    "idle": {
+      "frames": 479,
+      "mean": 8.35,
+      "p50": 8.3,
+      "p95": 8.6,
+      "p99": 8.7,
+      "max": 8.9,
+      "over34": 0
+    },
+    "idleCost": {
+      "script": 794,
+      "style": 40,
+      "layout": 4,
+      "task": 1591
+    },
+    "stopGo": {
+      "frames": 518,
+      "mean": 9.65,
+      "p50": 8.4,
+      "p95": 16.7,
+      "p99": 41.7,
+      "max": 42.3,
+      "over34": 8
+    },
+    "oceanDrawMs": {
+      "median": 0.1,
+      "p95": 0.2
+    },
+    "heapMB": 20.4,
+    "errors": []
+  },
+  {
+    "view": "390",
+    "config": "inertia",
+    "trial": 1,
+    "compileMs": 2.3,
+    "cv": {
+      "frames": 455,
+      "mean": 12.64,
+      "p50": 8.4,
+      "p95": 33.3,
+      "p99": 50.1,
+      "max": 75.4,
+      "over34": 18
+    },
+    "cvCost": {
+      "script": 1993,
+      "style": 818,
+      "layout": 662,
+      "task": 5735
+    },
+    "hero": {
+      "frames": 337,
+      "mean": 10.03,
+      "p50": 8.4,
+      "p95": 16.8,
+      "p99": 41.7,
+      "max": 41.9,
+      "over34": 6
+    },
+    "globe": {
+      "frames": 754,
+      "mean": 11.93,
+      "p50": 8.4,
+      "p95": 17,
+      "p99": 33.4,
+      "max": 75.1,
+      "over34": 6
+    },
+    "endCity": "Shanghai",
+    "idle": {
+      "frames": 480,
+      "mean": 8.35,
+      "p50": 8.3,
+      "p95": 8.6,
+      "p99": 9,
+      "max": 9.4,
+      "over34": 0
+    },
+    "idleCost": {
+      "script": 738,
+      "style": 40,
+      "layout": 5,
+      "task": 1493
+    },
+    "stopGo": {
+      "frames": 513,
+      "mean": 9.74,
+      "p50": 8.4,
+      "p95": 16.7,
+      "p99": 41.7,
+      "max": 66.7,
+      "over34": 10
+    },
+    "oceanDrawMs": {
+      "median": 0.1,
+      "p95": 0.2
+    },
+    "heapMB": 19.4,
+    "errors": []
+  },
+  {
+    "view": "390",
+    "config": "flow",
+    "trial": 1,
+    "compileMs": 4.5,
+    "cv": {
+      "frames": 436,
+      "mean": 13.17,
+      "p50": 8.4,
+      "p95": 33.9,
+      "p99": 58.5,
+      "max": 75,
+      "over34": 20
+    },
+    "cvCost": {
+      "script": 1987,
+      "style": 838,
+      "layout": 681,
+      "task": 5687
+    },
+    "hero": {
+      "frames": 342,
+      "mean": 9.86,
+      "p50": 8.4,
+      "p95": 16.8,
+      "p99": 33.3,
+      "max": 33.4,
+      "over34": 0
+    },
+    "globe": {
+      "frames": 880,
+      "mean": 10.23,
+      "p50": 8.4,
+      "p95": 16.7,
+      "p99": 25.3,
+      "max": 58.6,
+      "over34": 6
+    },
+    "endCity": "Shanghai",
+    "idle": {
+      "frames": 480,
+      "mean": 8.35,
+      "p50": 8.3,
+      "p95": 8.5,
+      "p99": 8.7,
+      "max": 9.4,
+      "over34": 0
+    },
+    "idleCost": {
+      "script": 800,
+      "style": 41,
+      "layout": 4,
+      "task": 1584
+    },
+    "stopGo": {
+      "frames": 519,
+      "mean": 9.63,
+      "p50": 8.4,
+      "p95": 16.7,
+      "p99": 41.7,
+      "max": 50,
+      "over34": 7
+    },
+    "oceanDrawMs": {
+      "median": 0.1,
+      "p95": 0.2
+    },
+    "heapMB": 18,
+    "errors": []
+  },
+  {
+    "view": "390",
+    "config": "wake",
+    "trial": 1,
+    "compileMs": 5.3,
+    "cv": {
+      "frames": 420,
+      "mean": 13.67,
+      "p50": 8.4,
+      "p95": 33.6,
+      "p99": 58.5,
+      "max": 83.4,
+      "over34": 19
+    },
+    "cvCost": {
+      "script": 2012,
+      "style": 847,
+      "layout": 722,
+      "task": 5785
+    },
+    "hero": {
+      "frames": 345,
+      "mean": 9.8,
+      "p50": 8.4,
+      "p95": 16.7,
+      "p99": 33.4,
+      "max": 42,
+      "over34": 2
+    },
+    "globe": {
+      "frames": 853,
+      "mean": 10.56,
+      "p50": 8.4,
+      "p95": 16.8,
+      "p99": 33.3,
+      "max": 75.1,
+      "over34": 5
+    },
+    "endCity": "Shanghai",
+    "idle": {
+      "frames": 479,
+      "mean": 8.35,
+      "p50": 8.3,
+      "p95": 8.6,
+      "p99": 8.8,
+      "max": 9.3,
+      "over34": 0
+    },
+    "idleCost": {
+      "script": 758,
+      "style": 40,
+      "layout": 3,
+      "task": 1492
+    },
+    "stopGo": {
+      "frames": 526,
+      "mean": 9.52,
+      "p50": 8.4,
+      "p95": 16.7,
+      "p99": 33.7,
+      "max": 41.8,
+      "over34": 5
+    },
+    "oceanDrawMs": {
+      "median": 0.1,
+      "p95": 0.2
+    },
+    "heapMB": 16.2,
+    "errors": []
+  },
+  {
+    "view": "390",
+    "config": "sea",
+    "trial": 1,
+    "compileMs": 3.4,
+    "cv": {
+      "frames": 438,
+      "mean": 13.11,
+      "p50": 8.4,
+      "p95": 33.3,
+      "p99": 58.3,
+      "max": 75.2,
+      "over34": 18
+    },
+    "cvCost": {
+      "script": 1973,
+      "style": 830,
+      "layout": 671,
+      "task": 5684
+    },
+    "hero": {
+      "frames": 342,
+      "mean": 9.86,
+      "p50": 8.4,
+      "p95": 16.8,
+      "p99": 33.4,
+      "max": 41.7,
+      "over34": 1
+    },
+    "globe": {
+      "frames": 761,
+      "mean": 11.83,
+      "p50": 8.4,
+      "p95": 16.9,
+      "p99": 41.5,
+      "max": 74.7,
+      "over34": 8
+    },
+    "endCity": "Shanghai",
+    "idle": {
+      "frames": 480,
+      "mean": 8.35,
+      "p50": 8.3,
+      "p95": 8.6,
+      "p99": 8.9,
+      "max": 9.2,
+      "over34": 0
+    },
+    "idleCost": {
+      "script": 738,
+      "style": 39,
+      "layout": 4,
+      "task": 1482
+    },
+    "stopGo": {
+      "frames": 520,
+      "mean": 9.61,
+      "p50": 8.4,
+      "p95": 16.7,
+      "p99": 41.7,
+      "max": 50.1,
+      "over34": 8
+    },
+    "oceanDrawMs": {
+      "median": 0.1,
+      "p95": 0.2
+    },
+    "heapMB": 17.7,
+    "errors": []
+  },
+  {
+    "view": "390",
+    "config": "all",
+    "trial": 1,
+    "compileMs": 13.3,
+    "cv": {
+      "frames": 424,
+      "mean": 13.56,
+      "p50": 8.4,
+      "p95": 33.4,
+      "p99": 58.3,
+      "max": 83.6,
+      "over34": 18
+    },
+    "cvCost": {
+      "script": 2016,
+      "style": 852,
+      "layout": 695,
+      "task": 5757
+    },
+    "hero": {
+      "frames": 337,
+      "mean": 10.03,
+      "p50": 8.4,
+      "p95": 16.8,
+      "p99": 41.7,
+      "max": 42.1,
+      "over34": 5
+    },
+    "globe": {
+      "frames": 750,
+      "mean": 12.01,
+      "p50": 8.4,
+      "p95": 16.9,
+      "p99": 33.2,
+      "max": 74.9,
+      "over34": 5
+    },
+    "endCity": "Shanghai",
+    "idle": {
+      "frames": 479,
+      "mean": 8.35,
+      "p50": 8.3,
+      "p95": 8.6,
+      "p99": 8.9,
+      "max": 9.1,
+      "over34": 0
+    },
+    "idleCost": {
+      "script": 745,
+      "style": 39,
+      "layout": 2,
+      "task": 1483
+    },
+    "stopGo": {
+      "frames": 511,
+      "mean": 9.8,
+      "p50": 8.4,
+      "p95": 16.7,
+      "p99": 42.2,
+      "max": 58.4,
+      "over34": 10
+    },
+    "oceanDrawMs": {
+      "median": 0.1,
+      "p95": 0.3
+    },
+    "heapMB": 18.3,
+    "errors": []
+  },
+  {
+    "view": "390",
+    "config": "all",
+    "trial": 2,
+    "compileMs": 10.6,
+    "cv": {
+      "frames": 446,
+      "mean": 12.89,
+      "p50": 8.4,
+      "p95": 25.2,
+      "p99": 58.4,
+      "max": 75.1,
+      "over34": 20
+    },
+    "cvCost": {
+      "script": 2023,
+      "style": 827,
+      "layout": 668,
+      "task": 5693
+    },
+    "hero": {
+      "frames": 336,
+      "mean": 10.06,
+      "p50": 8.4,
+      "p95": 16.8,
+      "p99": 33.4,
+      "max": 50.2,
+      "over34": 3
+    },
+    "globe": {
+      "frames": 859,
+      "mean": 10.48,
+      "p50": 8.4,
+      "p95": 16.8,
+      "p99": 33.2,
+      "max": 58.6,
+      "over34": 7
+    },
+    "endCity": "Shanghai",
+    "idle": {
+      "frames": 479,
+      "mean": 8.35,
+      "p50": 8.3,
+      "p95": 8.6,
+      "p99": 9,
+      "max": 9.1,
+      "over34": 0
+    },
+    "idleCost": {
+      "script": 755,
+      "style": 41,
+      "layout": 4,
+      "task": 1499
+    },
+    "stopGo": {
+      "frames": 526,
+      "mean": 9.5,
+      "p50": 8.4,
+      "p95": 16.7,
+      "p99": 41.5,
+      "max": 41.9,
+      "over34": 7
+    },
+    "oceanDrawMs": {
+      "median": 0.1,
+      "p95": 0.3
+    },
+    "heapMB": 20,
+    "errors": []
+  },
+  {
+    "view": "390",
+    "config": "sea",
+    "trial": 2,
+    "compileMs": 3.2,
+    "cv": {
+      "frames": 408,
+      "mean": 14.09,
+      "p50": 8.4,
+      "p95": 33.3,
+      "p99": 75.1,
+      "max": 83.6,
+      "over34": 19
+    },
+    "cvCost": {
+      "script": 2003,
+      "style": 906,
+      "layout": 704,
+      "task": 5772
+    },
+    "hero": {
+      "frames": 344,
+      "mean": 9.8,
+      "p50": 8.4,
+      "p95": 16.7,
+      "p99": 33.4,
+      "max": 41.8,
+      "over34": 3
+    },
+    "globe": {
+      "frames": 770,
+      "mean": 11.69,
+      "p50": 8.4,
+      "p95": 16.8,
+      "p99": 33.4,
+      "max": 66.7,
+      "over34": 7
+    },
+    "endCity": "Shanghai",
+    "idle": {
+      "frames": 479,
+      "mean": 8.35,
+      "p50": 8.3,
+      "p95": 8.6,
+      "p99": 8.8,
+      "max": 9.1,
+      "over34": 0
+    },
+    "idleCost": {
+      "script": 725,
+      "style": 41,
+      "layout": 4,
+      "task": 1434
+    },
+    "stopGo": {
+      "frames": 523,
+      "mean": 9.56,
+      "p50": 8.4,
+      "p95": 16.7,
+      "p99": 33.4,
+      "max": 42,
+      "over34": 3
+    },
+    "oceanDrawMs": {
+      "median": 0.1,
+      "p95": 0.2
+    },
+    "heapMB": 15.1,
+    "errors": []
+  },
+  {
+    "view": "390",
+    "config": "wake",
+    "trial": 2,
+    "compileMs": 4.9,
+    "cv": {
+      "frames": 444,
+      "mean": 12.95,
+      "p50": 8.4,
+      "p95": 25.2,
+      "p99": 58.4,
+      "max": 74.8,
+      "over34": 19
+    },
+    "cvCost": {
+      "script": 2001,
+      "style": 831,
+      "layout": 675,
+      "task": 5713
+    },
+    "hero": {
+      "frames": 341,
+      "mean": 9.89,
+      "p50": 8.4,
+      "p95": 16.7,
+      "p99": 33.4,
+      "max": 41.6,
+      "over34": 1
+    },
+    "globe": {
+      "frames": 868,
+      "mean": 10.37,
+      "p50": 8.4,
+      "p95": 16.7,
+      "p99": 25.1,
+      "max": 66.9,
+      "over34": 6
+    },
+    "endCity": "Shanghai",
+    "idle": {
+      "frames": 480,
+      "mean": 8.34,
+      "p50": 8.3,
+      "p95": 8.6,
+      "p99": 9,
+      "max": 9.3,
+      "over34": 0
+    },
+    "idleCost": {
+      "script": 743,
+      "style": 42,
+      "layout": 5,
+      "task": 1487
+    },
+    "stopGo": {
+      "frames": 524,
+      "mean": 9.54,
+      "p50": 8.4,
+      "p95": 16.7,
+      "p99": 33.5,
+      "max": 50.1,
+      "over34": 5
+    },
+    "oceanDrawMs": {
+      "median": 0.1,
+      "p95": 0.2
+    },
+    "heapMB": 21.1,
+    "errors": []
+  },
+  {
+    "view": "390",
+    "config": "flow",
+    "trial": 2,
+    "compileMs": 3.3,
+    "cv": {
+      "frames": 416,
+      "mean": 13.82,
+      "p50": 8.4,
+      "p95": 33.4,
+      "p99": 75.1,
+      "max": 83.6,
+      "over34": 16
+    },
+    "cvCost": {
+      "script": 1959,
+      "style": 872,
+      "layout": 713,
+      "task": 5748
+    },
+    "hero": {
+      "frames": 312,
+      "mean": 10.83,
+      "p50": 8.4,
+      "p95": 16.8,
+      "p99": 49.9,
+      "max": 58.4,
+      "over34": 7
+    },
+    "globe": {
+      "frames": 862,
+      "mean": 10.45,
+      "p50": 8.4,
+      "p95": 16.7,
+      "p99": 33.3,
+      "max": 66.7,
+      "over34": 6
+    },
+    "endCity": "Shanghai",
+    "idle": {
+      "frames": 480,
+      "mean": 8.35,
+      "p50": 8.3,
+      "p95": 8.5,
+      "p99": 8.9,
+      "max": 9,
+      "over34": 0
+    },
+    "idleCost": {
+      "script": 723,
+      "style": 39,
+      "layout": 3,
+      "task": 1436
+    },
+    "stopGo": {
+      "frames": 518,
+      "mean": 9.65,
+      "p50": 8.4,
+      "p95": 16.7,
+      "p99": 41.6,
+      "max": 50.1,
+      "over34": 7
+    },
+    "oceanDrawMs": {
+      "median": 0.1,
+      "p95": 0.2
+    },
+    "heapMB": 20.1,
+    "errors": []
+  },
+  {
+    "view": "390",
+    "config": "inertia",
+    "trial": 2,
+    "compileMs": 2.4,
+    "cv": {
+      "frames": 437,
+      "mean": 13.16,
+      "p50": 8.4,
+      "p95": 33.8,
+      "p99": 58.3,
+      "max": 75,
+      "over34": 21
+    },
+    "cvCost": {
+      "script": 1980,
+      "style": 830,
+      "layout": 690,
+      "task": 5732
+    },
+    "hero": {
+      "frames": 331,
+      "mean": 10.21,
+      "p50": 8.4,
+      "p95": 16.8,
+      "p99": 41.6,
+      "max": 50.1,
+      "over34": 5
+    },
+    "globe": {
+      "frames": 876,
+      "mean": 10.28,
+      "p50": 8.4,
+      "p95": 16.7,
+      "p99": 25.1,
+      "max": 66.7,
+      "over34": 4
+    },
+    "endCity": "Shanghai",
+    "idle": {
+      "frames": 480,
+      "mean": 8.35,
+      "p50": 8.3,
+      "p95": 8.5,
+      "p99": 8.8,
+      "max": 9.4,
+      "over34": 0
+    },
+    "idleCost": {
+      "script": 800,
+      "style": 39,
+      "layout": 4,
+      "task": 1586
+    },
+    "stopGo": {
+      "frames": 516,
+      "mean": 9.69,
+      "p50": 8.4,
+      "p95": 16.7,
+      "p99": 41.7,
+      "max": 50.1,
+      "over34": 7
+    },
+    "oceanDrawMs": {
+      "median": 0.1,
+      "p95": 0.2
+    },
+    "heapMB": 20.6,
+    "errors": []
+  },
+  {
+    "view": "390",
+    "config": "none",
+    "trial": 2,
+    "compileMs": 2.8,
+    "cv": {
+      "frames": 426,
+      "mean": 13.48,
+      "p50": 8.4,
+      "p95": 41.6,
+      "p99": 50.1,
+      "max": 83.4,
+      "over34": 22
+    },
+    "cvCost": {
+      "script": 1929,
+      "style": 843,
+      "layout": 692,
+      "task": 5720
+    },
+    "hero": {
+      "frames": 337,
+      "mean": 10.01,
+      "p50": 8.4,
+      "p95": 16.8,
+      "p99": 41.6,
+      "max": 41.7,
+      "over34": 4
+    },
+    "globe": {
+      "frames": 866,
+      "mean": 10.4,
+      "p50": 8.4,
+      "p95": 16.8,
+      "p99": 25.1,
+      "max": 66.9,
+      "over34": 5
+    },
+    "endCity": "Shanghai",
+    "idle": {
+      "frames": 479,
+      "mean": 8.35,
+      "p50": 8.3,
+      "p95": 8.5,
+      "p99": 8.8,
+      "max": 9.2,
+      "over34": 0
+    },
+    "idleCost": {
+      "script": 770,
+      "style": 39,
+      "layout": 5,
+      "task": 1550
+    },
+    "stopGo": {
+      "frames": 510,
+      "mean": 9.82,
+      "p50": 8.4,
+      "p95": 16.7,
+      "p99": 41.6,
+      "max": 58.7,
+      "over34": 8
+    },
+    "oceanDrawMs": {
+      "median": 0.1,
+      "p95": 0.2
+    },
+    "heapMB": 15,
+    "errors": []
+  }
+]

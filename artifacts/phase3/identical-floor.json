@@ -1,0 +1,37 @@
+[
+  {
+    "frame": "1440-0",
+    "size": true,
+    "worst": 13,
+    "mean": 0.2733,
+    "over6": 0.000117
+  },
+  {
+    "frame": "1440-1",
+    "size": true,
+    "worst": 10,
+    "mean": 0.2367,
+    "over6": 5.3e-05
+  },
+  {
+    "frame": "1440-2",
+    "size": true,
+    "worst": 13,
+    "mean": 0.3215,
+    "over6": 0.000136
+  },
+  {
+    "frame": "1440-3",
+    "size": true,
+    "worst": 13,
+    "mean": 0.2976,
+    "over6": 0.000184
+  },
+  {
+    "frame": "1440-4",
+    "size": true,
+    "worst": 12,
+    "mean": 0.3254,
+    "over6": 0.000171
+  }
+]
