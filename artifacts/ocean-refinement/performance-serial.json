@@ -1,0 +1,365 @@
+[
+  {
+    "width": 1440,
+    "height": 900,
+    "mode": "before",
+    "idle": {
+      "frames": 480,
+      "mean": 8.35,
+      "p50": 8.3,
+      "p95": 8.5,
+      "p99": 8.6,
+      "max": 8.7,
+      "over34": 0
+    },
+    "scroll": {
+      "frames": 554,
+      "mean": 10.82,
+      "p50": 8.4,
+      "p95": 16.8,
+      "p99": 50.1,
+      "max": 66.8,
+      "over34": 11
+    },
+    "synchronousOceanDraw": {
+      "frames": 20,
+      "mean": 0.15,
+      "p50": 0.1,
+      "p95": 0.3,
+      "p99": 0.3,
+      "max": 0.3,
+      "over34": 0
+    },
+    "effects": {
+      "inertia": true,
+      "flow": true,
+      "wake": true,
+      "sea": true
+    },
+    "errors": []
+  },
+  {
+    "width": 1440,
+    "height": 900,
+    "mode": "refined",
+    "idle": {
+      "frames": 480,
+      "mean": 8.35,
+      "p50": 8.3,
+      "p95": 8.5,
+      "p99": 8.8,
+      "max": 9.3,
+      "over34": 0
+    },
+    "scroll": {
+      "frames": 535,
+      "mean": 11.23,
+      "p50": 8.4,
+      "p95": 16.8,
+      "p99": 58.4,
+      "max": 66.9,
+      "over34": 15
+    },
+    "synchronousOceanDraw": {
+      "frames": 20,
+      "mean": 0.17,
+      "p50": 0.2,
+      "p95": 0.3,
+      "p99": 0.3,
+      "max": 0.3,
+      "over34": 0
+    },
+    "effects": {
+      "inertia": true,
+      "flow": false,
+      "wake": true,
+      "sea": false
+    },
+    "errors": []
+  },
+  {
+    "width": 1440,
+    "height": 900,
+    "mode": "original",
+    "idle": {
+      "frames": 480,
+      "mean": 8.35,
+      "p50": 8.3,
+      "p95": 8.5,
+      "p99": 8.7,
+      "max": 9.1,
+      "over34": 0
+    },
+    "scroll": {
+      "frames": 515,
+      "mean": 11.65,
+      "p50": 8.4,
+      "p95": 17.1,
+      "p99": 58.4,
+      "max": 67,
+      "over34": 19
+    },
+    "synchronousOceanDraw": {
+      "frames": 20,
+      "mean": 0.18,
+      "p50": 0.2,
+      "p95": 0.3,
+      "p99": 0.3,
+      "max": 0.3,
+      "over34": 0
+    },
+    "effects": {
+      "inertia": false,
+      "flow": false,
+      "wake": false,
+      "sea": false
+    },
+    "errors": []
+  },
+  {
+    "width": 390,
+    "height": 844,
+    "touch": true,
+    "dsf": 2,
+    "mode": "before",
+    "idle": {
+      "frames": 430,
+      "mean": 9.32,
+      "p50": 8.4,
+      "p95": 16.7,
+      "p99": 33.4,
+      "max": 41.8,
+      "over34": 3
+    },
+    "scroll": {
+      "frames": 349,
+      "mean": 17.29,
+      "p50": 8.4,
+      "p95": 50.1,
+      "p99": 116.8,
+      "max": 166.9,
+      "over34": 24
+    },
+    "synchronousOceanDraw": {
+      "frames": 20,
+      "mean": 0.16,
+      "p50": 0.2,
+      "p95": 0.3,
+      "p99": 0.3,
+      "max": 0.3,
+      "over34": 0
+    },
+    "effects": {
+      "inertia": true,
+      "flow": true,
+      "wake": true,
+      "sea": true
+    },
+    "errors": []
+  },
+  {
+    "width": 390,
+    "height": 844,
+    "touch": true,
+    "dsf": 2,
+    "mode": "refined",
+    "idle": {
+      "frames": 454,
+      "mean": 8.82,
+      "p50": 8.4,
+      "p95": 16,
+      "p99": 16.8,
+      "max": 25,
+      "over34": 0
+    },
+    "scroll": {
+      "frames": 354,
+      "mean": 16.95,
+      "p50": 8.4,
+      "p95": 58.4,
+      "p99": 158.5,
+      "max": 200.5,
+      "over34": 28
+    },
+    "synchronousOceanDraw": {
+      "frames": 20,
+      "mean": 0.16,
+      "p50": 0.2,
+      "p95": 0.2,
+      "p99": 0.2,
+      "max": 0.2,
+      "over34": 0
+    },
+    "effects": {
+      "inertia": true,
+      "flow": false,
+      "wake": true,
+      "sea": false
+    },
+    "errors": []
+  },
+  {
+    "width": 390,
+    "height": 844,
+    "touch": true,
+    "dsf": 2,
+    "mode": "original",
+    "idle": {
+      "frames": 447,
+      "mean": 8.96,
+      "p50": 8.3,
+      "p95": 16.5,
+      "p99": 16.8,
+      "max": 58.4,
+      "over34": 2
+    },
+    "scroll": {
+      "frames": 401,
+      "mean": 14.98,
+      "p50": 8.4,
+      "p95": 50.1,
+      "p99": 91.7,
+      "max": 125.2,
+      "over34": 24
+    },
+    "synchronousOceanDraw": {
+      "frames": 20,
+      "mean": 0.16,
+      "p50": 0.2,
+      "p95": 0.3,
+      "p99": 0.3,
+      "max": 0.3,
+      "over34": 0
+    },
+    "effects": {
+      "inertia": false,
+      "flow": false,
+      "wake": false,
+      "sea": false
+    },
+    "errors": []
+  },
+  {
+    "width": 320,
+    "height": 740,
+    "touch": true,
+    "dsf": 3,
+    "mode": "before",
+    "idle": {
+      "frames": 480,
+      "mean": 8.36,
+      "p50": 8.3,
+      "p95": 8.5,
+      "p99": 8.8,
+      "max": 16.7,
+      "over34": 0
+    },
+    "scroll": {
+      "frames": 524,
+      "mean": 11.58,
+      "p50": 8.4,
+      "p95": 16.9,
+      "p99": 66.8,
+      "max": 83.4,
+      "over34": 23
+    },
+    "synchronousOceanDraw": {
+      "frames": 20,
+      "mean": 0.2,
+      "p50": 0.2,
+      "p95": 0.3,
+      "p99": 0.3,
+      "max": 0.3,
+      "over34": 0
+    },
+    "effects": {
+      "inertia": true,
+      "flow": true,
+      "wake": true,
+      "sea": true
+    },
+    "errors": []
+  },
+  {
+    "width": 320,
+    "height": 740,
+    "touch": true,
+    "dsf": 3,
+    "mode": "refined",
+    "idle": {
+      "frames": 480,
+      "mean": 8.35,
+      "p50": 8.3,
+      "p95": 8.5,
+      "p99": 8.5,
+      "max": 9,
+      "over34": 0
+    },
+    "scroll": {
+      "frames": 607,
+      "mean": 9.93,
+      "p50": 8.4,
+      "p95": 16.7,
+      "p99": 41.8,
+      "max": 58.4,
+      "over34": 13
+    },
+    "synchronousOceanDraw": {
+      "frames": 20,
+      "mean": 0.14,
+      "p50": 0.2,
+      "p95": 0.2,
+      "p99": 0.2,
+      "max": 0.2,
+      "over34": 0
+    },
+    "effects": {
+      "inertia": true,
+      "flow": false,
+      "wake": true,
+      "sea": false
+    },
+    "errors": []
+  },
+  {
+    "width": 320,
+    "height": 740,
+    "touch": true,
+    "dsf": 3,
+    "mode": "original",
+    "idle": {
+      "frames": 480,
+      "mean": 8.35,
+      "p50": 8.3,
+      "p95": 8.5,
+      "p99": 8.7,
+      "max": 9.1,
+      "over34": 0
+    },
+    "scroll": {
+      "frames": 572,
+      "mean": 10.53,
+      "p50": 8.4,
+      "p95": 16.8,
+      "p99": 58.5,
+      "max": 75.1,
+      "over34": 18
+    },
+    "synchronousOceanDraw": {
+      "frames": 20,
+      "mean": 0.14,
+      "p50": 0.1,
+      "p95": 0.3,
+      "p99": 0.3,
+      "max": 0.3,
+      "over34": 0
+    },
+    "effects": {
+      "inertia": false,
+      "flow": false,
+      "wake": false,
+      "sea": false
+    },
+    "errors": []
+  }
+]

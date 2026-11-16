@@ -8,8 +8,8 @@ import { CV_SECTIONS } from './sections.ts';
 
 // --- The switches ---------------------------------------------------------------------------
 
-test('the shipped ocean has all four behaviours on, and no parameter means the shipped ocean', () => {
-  assert.deepEqual(OCEAN_EFFECT_DEFAULTS, { inertia: true, flow: true, wake: true, sea: true });
+test('the shipped ocean preserves inertia and whale wakes without global stroke bands or sea changes', () => {
+  assert.deepEqual(OCEAN_EFFECT_DEFAULTS, { inertia: true, flow: false, wake: true, sea: false });
   for (const search of ['', '?other=1', '?ocean=', '?ocean=nonsense', '?ocean=nonsense,stuff']) {
     assert.deepEqual(parseOceanEffects(search), OCEAN_EFFECT_DEFAULTS);
   }
@@ -18,7 +18,7 @@ test('the shipped ocean has all four behaviours on, and no parameter means the s
 test('each behaviour can be compared alone, together, or taken out, from the address bar', () => {
   const none = { inertia: false, flow: false, wake: false, sea: false };
   for (const word of ['none', 'original', 'off', 'ORIGINAL']) assert.deepEqual(parseOceanEffects(`?ocean=${word}`), none);
-  assert.deepEqual(parseOceanEffects('?ocean=all', none), OCEAN_EFFECT_DEFAULTS);
+  assert.deepEqual(parseOceanEffects('?ocean=all', none), { inertia: true, flow: true, wake: true, sea: true });
   for (const effect of OCEAN_EFFECTS) assert.deepEqual(parseOceanEffects(`?ocean=${effect}`), { ...none, [effect]: true });
   assert.deepEqual(parseOceanEffects('?ocean=inertia,flow'), { ...none, inertia: true, flow: true });
   // A typo beside a real name does not disturb the real name
@@ -262,27 +262,28 @@ test('a whale at its usual cruise already moves the water well: the wake does no
   assert.ok(out.count === 0 || out.bodies[1].strength < 0.1);
 });
 
-test('the page scrolling past a whale moves the water a little, its own swimming far more', () => {
+test('scroll alone emits no wake; real projected travel determines its direction even while scrolling', () => {
   const tracker = newWakeTracker();
   const out = { bodies: Array.from({ length: WAKE_BODIES }, () => ({ x: 0, y: 0, r: 1, ux: 0, uy: 0, strength: 0, churn: 0, spread: 1, wash: false, bow: 0, flank: 0 })), count: 0 };
   trackWake(tracker, [spine(1000, 400)], 1, 5000, 1 / 30, 900, out);
   trackWake(tracker, [spine(1000, 400)], 1, 5000, 1 / 30, 900, out);
   assert.equal(out.count, 0, 'a still whale in still water leaves it alone');
   trackWake(tracker, [spine(1000, 400)], 1, 5040, 1 / 30, 900, out);
-  assert.equal(out.count, 4);
-  // 1,200 px/s of page counts as about a tenth of that in swimming
-  const byScroll = out.bodies[0].strength;
-  assert.ok(byScroll > 0.3 && byScroll < 0.75, `${byScroll}`);
+  assert.equal(out.count, 0, 'scroll is not animal motion');
   const swum = { bodies: out.bodies.map((b) => ({ ...b })), count: 0 };
   const other = newWakeTracker();
   trackWake(other, [spine(1000, 400)], 1, 0, 1 / 30, 900, swum);
   trackWake(other, [spine(1000, 440)], 1, 0, 1 / 30, 900, swum);
-  assert.ok(swum.bodies[0].strength > 0.99 && swum.bodies[0].strength > byScroll);
+  assert.ok(swum.bodies[0].strength > 0.99);
+  assert.equal(swum.bodies[0].ux, 0);
+  assert.equal(swum.bodies[0].uy, 1, 'the projected path, not the horizontal body axis');
+  trackWake(other, [spine(1000, 480)], 1, 40, 1 / 30, 900, swum);
+  assert.ok(swum.bodies[3].churn > 0.8, 'scrolling does not switch off an actually swimming whale');
   // A whale that has been moved rather than swum (a link, a resize), or that is not there, moves nothing
   trackWake(tracker, [spine(1000, 400)], 1, 9000, 1 / 30, 900, out);
   assert.equal(out.count, 0);
   trackWake(tracker, [spine(1000, 400)], 1, 9040, 1 / 30, 900, out);
-  assert.equal(out.count, 4);
+  assert.equal(out.count, 0);
   trackWake(tracker, [spine(1000, 400)], 0, 9080, 1 / 30, 900, out);
   assert.equal(out.count, 0);
   trackWake(tracker, [new Float32Array(96).fill(NaN)], 1, 9120, 1 / 30, 900, out);

@@ -1,0 +1,6 @@
+Validation summary (full runner output was returned in the Codex tool result):
+236 tests passed, 0 failed; full suite duration 112104 ms.
+Command: node --experimental-strip-types --test --test-concurrency=1 <all 25 root *.test.mjs files>
+After the final shader update: 31 focused tests passed, 0 failed.
+TypeScript: npx tsc --noEmit passed.
+Production build: npm run build passed (see build.txt).

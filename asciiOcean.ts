@@ -33,17 +33,9 @@ import { WAKE, WAKE_BODIES, newWakeTracker, oceanWake, trackWake } from './ocean
 // Depth samples (colour, ink, glyph density) are evaluated in JS once per frame for a column of
 // points down the screen, so the CSS water and the WebGL water come from the same numbers.
 //
-// THE LIVING OCEAN (oceanExperiments.ts) adds four behaviours, each on its own switch. With all
-// of them off the two passes above are exactly the shaders below, untouched. With any of them on
-// the cell pass is `livingCells`: the same currents, read at a point the wake has moved, in the
-// sea state of the section they lie in, drawn as lines of strokes that travel the way the water
-// runs; the screen pass is `LIVING_SCREEN`, which lets those lines stand a little further off the
-// water than the bed they cross; and a third, tiny pass (WAKE_STEP) keeps the water's memory of
-// the whales, thirty times a second.
-//
-// What can be seen of each behaviour is measured, not judged by eye: dev/phase3-visible.mjs. The
-// first version of all four changed under one pixel in a hundred and could not be told from the
-// ocean without them.
+// The default keeps the original water and adds only inertia and local whale disturbances.
+// Flow bands and section sea states remain opt-in comparisons (oceanExperiments.ts).
+// WAKE_STEP reuses two cell-sized textures in this context; no additional animation loop.
 
 const DEV = !!(import.meta as any).env?.DEV;
 const SAMPLES = 24;
@@ -56,8 +48,8 @@ const WAKE_HZ = 30;
 const WAKE_MIN_ROWS = 2.6;
 /** How many runs a line of moving water is broken into along its length (livingCells' stream). */
 const FLOW_GRAIN = 5;
-/** Wake steps the ocean keeps simulating after the last whale has moved it: long enough to fade. */
-const WAKE_LINGER = 11 * WAKE_HZ;
+/** Seconds before the remaining subvisible memory is cleared and its pass stops. */
+const WAKE_LINGER = 3;
 const FONT = "'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
 const IDLE_FPS = 30;
 /** CSS px per unit of the currents' noise: the size of one swell. */
@@ -384,7 +376,11 @@ void main() {
   float pick = hash12(cell + 0.37);
   float level = hash12(cell * 1.73 + 4.1);
   // Each cell retunes its glyph slowly, at its own moment: a shimmer, never a flicker
+#ifdef SEA
   float tick = floor(t * 1.6 * shimmer + level * 7.0);
+#else
+  float tick = floor(t * 1.6 + level * 7.0);
+#endif
   float wobble = (hash12(cell * 2.31 + tick * 17.7) - 0.5) * 0.16;
   float tone = clamp(v + wobble, 0.0, 1.0);
   float index = clamp(floor(tone * (uCount - 1.0) + 0.5), 1.0, uCount - 1.0);
@@ -425,13 +421,11 @@ void main() {
 #endif
 
 #ifdef WAKE
-  // Moved water is a line of its own, laid the way the whale went. Freshly moved water is
-  // unsettled: its strokes change weight a few times a second, each cell at its own moment
-  float unsettled = (hash12(cell * 1.37 + floor(t * 4.0 + level * 5.0) * 7.3) - 0.5) * 0.36 * stirred;
-  float trail = clamp(stirred + unsettled, 0.0, 1.0);
+  // Align existing marks with the whale's continuous memory, without an extra shimmer clock.
+  float trail = stirred;
   vec2 trailLine = moved > 0.02 ? vec2(wake.x * wake.x - wake.y * wake.y, 2.0 * wake.x * wake.y) / (moved * moved) : vec2(1.0, 0.0);
   line = line * stroke * (1.0 - stirred) + trailLine * trail;
-  filled = mix(filled, uWakeGain.y, stirred);
+  filled = mix(filled, present, stirred);
   inked = mix(inked, uWakeGain.z, stirred);
   lift = max(lift * (1.0 - stirred), stirred * uWakeGain.w);
   stroke = max(stroke * (1.0 - 0.7 * stirred), trail);
@@ -449,14 +443,16 @@ void main() {
     else if (levelness < -0.62) index = weight < 0.7 ? 3.0 : 11.0;
     else index = heading.y > 0.0 ? 10.0 : 9.0;
     float drawn = smoothstep(0.3, 0.72, stroke);
+#ifdef FLOW
     present = max(present, filled * drawn);
+#endif
     ink = max(ink, inked * drawn * mix(0.72, 1.0, level));
   }
 #endif
 
   float alpha = step(pick, present) * min(1.0, g.y * ink);
-  // Moved water also lights the water itself a little, like any current
-  outCell = vec4(index / 255.0, alpha, clamp(field + stirred * 0.1, 0.0, 1.0), lift);
+  // No wake light, palette change or extra glyph population.
+  outCell = vec4(index / 255.0, alpha, field, lift);
 }`;
 
 /** The screen pass of the living ocean: the one above, with a line's ink lifted off the water by the cell's own measure. */
@@ -469,6 +465,20 @@ const LIVING_SCREEN = SCREEN.replace(
   vec3 color = mix(water, lifted, cell.g * coverage);`
 );
 
+/** Bend the existing glyph lattice locally; transport marks instead of adding particles. */
+const wakeScreen = (screen: string) => screen.replace(
+  'uniform float uFrame;',
+  'uniform float uFrame;\nuniform sampler2D uWake;\nuniform float uWakeRow;'
+).replace(
+  '  vec2 cellIndex = floor(coord);',
+  `  vec2 memoryUv = (coord + vec2(0.0, uWakeRow)) / uCellsSize;
+  if (all(greaterThan(memoryUv, vec2(0.0))) && all(lessThan(memoryUv, vec2(1.0)))) {
+    vec2 displacement = (texture(uWake, memoryUv).rg * 255.0 - 128.0) / 127.0;
+    coord -= displacement * vec2(uCellPx.y / uCellPx.x, 1.0) * 1.8;
+  }
+  vec2 cellIndex = floor(coord);`
+);
+
 /**
  * The water's memory of the whales: one texel per glyph cell, on the cells' own lattice. Red and
  * green hold the flow a whale has given the water (128 is rest), blue how stirred it is. Each
@@ -476,7 +486,7 @@ const LIVING_SCREEN = SCREEN.replace(
  * whale's body is (oceanWake.ts) the water takes the flow around it, and what its tail and flukes
  * stir is carried astern in their wash: that is the trail. Every other step the stored values are
  * rounded toward rest, so however slowly the water settles it always comes back to rest exactly,
- * some ten seconds after the whale has gone (the trail can be seen for about eight).
+ * within three seconds after the whale has gone.
  */
 const WAKE_STEP = `#version 300 es
 precision highp float;
@@ -565,14 +575,12 @@ void main() {
 }`;
 
 /** What one wake step keeps and takes (WAKE_STEP's uKeep and uTake), at WAKE_HZ. */
-const WAKE_KEEP = { flow: 0.986, churn: 0.994, drift: 2.3, spread: 0.1, take: 0.14 };
+const WAKE_KEEP = { flow: 0.955, churn: 0.97, drift: 2.3, spread: 0.08, take: 0.14 };
 /**
- * How the wake shows in the cells: currents carried up to this many cell heights, the share of
- * fully moved cells that hold a stroke, their ink (1 is the ocean's own at its firmest) and how
- * far that ink is lifted off the water: enough to be seen at a glance beside a whale, a good way
- * short of the whale's own engraving.
+ * Carry the current through the existing glyph field, using its own ink. No extra density,
+ * lifted color or light; the screen pass also bends the existing lattice by up to 1.8 rows.
  */
-const WAKE_SHOW = { carry: 3.4, density: 0.66, ink: 1.3, lift: 0.34 };
+const WAKE_SHOW = { carry: 3.4, density: 0, ink: 1, lift: 0 };
 /**
  * The lines of moving water (livingCells' uFlow and uFlowShow). A phone's screen is a quarter as
  * wide, so its lines are shorter and a little closer, or one line would span the screen and
@@ -659,7 +667,8 @@ export function createAsciiOcean(canvas: HTMLCanvasElement): AsciiOcean {
     if (screen) gl.deleteProgram(screen.program);
     cells = link(gl, living() ? livingCells(fx) : CELLS);
     wakeStep = fx.wake && cells ? link(gl, WAKE_STEP) : null;
-    screen = link(gl, living() ? LIVING_SCREEN : SCREEN);
+    const surface = fx.flow ? LIVING_SCREEN : SCREEN;
+    screen = link(gl, fx.wake ? wakeScreen(surface) : surface);
     if (living() && (!cells || !screen || (fx.wake && !wakeStep))) {
       if (cells) gl.deleteProgram(cells.program);
       if (wakeStep) gl.deleteProgram(wakeStep.program);
@@ -700,6 +709,10 @@ export function createAsciiOcean(canvas: HTMLCanvasElement): AsciiOcean {
     }
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     wakeLive = 0;
+    wakeTracker.x.fill(NaN);
+    wakeTracker.y.fill(NaN);
+    wakeTracker.water = NaN;
+    oceanWake.count = 0;
   };
   /** Where each section of the CV begins, for the sea states. Read when the layout changes, never per frame. */
   const measureSea = () => {
@@ -771,6 +784,8 @@ export function createAsciiOcean(canvas: HTMLCanvasElement): AsciiOcean {
   };
   const applyResize = () => {
     resizePending = false;
+    const projectionChanged = view.width !== canvas.clientWidth || view.height !== canvas.clientHeight
+      || view.ratio !== Math.min(window.devicePixelRatio || 1, canvas.clientWidth < 768 ? 1.25 : 1.5);
     view.width = Math.max(1, canvas.clientWidth);
     view.height = Math.max(1, canvas.clientHeight);
     const narrow = view.width < 768;
@@ -795,8 +810,8 @@ export function createAsciiOcean(canvas: HTMLCanvasElement): AsciiOcean {
         gl.bindFramebuffer(gl.FRAMEBUFFER, cellFramebuffer);
         gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, cellTexture, 0);
         gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-        allocateWake();
       }
+      if (projectionChanged) allocateWake();
     }
     measureSea();
     lastScroll = NaN;
@@ -822,7 +837,18 @@ export function createAsciiOcean(canvas: HTMLCanvasElement): AsciiOcean {
     const swimming = !reduce && !creation.active;
     trackWake(wakeTracker, ambientWhalesLive.spines, swimming ? ambientWhalesLive.presence : 0, water, elapsed, view.height);
     if (oceanWake.count) wakeLive = WAKE_LINGER;
-    else if (wakeLive > 0) wakeLive--;
+    else if (wakeLive > 0) {
+      wakeLive = Math.max(0, wakeLive - elapsed);
+      if (wakeLive === 0) {
+        // Clear before suspending the pass, so no stale memory survives at rest.
+        for (const framebuffer of wakeFramebuffers) {
+          gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+          gl.clearColor(128 / 255, 128 / 255, 0, 1);
+          gl.clear(gl.COLOR_BUFFER_BIT);
+        }
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      }
+    }
     if (wakeLive <= 0) {
       // Still water: nothing to step, and nothing in the texture to keep in place
       wakeRow = firstRow;
@@ -852,8 +878,10 @@ export function createAsciiOcean(canvas: HTMLCanvasElement): AsciiOcean {
     gl.uniform1i(wu.uPrev, 0);
     gl.uniform2f(wu.uCellPx, cellW, cellH);
     gl.uniform1f(wu.uRowShift, firstRow - wakeRow);
-    gl.uniform4f(wu.uKeep, WAKE_KEEP.flow, WAKE_KEEP.churn, WAKE_KEEP.drift * view.ratio, WAKE_KEEP.spread);
-    gl.uniform2f(wu.uTake, WAKE_KEEP.take, wakeSteps++ % 2);
+    // Decay and transport follow elapsed seconds, including slower mobile frames.
+    const steps = elapsed * WAKE_HZ;
+    gl.uniform4f(wu.uKeep, WAKE_KEEP.flow ** steps, WAKE_KEEP.churn ** steps, WAKE_KEEP.drift * view.ratio * steps, 1 - (1 - WAKE_KEEP.spread) ** steps);
+    gl.uniform2f(wu.uTake, 1 - (1 - WAKE_KEEP.take) ** steps, wakeSteps++ % 2);
     gl.uniform4fv(wu.uBody, wakeBodies);
     gl.uniform4fv(wu.uMove, wakeMoves);
     gl.uniform4fv(wu.uShed, wakeSheds);
@@ -920,6 +948,10 @@ export function createAsciiOcean(canvas: HTMLCanvasElement): AsciiOcean {
     gl.viewport(0, 0, canvas.width, canvas.height);
     gl.useProgram(screen.program);
     const su = screen.uniforms;
+    if (fx.wake) {
+      gl.uniform1i(su.uWake, 2);
+      gl.uniform1f(su.uWakeRow, firstRow - wakeRow);
+    }
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, cellTexture);
     gl.uniform1i(su.uCells, 0);

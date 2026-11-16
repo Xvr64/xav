@@ -22,7 +22,9 @@ export type OceanEffects = Record<OceanEffect, boolean>;
 
 export const OCEAN_EFFECTS: readonly OceanEffect[] = ['inertia', 'flow', 'wake', 'sea'];
 
-export const OCEAN_EFFECT_DEFAULTS: OceanEffects = { inertia: true, flow: true, wake: true, sea: true };
+// Global stroke bands and section-wide texture changes are opt-in comparisons only.
+// ?ocean=wake isolates the whale disturbance; ?ocean=-wake keeps only gentle inertia.
+export const OCEAN_EFFECT_DEFAULTS: OceanEffects = { inertia: true, flow: false, wake: true, sea: false };
 
 const isEffect = (name: string): name is OceanEffect => (OCEAN_EFFECTS as readonly string[]).includes(name);
 

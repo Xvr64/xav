@@ -1,0 +1,387 @@
+[
+  {
+    "mode": "original",
+    "width": 1440,
+    "height": 900,
+    "sections": [
+      {
+        "section": "experience",
+        "scroll": 8731,
+        "ocean": {
+          "time": 40.75100000000001,
+          "reduce": false,
+          "glReady": true,
+          "scroll": 8731,
+          "depth": 0.8216868458854915,
+          "geometry": {
+            "journeyStart": 2700,
+            "journeyTravel": 4500,
+            "maxScroll": 12073,
+            "viewHeight": 900
+          },
+          "canvas": [
+            1440,
+            900
+          ],
+          "cells": {
+            "cols": 173,
+            "rows": 67
+          }
+        },
+        "effects": {
+          "inertia": false,
+          "flow": false,
+          "wake": false,
+          "sea": false
+        },
+        "wake": {
+          "live": 0,
+          "bodies": []
+        },
+        "bounds": [
+          {
+            "left": 191,
+            "right": 1271,
+            "top": 411,
+            "bottom": 931
+          },
+          {
+            "left": 1545,
+            "right": 2261,
+            "top": 590,
+            "bottom": 1507
+          }
+        ],
+        "overflow": false
+      },
+      {
+        "section": "languages",
+        "scroll": 10704,
+        "ocean": {
+          "time": 40.792899999999946,
+          "reduce": false,
+          "glReady": true,
+          "scroll": 10704,
+          "depth": 0.9269567001846911,
+          "geometry": {
+            "journeyStart": 2700,
+            "journeyTravel": 4500,
+            "maxScroll": 12073,
+            "viewHeight": 900
+          },
+          "canvas": [
+            1440,
+            900
+          ],
+          "cells": {
+            "cols": 173,
+            "rows": 67
+          }
+        },
+        "effects": {
+          "inertia": false,
+          "flow": false,
+          "wake": false,
+          "sea": false
+        },
+        "wake": {
+          "live": 0,
+          "bodies": []
+        },
+        "bounds": [
+          {
+            "left": 711,
+            "right": 1854,
+            "top": 267,
+            "bottom": 778
+          },
+          {
+            "left": -445,
+            "right": 596,
+            "top": 734,
+            "bottom": 1188
+          }
+        ],
+        "overflow": false
+      }
+    ],
+    "idle": {
+      "frames": 479,
+      "mean": 8.35,
+      "p50": 8.3,
+      "p95": 8.4,
+      "p99": 8.5,
+      "max": 8.9,
+      "over34": 0
+    },
+    "scrolling": {
+      "frames": 172,
+      "mean": 23.34,
+      "p50": 16.7,
+      "p95": 83.4,
+      "p99": 108.6,
+      "max": 125.1,
+      "over34": 18
+    },
+    "gpu": "ANGLE (AMD, AMD Radeon (TM) Graphics (0x00001681) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+    "errors": []
+  },
+  {
+    "mode": "original",
+    "width": 390,
+    "height": 844,
+    "touch": true,
+    "dsf": 2,
+    "sections": [
+      {
+        "section": "experience",
+        "scroll": 8375,
+        "ocean": {
+          "time": 40.45899999999999,
+          "reduce": false,
+          "glReady": true,
+          "scroll": 8375,
+          "depth": 0.8216051053954747,
+          "geometry": {
+            "journeyStart": 2532,
+            "journeyTravel": 4220,
+            "maxScroll": 11923,
+            "viewHeight": 844
+          },
+          "canvas": [
+            488,
+            1055
+          ],
+          "cells": {
+            "cols": 56,
+            "rows": 73
+          }
+        },
+        "effects": {
+          "inertia": false,
+          "flow": false,
+          "wake": false,
+          "sea": false
+        },
+        "wake": {
+          "live": 0,
+          "bodies": []
+        },
+        "bounds": [
+          {
+            "left": 169,
+            "right": 568,
+            "top": 517,
+            "bottom": 717
+          },
+          {
+            "left": -240,
+            "right": 103,
+            "top": 673,
+            "bottom": 873
+          }
+        ],
+        "overflow": false
+      },
+      {
+        "section": "languages",
+        "scroll": 10583,
+        "ocean": {
+          "time": 40.42539999999998,
+          "reduce": false,
+          "glReady": true,
+          "scroll": 10583,
+          "depth": 0.9326242506285052,
+          "geometry": {
+            "journeyStart": 2532,
+            "journeyTravel": 4220,
+            "maxScroll": 11923,
+            "viewHeight": 844
+          },
+          "canvas": [
+            488,
+            1055
+          ],
+          "cells": {
+            "cols": 56,
+            "rows": 73
+          }
+        },
+        "effects": {
+          "inertia": false,
+          "flow": false,
+          "wake": false,
+          "sea": false
+        },
+        "wake": {
+          "live": 0,
+          "bodies": []
+        },
+        "bounds": [
+          {
+            "left": 169,
+            "right": 569,
+            "top": 518,
+            "bottom": 718
+          },
+          {
+            "left": -237,
+            "right": 109,
+            "top": 685,
+            "bottom": 884
+          }
+        ],
+        "overflow": false
+      }
+    ],
+    "idle": {
+      "frames": 454,
+      "mean": 8.82,
+      "p50": 8.4,
+      "p95": 16.6,
+      "p99": 16.8,
+      "max": 16.9,
+      "over34": 0
+    },
+    "scrolling": {
+      "frames": 209,
+      "mean": 19.17,
+      "p50": 16.7,
+      "p95": 66.7,
+      "p99": 91.9,
+      "max": 116.9,
+      "over34": 15
+    },
+    "gpu": "ANGLE (AMD, AMD Radeon (TM) Graphics (0x00001681) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+    "errors": []
+  },
+  {
+    "mode": "original",
+    "width": 320,
+    "height": 740,
+    "touch": true,
+    "dsf": 3,
+    "sections": [
+      {
+        "section": "experience",
+        "scroll": 7509,
+        "ocean": {
+          "time": 40.4423,
+          "reduce": false,
+          "glReady": true,
+          "scroll": 7509,
+          "depth": 0.8189188156638013,
+          "geometry": {
+            "journeyStart": 2220,
+            "journeyTravel": 3700,
+            "maxScroll": 11155,
+            "viewHeight": 740
+          },
+          "canvas": [
+            400,
+            925
+          ],
+          "cells": {
+            "cols": 46,
+            "rows": 64
+          }
+        },
+        "effects": {
+          "inertia": false,
+          "flow": false,
+          "wake": false,
+          "sea": false
+        },
+        "wake": {
+          "live": 0,
+          "bodies": []
+        },
+        "bounds": [
+          {
+            "left": 139,
+            "right": 466,
+            "top": 457,
+            "bottom": 622
+          },
+          {
+            "left": -198,
+            "right": 88,
+            "top": 588,
+            "bottom": 752
+          }
+        ],
+        "overflow": false
+      },
+      {
+        "section": "languages",
+        "scroll": 9784,
+        "ocean": {
+          "time": 40.38379999999999,
+          "reduce": false,
+          "glReady": true,
+          "scroll": 9784,
+          "depth": 0.9319083094555873,
+          "geometry": {
+            "journeyStart": 2220,
+            "journeyTravel": 3700,
+            "maxScroll": 11155,
+            "viewHeight": 740
+          },
+          "canvas": [
+            400,
+            925
+          ],
+          "cells": {
+            "cols": 46,
+            "rows": 64
+          }
+        },
+        "effects": {
+          "inertia": false,
+          "flow": false,
+          "wake": false,
+          "sea": false
+        },
+        "wake": {
+          "live": 0,
+          "bodies": []
+        },
+        "bounds": [
+          {
+            "left": 139,
+            "right": 466,
+            "top": 458,
+            "bottom": 623
+          },
+          {
+            "left": -193,
+            "right": 95,
+            "top": 603,
+            "bottom": 764
+          }
+        ],
+        "overflow": false
+      }
+    ],
+    "idle": {
+      "frames": 479,
+      "mean": 8.36,
+      "p50": 8.3,
+      "p95": 8.5,
+      "p99": 8.8,
+      "max": 16.8,
+      "over34": 0
+    },
+    "scrolling": {
+      "frames": 264,
+      "mean": 15.17,
+      "p50": 8.4,
+      "p95": 41.8,
+      "p99": 84,
+      "max": 100.1,
+      "over34": 15
+    },
+    "gpu": "ANGLE (AMD, AMD Radeon (TM) Graphics (0x00001681) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+    "errors": []
+  }
+]

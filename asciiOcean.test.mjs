@@ -217,14 +217,13 @@ test('wake: a third small pass runs only while a whale is moving the water', t =
   const before = b.draws;
   swim(1006); b.tick(40);
   assert.equal(b.draws - before, 3, 'the wake steps, then the two passes');
-  // The whales leave: the wake fades for some ten seconds (its trail is seen for about eight),
-  // then the pass stops
+  // The whales leave: the visible trail fades in 1–3 seconds, then the pass stops.
   b.whales.presence = 0;
-  for (let i = 0; i < 120; i++) b.tick(40);
+  for (let i = 0; i < 25; i++) b.tick(40);
   const fading = b.draws;
   b.tick(40);
-  assert.equal(b.draws - fading, 3, 'still fading four seconds on');
-  for (let i = 0; i < 240; i++) b.tick(40);
+  assert.equal(b.draws - fading, 3, 'still fading one second on');
+  for (let i = 0; i < 80; i++) b.tick(40);
   const after = b.draws;
   b.tick(40);
   assert.equal(b.draws - after, 2);

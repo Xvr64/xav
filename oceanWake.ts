@@ -8,11 +8,9 @@
  * around it. The ocean relaxes a small field toward that flow where the whale is and lets it
  * fade where the whale has been, so the water remembers a passage for a few seconds.
  *
- * The flow's direction is the body's own axis at each point, its strength how fast that point
- * moves through the water: the whale's own swim across the screen, and a small share of the water
- * passing as the page scrolls (the whales dive with the reader, but a whale the width of the
- * screen sweeping all the water it passes would be a storm, not a wake). Nothing here changes how
- * the whales swim.
+ * Direction and strength come from each projected point's measured velocity. Scroll alone
+ * never emits a wake. The renderer stores the disturbance on the document's water lattice,
+ * reprojecting the memory when that lattice scrolls. Nothing here changes how the whales swim.
  */
 export const WAKE = {
   /** Spine nodes read (0 is the snout, 47 the notch of the flukes). */
@@ -53,17 +51,6 @@ export const WAKE = {
    * wake never rose above a third of its strength and could not be seen.
    */
   speed: 0.05,
-  /** Share of the page's scroll past a whale that counts as the whale moving through the water. */
-  scroll: 0.025,
-  /**
-   * While the page scrolls the whales stay with the reader, so the page's water streams past
-   * them: a whale the width of the screen would stir every bit of water it is carried through and
-   * leave half the screen in strokes. So a body stirs the water only while the page holds still
-   * or creeps: fully below the first of these (radii of water passing per step), not at all above
-   * the second. The trail it has already left stays where it is in the water and scrolls away
-   * with the page.
-   */
-  stillWater: [0.02, 0.1],
   /**
    * Outside a body, how far the water's flow is drawn from the pure doublet toward the body's own
    * heading: the doublet turns a quarter circle off the bow and the quarter, which reads as
@@ -132,8 +119,7 @@ const smoothstep = (a: number, b: number, v: number) => {
 
 /**
  * Read the whales' spines into bodies. `water` is how far the water's lattice has scrolled (CSS
- * px): a body's speed through the water is its change of place on screen, plus `WAKE.scroll` of
- * the water's own travel, over `dt` seconds.
+ * px), used to reject anchor jumps. Velocity is measured in CSS px/s, independent of DPR.
  * `spines` hold 48 screen points per whale (x, y pairs), snout first.
  */
 export function trackWake(
@@ -173,17 +159,17 @@ export function trackWake(
       tracker.y[slot] = valid ? y : NaN;
       if (!valid || jumped || !Number.isFinite(px) || !(dt > 0) || !(presence > 0.05)) continue;
       if (Math.hypot(x - px, y - py) > viewport * WAKE.jump) continue;
-      const travelled = Math.hypot(x - px, y - py + passed * WAKE.scroll);
+      const travelled = Math.hypot(x - px, y - py);
       const strength = (1 - Math.exp(-travelled / dt / (WAKE.speed * length))) * Math.min(1, presence);
       if (strength < 0.02) continue;
       const body = out.bodies[count++];
       body.x = x;
       body.y = y;
       body.r = r;
-      body.ux = ax / axis;
-      body.uy = ay / axis;
+      body.ux = (x - px) / travelled;
+      body.uy = (y - py) / travelled;
       body.strength = strength;
-      const stirs = strength * (1 - smoothstep(WAKE.stillWater[0], WAKE.stillWater[1], Math.abs(passed) / r));
+      const stirs = strength;
       body.churn = WAKE.churn[k] * stirs;
       body.spread = WAKE.stirReach[k];
       body.wash = WAKE.wash[k];
