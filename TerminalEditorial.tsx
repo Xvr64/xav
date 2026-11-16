@@ -10,6 +10,8 @@ import {
 import { advanceEncryptedLine, encryptedCharacterState, ENCRYPTED_CHARSET, FLIP_DELAY_MS } from './encryptedMotion';
 import { creation, HERO_TEXT_AT } from './creationTimeline';
 import { EncryptedText } from './components/ui/encrypted-text';
+import { oceanWake, onWhaleWake } from './oceanWake';
+import { textPressureAt, settleTextPressure } from './whaleTextPressure';
 import {
   disableDecodeSound,
   disposeDecodeSound,
@@ -55,6 +57,11 @@ type Word = {
   /** Document Y of the rendered line this word sits on, where its entry decode completes and
    * where its exit scramble begins. */
   top: number;
+  left: number;
+  width: number;
+  height: number;
+  pressure: Float32Array;
+  rippling: boolean;
   entryEnd: number;
   exitStart: number;
   seed: number;
@@ -157,6 +164,11 @@ export function useEditorialScroll() {
               decodable: chars.map((char) => !/\s/u.test(char)),
               control: null,
               top: 0,
+              left: 0,
+              width: 0,
+              height: 0,
+              pressure: new Float32Array(chars.length),
+              rippling: false,
               entryEnd: 0,
               exitStart: 0,
               seed: 0,
@@ -176,6 +188,9 @@ export function useEditorialScroll() {
             cache.set(el, word);
           }
           word.control = el.closest('a,button');
+          word.left = rect.left;
+          word.width = rect.width;
+          word.height = rect.height;
           word.seed = (++counter * 131) >>> 0;
           word.key = NaN;
           // Layout changed: character cells are re-measured lazily the next time they are needed
@@ -323,28 +338,66 @@ export function useEditorialScroll() {
       }
 
       // Pass 2: Determine which words need updating in DOM this frame
-      const pending: { w: Word; p: number; entering: boolean }[] = [];
+      // Rank only visible, resolved words. At most four words feel a passage at once.
+      const nearby = !isReduced && oceanWake.count ? words
+        .filter(w => w.currentP >= 1 && w.top - y > 0 && w.top - y < viewport - w.height && !(w.control?.contains(focused)))
+        .map(w => ({ w, pressure: textPressureAt(w.left + w.width / 2, w.top - y + w.height / 2, oceanWake) }))
+        .filter(hit => hit.pressure > 0.025)
+        .sort((a, b) => b.pressure - a.pressure).slice(0, 4).map(hit => hit.w) : [];
+      const pending: { w: Word; p: number; entering: boolean; ripple: boolean }[] = [];
       for (const w of words) {
-        const forced = isReduced || (w.control !== null && w.control === focused);
+        const forced = isReduced || (w.control !== null && w.control.contains(focused));
         const lineP = forced ? 1 : w.currentP;
         const entering = w.revealState !== 'exiting';
         // Flip only encrypted letters, leaving the resolved prefix stable.
         const p = lineP;
         const flip = p > 0 && p < 1 ? Math.floor(now / FLIP_DELAY_MS) : 0;
         const key = (entering ? p : -p - 1) + flip * 4;
-        if (w.key === key) continue;
+        const affected = !forced && p >= 1 && nearby.includes(w);
+        const wasRippling = w.rippling;
+        if ((affected || wasRippling) && !w.cellX) measureChars(w);
+        let ripple = false;
+        if (affected || wasRippling) {
+          for (let i = 0; i < w.chars.length; i++) {
+            const target = affected ? textPressureAt(w.left + w.cellX![i] + w.cellW![i] / 2, w.top - y + w.height / 2, oceanWake) : 0;
+            w.pressure[i] = forced || p < 1 ? 0 : settleTextPressure(w.pressure[i], target, elapsedMs / 1000);
+            ripple ||= w.pressure[i] > 0;
+          }
+        }
+        w.rippling = ripple;
+        if (ripple) needsAnotherRaf = true;
+        if (w.key === key && !ripple && !wasRippling) continue;
         w.key = key;
         if (p > 0 && p < 1 && !w.cellX) measureChars(w);
-        pending.push({ w, p, entering });
+        pending.push({ w, p, entering, ripple });
       }
 
       // Pass 3 (DOM writes)
       let enterChanges = 0;
       let exitChanges = 0;
       let locks = 0;
-      for (const { w, p, entering } of pending) {
+      for (const { w, p, entering, ripple } of pending) {
         let changes = 0;
-        if (p >= 1) {
+        if (p >= 1 && ripple) {
+          if (!w.cells) buildCells(w);
+          if (w.shown !== 'cells') {
+            w.visual.replaceChildren(...w.cells!);
+            w.shown = 'cells';
+          }
+          w.el.style.opacity = '1';
+          w.states.fill(RESOLVED);
+          for (let i = 0; i < w.chars.length; i++) {
+            const cell = w.cells![i];
+            const strength = w.pressure[i];
+            // A continuous wave passes through real letters, never replacing them with noise.
+            const wave = Math.sin(now * 0.004 - (w.left + w.cellX![i]) * 0.055);
+            cell.textContent = w.chars[i];
+            cell.style.opacity = '1';
+            cell.style.transform = strength ? `translateY(${(wave * strength * 1.7).toFixed(2)}px)` : '';
+            cell.style.setProperty('--whale-pressure', (strength * 0.24).toFixed(3));
+            cell.classList.toggle('ascii-pressure', strength > 0.12 && i % 3 === 1);
+          }
+        } else if (p >= 1) {
           // Readable: the overlay goes back to the plain, fully typeset word
           w.states.forEach((s, i) => {
             if (s !== RESOLVED && w.decodable[i]) {
@@ -372,6 +425,12 @@ export function useEditorialScroll() {
           w.el.style.opacity = '0';
         } else {
           if (!w.cells) buildCells(w);
+          // A subsequent entry/exit decode owns its cells again.
+          for (const cell of w.cells!) {
+            cell.style.removeProperty('transform');
+            cell.style.removeProperty('--whale-pressure');
+            cell.classList.remove('ascii-pressure');
+          }
           if (w.shown !== 'cells') {
             w.states.fill(-2);
             w.visual.replaceChildren(...w.cells!);
@@ -416,6 +475,7 @@ export function useEditorialScroll() {
     const schedule = () => {
       if (!frame && !disposed && !document.hidden) frame = requestAnimationFrame(render);
     };
+    const stopWake = onWhaleWake(schedule);
     const invalidate = () => {
       dirty = true;
       schedule();
@@ -459,6 +519,7 @@ export function useEditorialScroll() {
 
     return () => {
       disposed = true;
+      stopWake();
       cancelAnimationFrame(frame);
       observer.disconnect();
       mutations.disconnect();

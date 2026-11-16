@@ -1,4 +1,4 @@
-import{C as q,l as M,m as B,n as D,o as F}from"./portfolio-yTBUnQ95.js";import"./utils-ld2vAeWm.js";const j=`
+import{c as Y,m as Z,n as V,o as $,p as P,q as ee,s as te,P as H,t as ae,u as oe,v as re,x as se,y as m,z as K,A as le}from"./portfolio-CpaibWE7.js";import"./utils-Crv3BWuX.js";const ie=`
 const float PI=3.14159265359;
 const float TAU=6.28318530718;
 float sat(float x){return clamp(x,0.,1.);}
@@ -173,14 +173,17 @@ vec3 blackHole(vec2 p,float t){
  return vec3(sat(I*1.9),pow(sat(I*1.6-.45),1.1),sat(I*2.2-1.35))+ring*shadow*.25*vec3(.6,.8,1);
 }
 #endif
-`,Y=`
+`,ce=`
 #if STAGE<5
 #if STAGE==0
 // The hands are by far the slowest to compile. A cold visit opens the eye on this variant, its
 // pupil dark, while the full program compiles alongside; the hands then fade up inside the pupil.
 uniform float uPortal;
 vec3 thisWorld(vec2 p,float t,float pt,float zoom){return eye(p,t,pt);}
-#ifdef EYE_ONLY
+#if defined(PASSAGE)
+// The Passage: no hands in this pupil, the star tunnel instead (creationRenderer's passageTunnel)
+vec3 nextWorld(vec2 p,float t,float pt,float zoom){return passageTunnel(p,t)*uPortal;}
+#elif defined(EYE_ONLY)
 vec3 nextWorld(vec2 p,float t,float pt,float zoom){return vec3(0);}
 #else
 vec3 nextWorld(vec2 p,float t,float pt,float zoom){return creationHands(p,t,pt,zoom)*uPortal;}
@@ -229,9 +232,10 @@ vec3 originalSequence(vec2 p,float t,float rho){
  return col;
 }
 #endif
-`,H=5.4,W=(e,f=!1)=>`#version 300 es
+`,ne=5.4,u=e=>e.toFixed(1),U=(e,f=!1,c=!1)=>`#version 300 es
 #define STAGE ${e}
 ${f?"#define EYE_ONLY":""}
+${c?"#define PASSAGE":""}
 precision highp float;
 uniform float uTime;
 uniform float uAspect;
@@ -240,8 +244,30 @@ uniform vec3 uInk;
 uniform sampler2D uLand;
 in vec2 vUv;
 out vec4 outColor;
-${j}
-#if STAGE>=4
+${ie}
+#if STAGE>=4||defined(PASSAGE)
+#ifdef PASSAGE
+// Set by passageTunnel for the arrival it draws: how much further out the planet still is, and how
+// far the hyperspace stars have still to fall back to the arrival's own (both identity at the seam).
+float passageFar=1.,passageWarp=0.,passageStreak=0.;
+// The arrival's stars1, its cells stretched along their own radius into streaks while warping.
+vec3 streak1(vec2 p,float logz,float t,float r,float a,float N,float K,float par,float seed){
+ vec2 uv=vec2((a/TAU+.5)*N,(log(r)-par*logz)*K),c=floor(uv);c.x=mod(c.x,N);
+ float h=hash(c+vec2(seed*1013.,0)),h2=hash(c+vec2(77,seed*389.));
+ float along=fract(uv.y)-.5;
+ float arc=(fract(uv.x)-(.25+.5*h2))*TAU*r/N,rad=along*r/K/(1.+passageStreak);
+ float tw=.65+.35*sin(t*(1.5+4.*h2)+h2*60.);
+ // A long streak thins toward its cell's ends instead of stopping at the edge
+ float tail=mix(1.,sat(1.-4.*along*along),sat(passageStreak*.5));
+ return step(h,clamp(26.*TAU*r*r/(N*K),0.,.9))*exp(-(arc*arc+rad*rad)/.00022)*tail*(.35+.9*h2)*tw*mix(vec3(.65,.78,1),vec3(1,.85,.7),h2);
+}
+// At rest (no warp, no streak) exactly the arrival's own stars once its exit is complete.
+vec3 passageStars(vec2 p,float t){
+ float r=length(p)+.00001,a=atan(p.y,p.x),logz=-1.8+(t-60.)*.025+passageWarp;
+ vec3 s=streak1(p,logz,t,r,a,120.,8.,.22,1.)+streak1(p,logz,t,r,a,220.,14.,.45,5.);
+ return s*.45*(1.+sat(passageStreak*.25));
+}
+#endif
 // The globe's spherical coordinates for a point on or above the Earth, at this moment's longitude.
 vec2 earthUv(vec3 n,float t){
  float lon=mix(-85.,-140.,ss(62.,72.,t))*PI/180.,lat=-15.*PI/180.;
@@ -279,6 +305,10 @@ vec3 arrival(vec2 p,float t){
  float exit=ss(54.,60.,t),approach=ss(60.,68.,t),descent=ss(68.,77.,t);
  float altitude=mix(10.,4.,exit);altitude=mix(altitude,1.4,approach);
  altitude=exp(mix(log(altitude),log(.0004),descent));
+#ifdef PASSAGE
+ // From hyperspace, not the black hole: the same approach, further out (descent is still 0 here)
+ altitude=mix(4.,1.4,approach)*passageFar;
+#endif
  // The camera pitches up from the planet's centre toward its horizon as it falls
  float tilt=ss(68.5,74.,t)*1.32,ct=cos(tilt),st=sin(tilt);
  vec3 rd=normalize(vec3(p*.42,-1));rd=vec3(rd.x,rd.y*ct-rd.z*st,rd.y*st+rd.z*ct);
@@ -290,7 +320,11 @@ vec3 arrival(vec2 p,float t){
  float b=dot(ro,rd),c=dot(ro,ro)-1.,disc=b*b-c;
  vec3 color;float light=1.,far=1e6;
  if(disc<0.||b>0.){
+#ifdef PASSAGE
+   vec3 space=passageStars(p,t)*(1.-air);
+#else
    vec3 space=stars(p,-exit*1.8+(t-60.)*.025,t)*(.75-.3*exit)*(1.-air);
+#endif
    space+=vec3(.004,.009,.023);
    float miss=sqrt(max(0.,dot(ro,ro)-b*b))-1.;
    space+=exp(-max(miss,0.)*16.)*vec3(.10,.36,.80)*.7;
@@ -320,12 +354,32 @@ vec3 arrival(vec2 p,float t){
  color=mix(color,vec3(.6,.77,.9),exp(-sq((altitude-.06)/.03))*.22+exp(-sq((altitude-.012)/.006))*.22);
  return color;
 }
+#ifdef PASSAGE
+/**
+ * The Passage's star tunnel, on its own clock t (0..${u(m)}). The stars stream out of
+ * the centre, accelerating as the pupil opens and stretching into streaks, then fall back to rest
+ * while the planet grows out of a point ahead; at ${u(m)} this is arrival(p,${u(K)})
+ * exactly, the frame the arrival program picks up from.
+ */
+vec3 passageTunnel(vec2 p,float t){
+ float x=sat((t-3.)/(${u(m)}-3.));
+ passageWarp=-40.*(1.-x*x*x*(x*(x*6.-15.)+10.));
+ passageStreak=6.5*16.*x*x*(1.-x)*(1.-x);
+ passageFar=exp(log(60.)*(1.-ss(13.,${u(m)},t)));
+ return arrival(p,t+${u(K-m)});
+}
 #endif
-${Y}
+#endif
+${ce}
 void main(){
  vec2 p=(vUv-.5)*vec2(uAspect,1.)*2.;float fit=max(1.,1.45/uAspect);p*=fit;
 #if STAGE<5
+#ifdef PASSAGE
+ // Once the pupil has taken the whole screen the eye is gone: only the tunnel is left to draw
+ vec3 color=uTime<${u(le)}?originalSequence(p,uTime,length(vec2(uAspect*fit,fit))*1.06):passageTunnel(p,uTime)*uPortal;
+#else
  vec3 color=originalSequence(p,uTime,length(vec2(uAspect*fit,fit))*1.06);
+#endif
  // The original exponential tone map
  outColor=vec4(clamp(1.-exp(-max(color,vec3(0))*1.6),0.,1.),1.);
 #else
@@ -345,7 +399,7 @@ void main(){
  color=mix(cosmic,color,ss(67.,76.,uTime));
  outColor=vec4(clamp(color,0.,1.),alpha);
 #endif
-}`,$=`#version 300 es
+}`,fe=`#version 300 es
 precision highp float;
 uniform sampler2D uField;
 uniform sampler2D uAtlas;
@@ -359,6 +413,10 @@ uniform vec3 uNativeInk;
 uniform vec2 uAtlasGrid;
 uniform float uCount;
 uniform float uTime;
+// The arrival's handoff (journeyHandoff.ts): 1 = whole, as always outside it
+uniform float uReveal;
+uniform float uRevealShape;
+uniform float uRevealClock;
 in vec2 vUv;
 out vec4 outColor;
 void main(){
@@ -386,5 +444,28 @@ void main(){
  // so there is never a stretch where every glyph has the water's own brightness and disappears.
  float turned=clamp(ocean*1.7-pick*.7,0.,1.);
  vec3 color=glow*mix(.21,.99,ocean)+glyph*mix(ink*.88,(uNativeInk-glow)*.5,turned);
+ if(uReveal<1.){
+   // Cell by cell out of the arrival's dark, in the order of the destination's own shape: the eye
+   // opens from a horizontal slit along its lid curve, the Earth gathers inward from its silhouette.
+   // Same mapping as the field's p, so the shape sits exactly where the world will be.
+   float aspect=uCanvas.x/uCanvas.y;
+   vec2 q=(centre-.5)*vec2(aspect,1.)*2.*max(1.,1.45/aspect);
+   float order;
+   if(uRevealShape<.5){
+     float xn=q.x/1.32,d=abs(q.y)/(.6*pow(max(0.,1.-xn*xn),.75)+.03);
+     order=d/(1.+d);
+   }else{
+     float r=length(q)/.486;
+     order=r<1.?(1.-r)*.42:.3+min(1.,(r-1.)/2.2)*.62;
+   }
+   float shown=clamp((uReveal*1.3-order*.8-pick*.2-.02)/.16,0.,1.);
+   // Its edge decodes: the cells it is passing flicker through the ramp before they settle
+   float front=shown*(1.-shown)*4.;
+   float flick=fract(sin(dot(cell+floor(uRevealClock*16.),vec2(12.9898,78.233)))*43758.5453);
+   float fi=floor(flick*(uCount-1.));
+   vec2 fuv=vec2((mod(fi,uAtlasGrid.x)+local.x)/uAtlasGrid.x,(floor(fi/uAtlasGrid.x)+local.y)/uAtlasGrid.y);
+   float decoding=textureGrad(uAtlas,fuv,dFdx(coord/uAtlasGrid),dFdy(coord/uAtlasGrid)).a*step(.5,pick+level);
+   color=mix(vec3(.004,.012,.039),color,shown)+decoding*front*vec3(.59,.75,.84)*.7;
+ }
  outColor=vec4(clamp(color,0.,1.),field.a);
-}`;function J(e){let f=null,d=null,z=!1,c=0,G=0,s=null,i=null,R=!1,U=0;const v=Array(q).fill(null);let N,_;const O=new Promise((t,a)=>{N=t,_=a}),k=()=>{if(w)return;!s&&c<=q&&(s=F(e,c===0?$:W(c-1)),c===1&&(i=F(e,W(0,!0))));const t=i==null?void 0:i.poll(),a=s==null?void 0:s.poll();if(t===null||a===null){z=!0,_(new Error("Creation shader compilation failed"));return}t&&(d=t,i=null),a&&(c===0?f=a:v[c-1]=a,c===1&&(U=performance.now()),s=null,c++),f&&(d||v[0])&&N(),(s||i||c<=q)&&(G=window.setTimeout(k,a?0:50))},m=M(e," .'`^\",:;Il!i><~+_-?][}{1)(|/tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@$","'IBM Plex Mono', monospace"),u=e.createTexture(),h=e.createTexture(),I=e.createFramebuffer();for(const t of[u,h])e.bindTexture(e.TEXTURE_2D,t),e.texParameteri(e.TEXTURE_2D,e.TEXTURE_MIN_FILTER,e.LINEAR),e.texParameteri(e.TEXTURE_2D,e.TEXTURE_MAG_FILTER,e.LINEAR),e.texParameteri(e.TEXTURE_2D,e.TEXTURE_WRAP_S,e.CLAMP_TO_EDGE),e.texParameteri(e.TEXTURE_2D,e.TEXTURE_WRAP_T,e.CLAMP_TO_EDGE);let w=!1,P=0,S=0;k();const X=B().then(t=>{if(w)return;const a=document.createElement("canvas");a.width=360,a.height=180;const l=a.getContext("2d");l.fillStyle="#000",l.fillRect(0,0,360,180);for(let n=0;n<t.xyz.length;n+=3){const b=(Math.atan2(t.xyz[n+1],t.xyz[n])/Math.PI/2+.5)*360,x=(Math.asin(t.xyz[n+2])/Math.PI+.5)*180,o=n/3<t.bands[1]?110:n/3<t.bands[2]?175:235;l.fillStyle=`rgb(${o},${o},${o})`,l.fillRect(b-1.1,x-1,2.2,2)}e.activeTexture(e.TEXTURE2),e.bindTexture(e.TEXTURE_2D,h),e.pixelStorei(e.UNPACK_FLIP_Y_WEBGL,!1),e.texImage2D(e.TEXTURE_2D,0,e.RGBA,e.RGBA,e.UNSIGNED_BYTE,a)});return{ready:Promise.all([X,O]).then(()=>{}),canDraw:t=>t>=81||!!v[D(t)]||t<H&&!!d,failed:()=>z,draw(t,a,l,n,b,x,o){const C=D(t),T=v[C]??(C===0?d:null);if(!T||!f)return;T===d&&(R=!0);const A=Math.max(0,Math.min(1,(t-70)/11)),L=A*A*(3-2*A),g=o.startH*.6,y=Math.ceil(l/o.startH),E=Math.ceil(a/g);e.activeTexture(e.TEXTURE0),e.bindTexture(e.TEXTURE_2D,u),(E!==P||y!==S)&&(P=E,S=y,e.texImage2D(e.TEXTURE_2D,0,e.RGBA8,E,y,0,e.RGBA,e.UNSIGNED_BYTE,null)),e.bindFramebuffer(e.FRAMEBUFFER,I),e.framebufferTexture2D(e.FRAMEBUFFER,e.COLOR_ATTACHMENT0,e.TEXTURE_2D,u,0),e.disable(e.BLEND),e.viewport(0,0,E,y),e.useProgram(T.program);const p=T.uniforms;e.uniform1f(p.uTime,t),e.uniform1f(p.uAspect,a/l),e.uniform1f(p.uPortal,R?Math.min(1,(performance.now()-U)/800):1),e.uniform3fv(p.uWater,n.subarray(0,3)),e.uniform3fv(p.uInk,b.subarray(0,3)),e.activeTexture(e.TEXTURE2),e.bindTexture(e.TEXTURE_2D,h),e.uniform1i(p.uLand,2),e.drawArrays(e.TRIANGLES,0,3),e.bindFramebuffer(e.FRAMEBUFFER,null),e.viewport(0,0,a,l),e.useProgram(f.program);const r=f.uniforms;e.activeTexture(e.TEXTURE0),e.bindTexture(e.TEXTURE_2D,u),e.uniform1i(r.uField,0),e.activeTexture(e.TEXTURE1),e.bindTexture(e.TEXTURE_2D,m.texture),e.uniform1i(r.uAtlas,1),e.activeTexture(e.TEXTURE3),e.bindTexture(e.TEXTURE_2D,x.texture),e.uniform1i(r.uNativeAtlas,3),e.uniform2f(r.uNativeGrid,...x.grid),e.uniform1f(r.uNativeCount,x.count),e.uniform2f(r.uCanvas,a,l),e.uniform2f(r.uAnchor,o.anchorX,o.anchorY),e.uniform2f(r.uCell,g+(o.cellW-g)*L,o.startH+(o.cellH-o.startH)*L),e.uniform3fv(r.uNativeInk,b.subarray(0,3)),e.uniform2f(r.uAtlasGrid,...m.grid),e.uniform1f(r.uCount,m.count),e.uniform1f(r.uTime,t),e.enable(e.BLEND),e.blendFunc(e.SRC_ALPHA,e.ONE_MINUS_SRC_ALPHA),e.drawArrays(e.TRIANGLES,0,3),e.disable(e.BLEND)},destroy(){w=!0,clearTimeout(G),s==null||s.cancel(),i==null||i.cancel();for(const t of[f,d,...v])t&&e.deleteProgram(t.program);e.deleteTexture(u),e.deleteTexture(h),e.deleteTexture(m.texture),e.deleteFramebuffer(I)}}}export{J as createCreationRenderer};
+}`;function ve(e){let f=null,c=null,q=!1,b=0,i=null,d=null,N=!1;const p=new Map,S=new Map,_=t=>t==="eye"?U(0,!0):t===H?U(0,!0,!0):U(t),C=t=>t===0||t===H,I=t=>{if(t>=81)return!0;const a=$(t);return p.has(a)||C(a)&&t<ne&&p.has("eye")};let F,D;const Q=new Promise((t,a)=>{F=t,D=a}),G=()=>{if(b=0,E)return;!f&&!c&&(c=P(e,fe));const t=ee();if(f){!d&&t.includes("eye")&&!p.has("eye")&&(d=P(e,_("eye")));const n=i?void 0:t.find(o=>o!=="eye"&&!p.has(o));n!==void 0&&(i={key:n,link:P(e,_(n))})}const a=c==null?void 0:c.poll(),s=d==null?void 0:d.poll(),l=i==null?void 0:i.link.poll();if(a===null||s===null||l===null){q=!0,D(new Error("Creation shader compilation failed"));return}const v=performance.now();a&&(f=a,c=null),s&&(p.set("eye",s),S.set("eye",v),d=null),l&&i&&(p.set(i.key,l),S.set(i.key,v),i=null),f&&I(te())&&F(),(c||d||i||t.some(n=>!p.has(n)))&&(b=window.setTimeout(G,a||s||l?0:50))},L=()=>{!b&&!E&&!q&&G()};Y.listeners.add(L);const y=Z(e," .'`^\",:;Il!i><~+_-?][}{1)(|/tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@$","'IBM Plex Mono', monospace"),x=e.createTexture(),T=e.createTexture(),W=e.createFramebuffer();for(const t of[x,T])e.bindTexture(e.TEXTURE_2D,t),e.texParameteri(e.TEXTURE_2D,e.TEXTURE_MIN_FILTER,e.LINEAR),e.texParameteri(e.TEXTURE_2D,e.TEXTURE_MAG_FILTER,e.LINEAR),e.texParameteri(e.TEXTURE_2D,e.TEXTURE_WRAP_S,e.CLAMP_TO_EDGE),e.texParameteri(e.TEXTURE_2D,e.TEXTURE_WRAP_T,e.CLAMP_TO_EDGE);let E=!1,O=0,X=0;G();const J=V().then(t=>{if(E)return;const a=document.createElement("canvas");a.width=360,a.height=180;const s=a.getContext("2d");s.fillStyle="#000",s.fillRect(0,0,360,180);for(let l=0;l<t.xyz.length;l+=3){const v=(Math.atan2(t.xyz[l+1],t.xyz[l])/Math.PI/2+.5)*360,n=(Math.asin(t.xyz[l+2])/Math.PI+.5)*180,o=l/3<t.bands[1]?110:l/3<t.bands[2]?175:235;s.fillStyle=`rgb(${o},${o},${o})`,s.fillRect(v-1.1,n-1,2.2,2)}e.activeTexture(e.TEXTURE2),e.bindTexture(e.TEXTURE_2D,T),e.pixelStorei(e.UNPACK_FLIP_Y_WEBGL,!1),e.texImage2D(e.TEXTURE_2D,0,e.RGBA,e.RGBA,e.UNSIGNED_BYTE,a)});return{ready:Promise.all([J,Q]).then(()=>{}),canDraw:I,failed:()=>q,draw(t,a,s,l,v,n,o){const k=$(t),j=p.get("eye"),g=p.get(k)??(C(k)?j:void 0);if(!g||!f){t<76&&(e.clearColor(.003,.006,.012,1),e.clear(e.COLOR_BUFFER_BIT));return}g===j&&(N=!0);const R=Math.max(0,Math.min(1,(t-70)/11)),M=R*R*(3-2*R),z=o.startH*.6,A=Math.ceil(s/o.startH),w=Math.ceil(a/z);e.activeTexture(e.TEXTURE0),e.bindTexture(e.TEXTURE_2D,x),(w!==O||A!==X)&&(O=w,X=A,e.texImage2D(e.TEXTURE_2D,0,e.RGBA8,w,A,0,e.RGBA,e.UNSIGNED_BYTE,null)),e.bindFramebuffer(e.FRAMEBUFFER,W),e.framebufferTexture2D(e.FRAMEBUFFER,e.COLOR_ATTACHMENT0,e.TEXTURE_2D,x,0),e.disable(e.BLEND),e.viewport(0,0,w,A),e.useProgram(g.program);const h=g.uniforms;e.uniform1f(h.uTime,t),e.uniform1f(h.uAspect,a/s),e.uniform1f(h.uPortal,N?Math.min(1,(performance.now()-(S.get(k)??0))/800):1),e.uniform3fv(h.uWater,l.subarray(0,3)),e.uniform3fv(h.uInk,v.subarray(0,3)),e.activeTexture(e.TEXTURE2),e.bindTexture(e.TEXTURE_2D,T),e.uniform1i(h.uLand,2),e.drawArrays(e.TRIANGLES,0,3),e.bindFramebuffer(e.FRAMEBUFFER,null),e.viewport(0,0,a,s),e.useProgram(f.program);const r=f.uniforms;e.activeTexture(e.TEXTURE0),e.bindTexture(e.TEXTURE_2D,x),e.uniform1i(r.uField,0),e.activeTexture(e.TEXTURE1),e.bindTexture(e.TEXTURE_2D,y.texture),e.uniform1i(r.uAtlas,1),e.activeTexture(e.TEXTURE3),e.bindTexture(e.TEXTURE_2D,n.texture),e.uniform1i(r.uNativeAtlas,3),e.uniform2f(r.uNativeGrid,...n.grid),e.uniform1f(r.uNativeCount,n.count),e.uniform2f(r.uCanvas,a,s),e.uniform2f(r.uAnchor,o.anchorX,o.anchorY),e.uniform2f(r.uCell,z+(o.cellW-z)*M,o.startH+(o.cellH-o.startH)*M),e.uniform3fv(r.uNativeInk,v.subarray(0,3)),e.uniform2f(r.uAtlasGrid,...y.grid),e.uniform1f(r.uCount,y.count),e.uniform1f(r.uTime,t);const B=performance.now();e.uniform1f(r.uReveal,ae(B)),e.uniform1f(r.uRevealClock,oe(B)),e.uniform1f(r.uRevealShape,re(se.journey)==="planet"?1:0),e.enable(e.BLEND),e.blendFunc(e.SRC_ALPHA,e.ONE_MINUS_SRC_ALPHA),e.drawArrays(e.TRIANGLES,0,3),e.disable(e.BLEND)},destroy(){E=!0,clearTimeout(b),Y.listeners.delete(L),c==null||c.cancel(),i==null||i.link.cancel(),d==null||d.cancel();for(const t of[f,...p.values()])t&&e.deleteProgram(t.program);e.deleteTexture(x),e.deleteTexture(T),e.deleteTexture(y.texture),e.deleteFramebuffer(W)}}}export{ve as createCreationRenderer};

@@ -103,6 +103,13 @@ export const oceanWake: { bodies: WakeBody[]; count: number } = {
   count: 0
 };
 
+// The existing water step wakes the text controller; no independent polling loop.
+const wakeListeners = new Set<() => void>();
+export function onWhaleWake(listener: () => void): () => void {
+  wakeListeners.add(listener);
+  return () => { wakeListeners.delete(listener); };
+}
+
 export interface WakeTracker {
   /** Each body's last place on screen (CSS px), NaN before it has one. */
   x: Float64Array;
@@ -177,7 +184,9 @@ export function trackWake(
       body.flank = WAKE.flank[k] * stirs;
     }
   }
+  const previousCount = out.count;
   out.count = count;
+  if (out === oceanWake && (count || previousCount)) wakeListeners.forEach(listener => listener());
 }
 
 

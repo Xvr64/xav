@@ -1,0 +1,99 @@
+{
+  "width": 320,
+  "motion": [
+    {
+      "glyphs": {
+        "visible": 140,
+        "far": 0,
+        "total": 3542
+      },
+      "text": 6,
+      "bodies": 8
+    },
+    {
+      "glyphs": {
+        "visible": 123,
+        "far": 0,
+        "total": 3542
+      },
+      "text": 5,
+      "bodies": 8
+    },
+    {
+      "glyphs": {
+        "visible": 104,
+        "far": 0,
+        "total": 3542
+      },
+      "text": 3,
+      "bodies": 8
+    },
+    {
+      "glyphs": {
+        "visible": 102,
+        "far": 0,
+        "total": 3542
+      },
+      "text": 3,
+      "bodies": 8
+    },
+    {
+      "glyphs": {
+        "visible": 95,
+        "far": 0,
+        "total": 3542
+      },
+      "text": 2,
+      "bodies": 8
+    },
+    {
+      "glyphs": {
+        "visible": 101,
+        "far": 0,
+        "total": 3542
+      },
+      "text": 4,
+      "bodies": 0
+    },
+    {
+      "glyphs": {
+        "visible": 102,
+        "far": 0,
+        "total": 3542
+      },
+      "text": 4,
+      "bodies": 8
+    },
+    {
+      "glyphs": {
+        "visible": 105,
+        "far": 0,
+        "total": 3542
+      },
+      "text": 3,
+      "bodies": 8
+    }
+  ],
+  "performance": {
+    "frames": 343,
+    "mean": 8.76,
+    "p50": 8.3,
+    "p95": 8.5,
+    "p99": 16.9,
+    "max": 24.9,
+    "over34": 0
+  },
+  "overflow": false,
+  "rest": {
+    "visible": 0,
+    "far": 0,
+    "total": 3542
+  },
+  "text": {
+    "count": 7,
+    "words": 4,
+    "intact": true,
+    "maxDisplacement": 1.37,
+    "settled": true
+  }
+}

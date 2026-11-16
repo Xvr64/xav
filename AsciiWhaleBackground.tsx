@@ -4,7 +4,6 @@ import { createAsciiJellyfishField } from './asciiOceanLife';
 import { playSonarPing, setSoundDepth } from './decodeAudio';
 import { createGlyphBatchGL } from './glyphBatchGL';
 import { MAX_PINGS, arrivalTime, echoStrength, isOpenWaterClick, pingRadius, pingStrength } from './sonarPing';
-import { driftSnow, oceanWake, wakeFlowAt } from './oceanWake';
 import { waterShade } from './terminalMotion';
 import {
   applyAbyssPalette,
@@ -521,39 +520,8 @@ export const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.m
       createWhaleAgent(0.58, 3.4)
     ];
 
-    // Lightweight drifting ambient ASCII points (precomputed relative offsets)
-    const ambientDots = Array.from({ length: 85 }, (_, idx) => ({
-      nx: ((idx * 41 + 13) % 100) / 100,
-      ny: ((idx * 67 + 29) % 100) / 100,
-      speedX: ((idx % 2 === 0 ? 1 : -1) * (0.002 + (idx % 3) * 0.001)),
-      glyphIdx: idx % 3 // 0: '.', 1: ':', 2: '+'
-    }));
-    let ambientOffsetY = 0;
-
     /** The sonar's ink this frame (set when a ping is drawn, reused by its echoes). */
     let sonarInk = 'rgb(47, 72, 88)';
-
-    // Marine snow (deterministic): position, parallax against the page (> 1: it passes faster
-    // than the copy), slow sink (px/s), sideways sway, glyph and strength
-    const MARINE_SNOW = Array.from({ length: 64 }, (_, i) => {
-      const r = (k: number) => (((i + 1) * k) % 1000) / 1000;
-      return {
-        nx: r(617.3),
-        ny: r(379.1),
-        par: 1.15 + r(271.7) * 0.45,
-        sink: 4 + r(143.9) * 7,
-        sway: 3 + r(97.3) * 6,
-        swayF: 0.2 + r(53.1) * 0.25,
-        phase: r(811.7) * Math.PI * 2,
-        glyph: ['.', '.', '·', '·', ',', ':'][(r(431.9) * 6) | 0],
-        alpha: 0.38 + r(677.1) * 0.5
-      };
-    });
-    // What a passing whale has done to each fleck: carried off its path, drifting back to it
-    // (oceanWake.ts). All zero, and never read, while no whale is moving the water.
-    const snowDrift = new Float32Array(MARINE_SNOW.length * 2);
-    const snowFlow: [number, number] = [0, 0];
-    const snowOffset: [number, number] = [0, 0];
 
     // Anatomical ASCII jellyfish (3 species, 3 parallax depth planes).
     // Rendered by this component's single RAF loop through pre-baked glyph atlases
@@ -2556,75 +2524,8 @@ export const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.m
         migrationStats.sceneMs += (performance.now() - t0 - migrationStats.sceneMs) * 0.1;
       }
 
-      // 2B. Subtle drifting deep-water particles (restrained count, zero flicker). Screen-space,
-      // so they give way while the migration's world-anchored water is on screen.
-      ambientOffsetY = (ambientOffsetY - sm.velocity * 0.00038 * dtScale + 10) % 1;
-      const dotLimit = migActive ? 0 : prefersReducedMotion ? 24 : 48;
-      if (mig.water > 0) ctx.globalAlpha = 1 - mig.water;
-      for (let i = 0; i < dotLimit; i++) {
-        const d = ambientDots[i];
-        const cx = (((d.nx + time * d.speedX * 0.65 + 10) % 1) * cols) | 0;
-        const cy = (((d.ny + ambientOffsetY + 10) % 1) * rows) | 0;
-        const inAbyss = abyss > 0.004 && ((i * 37) % 100) / 100 < abyss;
-        ctx.drawImage(
-          atlasCanvas,
-          (inAbyss ? d.glyphIdx + 1 : d.glyphIdx) * tilePx,
-          (inAbyss ? 20 : 5) * tilePx,
-          tilePx,
-          tilePx,
-          cx * cellSize,
-          cy * cellSize,
-          cellSize,
-          cellSize
-        );
-      }
-      ctx.globalAlpha = 1;
-
-      // The ocean sound bed (when sound is on) darkens with the descent
+      // Quiet water: no distributed ambient dots or marine-snow glyphs.
       setSoundDepth(Math.max(abyss, rawDepth * 0.4));
-
-      // 2B'. MARINE SNOW — in dark water only, sparse flecks pass upward faster than the page as
-      // the visitor descends (the reader is the one sinking) and settle into a slow fall when the
-      // page holds still. Never over a line of text; absent on white water and without motion.
-      const snowPresence = migActive || prefersReducedMotion ? 0 : Math.max(0, Math.min(1, (abyss - 0.22) / 0.4));
-      if (snowPresence > 0.01) {
-        const snowCount = w < 768 ? 34 : MARINE_SNOW.length;
-        const lines = readingZones.read();
-        const scrollNow = window.scrollY;
-        ctx.font = '500 13px "JetBrains Mono", monospace';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillStyle = 'rgb(198, 220, 214)';
-        for (let i = 0; i < snowCount; i++) {
-          const f = MARINE_SNOW[i];
-          const span = h + 40;
-          let y = ((((f.ny * span - scrollNow * f.par + time * f.sink) % span) + span) % span) - 20;
-          let x = (f.nx * w + Math.sin(time * f.swayF + f.phase) * f.sway + w) % w;
-          if (oceanWake.count || snowDrift[i * 2] !== 0 || snowDrift[i * 2 + 1] !== 0) {
-            // The wake carries the fleck with the water around the whale; it eases home afterwards
-            snowOffset[0] = snowDrift[i * 2];
-            snowOffset[1] = snowDrift[i * 2 + 1];
-            wakeFlowAt(x + snowOffset[0], y + snowOffset[1], snowFlow);
-            driftSnow(snowOffset, snowFlow[0], snowFlow[1], dt);
-            snowDrift[i * 2] = Math.abs(snowOffset[0]) < 0.02 ? 0 : snowOffset[0];
-            snowDrift[i * 2 + 1] = Math.abs(snowOffset[1]) < 0.02 ? 0 : snowOffset[1];
-            x += snowDrift[i * 2];
-            y += snowDrift[i * 2 + 1];
-          }
-          let behindText = false;
-          for (let k = 0; k < lines.length; k++) {
-            const r = lines[k];
-            if (x > r.left - 6 && x < r.left + r.width + 6 && y > r.top - 6 && y < r.top + r.height + 6) {
-              behindText = true;
-              break;
-            }
-          }
-          if (behindText) continue;
-          ctx.globalAlpha = snowPresence * f.alpha;
-          ctx.fillText(f.glyph, x, y);
-        }
-        ctx.globalAlpha = 1;
-      }
 
       // 2B''. SONAR RING — glyphs along a spreading circle, in the water's ink (slate on light
       // water, seafoam in the deep), passing beneath the whales and never over a line of text

@@ -121,7 +121,8 @@ void main() {
   float tone = clamp(v + wobble, 0.0, 1.0);
   float index = clamp(floor(tone * (uCount - 1.0) + 0.5), 1.0, uCount - 1.0);
   float present = step(pick, g.x * (0.3 + v));
-  float alpha = present * g.y * smoothstep(0.06, 0.42, v) * mix(0.5, 1.0, level);
+  // Quiet water has colour and soft currents, but no ambient character texture.
+  float alpha = 0.0;
   outCell = vec4(index / 255.0, alpha, field, 1.0);
 }`;
 
@@ -384,9 +385,9 @@ void main() {
   float wobble = (hash12(cell * 2.31 + tick * 17.7) - 0.5) * 0.16;
   float tone = clamp(v + wobble, 0.0, 1.0);
   float index = clamp(floor(tone * (uCount - 1.0) + 0.5), 1.0, uCount - 1.0);
-  // The bed: the share of cells that hold a glyph, and their ink
-  float present = g.x * (0.3 + v);
-  float ink = smoothstep(0.06, 0.42, v) * mix(0.5, 1.0, level);
+  // No global glyph bed. Only explicit flow previews or whale memory can emit ink.
+  float present = 0.0;
+  float ink = 0.0;
   float lift = 0.0;
   // A line of moving water through this cell: how much of one, the way it runs (doubled angle),
   // the share of its cells that hold a stroke, and their ink
@@ -421,11 +422,11 @@ void main() {
 #endif
 
 #ifdef WAKE
-  // Align existing marks with the whale's continuous memory, without an extra shimmer clock.
+  // Emit only inside the whale's fading, directional memory.
   float trail = stirred;
   vec2 trailLine = moved > 0.02 ? vec2(wake.x * wake.x - wake.y * wake.y, 2.0 * wake.x * wake.y) / (moved * moved) : vec2(1.0, 0.0);
   line = line * stroke * (1.0 - stirred) + trailLine * trail;
-  filled = mix(filled, present, stirred);
+  filled = mix(filled, uWakeGain.y, stirred);
   inked = mix(inked, uWakeGain.z, stirred);
   lift = max(lift * (1.0 - stirred), stirred * uWakeGain.w);
   stroke = max(stroke * (1.0 - 0.7 * stirred), trail);
@@ -443,15 +444,13 @@ void main() {
     else if (levelness < -0.62) index = weight < 0.7 ? 3.0 : 11.0;
     else index = heading.y > 0.0 ? 10.0 : 9.0;
     float drawn = smoothstep(0.3, 0.72, stroke);
-#ifdef FLOW
     present = max(present, filled * drawn);
-#endif
     ink = max(ink, inked * drawn * mix(0.72, 1.0, level));
   }
 #endif
 
-  float alpha = step(pick, present) * min(1.0, g.y * ink);
-  // No wake light, palette change or extra glyph population.
+  float alpha = (present > 0.0 ? step(pick, present) : 0.0) * min(1.0, g.y * ink);
+  // No emission outside the disturbance; preserve the water palette.
   outCell = vec4(index / 255.0, alpha, field, lift);
 }`;
 
@@ -577,10 +576,9 @@ void main() {
 /** What one wake step keeps and takes (WAKE_STEP's uKeep and uTake), at WAKE_HZ. */
 const WAKE_KEEP = { flow: 0.955, churn: 0.97, drift: 2.3, spread: 0.08, take: 0.14 };
 /**
- * Carry the current through the existing glyph field, using its own ink. No extra density,
- * lifted color or light; the screen pass also bends the existing lattice by up to 1.8 rows.
+ * Sparse strokes in moved water only. The screen pass bends the local lattice by up to 1.8 rows.
  */
-const WAKE_SHOW = { carry: 3.4, density: 0, ink: 1, lift: 0 };
+const WAKE_SHOW = { carry: 3.4, density: 0.48, ink: 1.6, lift: 0 };
 /**
  * The lines of moving water (livingCells' uFlow and uFlowShow). A phone's screen is a quarter as
  * wide, so its lines are shorter and a little closer, or one line would span the screen and
@@ -1050,6 +1048,8 @@ export function createAsciiOcean(canvas: HTMLCanvasElement): AsciiOcean {
   };
   const onMotion = () => {
     reduce = motionQuery.matches;
+    if (reduce) allocateWake();
+    lastScroll = NaN;
     schedule();
   };
   const resizeObserver = new ResizeObserver(resize);
