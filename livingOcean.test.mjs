@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { OCEAN_EFFECTS, OCEAN_EFFECT_DEFAULTS, parseOceanEffects } from './oceanExperiments.ts';
-import { WATER_INERTIA, newWaterInertia, stepWaterInertia, waterSettling } from './waterInertia.ts';
+import { WATER_INERTIA, newWaterInertia, stepWaterInertia, waterLag, waterSettling } from './waterInertia.ts';
 import { SEA_MAX_EDGES, SEA_MAX_STATES, SEA_OPEN, SEA_STATES, layoutSea, packSea, seaAt } from './seaState.ts';
 import { SNOW_LIMIT, WAKE, WAKE_BODIES, bodyFlow, driftSnow, newWakeTracker, trackWake, wakeFlowAt } from './oceanWake.ts';
 import { CV_SECTIONS } from './sections.ts';
@@ -33,7 +33,7 @@ test('each behaviour can be compared alone, together, or taken out, from the add
 // --- Water inertia --------------------------------------------------------------------------
 
 /** Scroll at `speed` px/s for `seconds`, stop dead, and record the water's offset every frame. */
-const stopFrom = (speed, seconds = 0.8, fps = 60, after = 2) => {
+const stopFrom = (speed, seconds = 0.8, fps = 60, after = 2.5) => {
   const state = newWaterInertia();
   const dt = 1 / fps;
   let scroll = 1000;
@@ -45,40 +45,53 @@ const stopFrom = (speed, seconds = 0.8, fps = 60, after = 2) => {
   return { state, during, settle };
 };
 
-test('steady scrolling carries the water with the page: no lag, so no parallax', () => {
+test('a steady scroll holds the water a steady way behind the page: it moves exactly as fast, so no parallax', () => {
   for (const speed of [300, 1200, 3000, -1500]) {
-    const { during } = stopFrom(speed, 1.5);
-    assert.ok(Math.abs(during.at(-1)) < 0.35, `${speed}: ${during.at(-1)}`);
+    const { during } = stopFrom(speed, 2.5);
+    const late = during.slice(-30);
+    assert.ok(Math.max(...late) - Math.min(...late) < 0.15, `${speed}: still drifting by ${Math.max(...late) - Math.min(...late)}`);
+    assert.ok(Math.abs(late.at(-1) + waterLag(speed)) < 0.1, `${speed}: ${late.at(-1)} against ${-waterLag(speed)}`);
+    assert.equal(Math.sign(late.at(-1)), -Math.sign(speed), 'behind the travel');
   }
 });
 
-test('when the page stops the water runs on a few pixels the same way, then comes back to rest exactly', () => {
+test('when the page stops the water carries on the same way until it has caught up, and never runs past', () => {
   for (const speed of [600, 1500, 3000]) {
-    const { state, settle } = stopFrom(speed);
-    const peak = Math.max(...settle);
-    assert.ok(peak > 1 && peak <= WATER_INERTIA.limit, `${speed}: peak ${peak}`);
-    // Critically damped: it eases back and never swings past the page
-    assert.ok(Math.min(...settle) > -0.3, `${speed}: swings back ${Math.min(...settle)}`);
+    const { state, during, settle } = stopFrom(speed, 2);
+    const behind = -during.at(-1);
+    // Enough to be seen: tens of pixels of glyphs still travelling after the copy has stopped
+    assert.ok(behind > (speed >= 1500 ? 40 : 20) && behind <= WATER_INERTIA.limit, `${speed}: ${behind} px behind`);
+    // One movement, one direction: every frame closer to the page, never beyond it
+    for (let i = 1; i < settle.length; i++) assert.ok(settle[i] >= settle[i - 1] - 1e-9, `${speed}: turns back at frame ${i}`);
+    assert.ok(Math.max(...settle) <= 0, `${speed}: runs past by ${Math.max(...settle)}`);
+    // Still under way a third of a second after the stop, home within a second and a half
+    assert.ok(-settle[Math.round(60 * 0.33)] > behind * 0.25, `${speed}: already home at 0.33 s`);
+    assert.ok(Math.abs(settle[Math.round(60 * 1.5)]) < 1, `${speed}: ${settle[Math.round(60 * 1.5)]} at 1.5 s`);
     assert.equal(settle.at(-1), 0);
     assert.equal(waterSettling(state), false);
-    // Gone within about a second
-    assert.ok(Math.abs(settle[Math.round(60 * 1.2)]) < 0.6);
   }
-  const up = stopFrom(-1500);
-  assert.ok(Math.min(...up.settle) < -1, 'scrolling up, the water runs on upward');
+  const up = stopFrom(-1500, 2);
+  assert.ok(up.during.at(-1) > 40 && Math.min(...up.settle) >= 0, 'scrolling up, the water carries on upward');
 });
 
-test('a faster stop runs further, but never past the limit', () => {
-  const peaks = [400, 1200, 3000, 12000, 24000].map((speed) => Math.max(...stopFrom(speed).settle));
-  for (let i = 1; i < peaks.length; i++) assert.ok(peaks[i] >= peaks[i - 1]);
-  assert.ok(peaks.at(-1) <= WATER_INERTIA.limit);
+test('a faster scroll leaves the water further behind, but never past the limit', () => {
+  const behind = [400, 1200, 3000, 12000, 24000].map((speed) => -stopFrom(speed).during.at(-1));
+  for (let i = 1; i < behind.length; i++) assert.ok(behind[i] >= behind[i - 1]);
+  assert.ok(behind.at(-1) <= WATER_INERTIA.limit);
+  assert.ok(waterLag(1e9) <= WATER_INERTIA.limit && waterLag(-1e9) >= -WATER_INERTIA.limit);
 });
 
-test('setting off holds the water back far less than a stop lets it run on', () => {
-  const { during, settle } = stopFrom(1500, 0.6);
-  const lag = -Math.min(...during);
-  const run = Math.max(...settle);
-  assert.ok(lag > 0 && lag < run * 0.4, `lags ${lag}, runs on ${run}`);
+test('the water has no sudden starts of its own: setting off and stopping are both eased', () => {
+  const { during, settle } = stopFrom(1500, 1.2);
+  // The largest change of the water's offset in one frame, as a speed, is far below the page's own
+  const steps = [...during, ...settle].map((v, i, all) => (i ? Math.abs(v - all[i - 1]) * 60 : 0));
+  assert.ok(Math.max(...steps) < 420, `the water jumps at ${Math.max(...steps)} px/s`);
+  // Speeding up and slowing down are treated alike: at a reading pace a start mirrors a stop
+  // (a fast scroll nears the limit, which is approached softly and left as softly)
+  const slow = stopFrom(300, 2.5);
+  const start = slow.during.slice(0, 60).map((v) => -v);
+  const stop = slow.settle.slice(0, 60).map((v) => -slow.during.at(-1) + v);
+  for (let i = 0; i < 60; i++) assert.ok(Math.abs(start[i] - stop[i]) < 0.6, `frame ${i}: ${start[i]} against ${stop[i]}`);
 });
 
 test('uneven frames do not push the water: a steady scroll stays a steady scroll', () => {
@@ -89,15 +102,15 @@ test('uneven frames do not push the water: a steady scroll stays a steady scroll
   let t = 0;
   stepWaterInertia(state, 0, 1 / 60, 900);
   const leads = [];
-  for (let i = 0; i < 400; i++) {
+  for (let i = 0; i < 500; i++) {
     const dt = 0.008 + random() * 0.02;
     t += dt;
     const lead = stepWaterInertia(state, t * 1500, dt, 900);
-    if (t > 1) leads.push(lead);
+    if (t > 2.5) leads.push(lead);
   }
   const mean = leads.reduce((a, b) => a + b, 0) / leads.length;
-  assert.ok(Math.abs(mean) < 0.2, `mean lead ${mean}`);
-  assert.ok(Math.max(...leads.map(Math.abs)) < 1, `worst ${Math.max(...leads.map(Math.abs))}`);
+  assert.ok(Math.abs(mean + waterLag(1500)) < 0.3, `mean ${mean}`);
+  assert.ok(Math.max(...leads.map((v) => Math.abs(v - mean))) < 0.5, `wanders ${Math.max(...leads.map((v) => Math.abs(v - mean)))}`);
 });
 
 test('a jump is not a scroll, and the same motion gives the same water at any frame rate', () => {
@@ -105,10 +118,10 @@ test('a jump is not a scroll, and the same motion gives the same water at any fr
   stepWaterInertia(state, 0, 1 / 60, 900);
   assert.equal(stepWaterInertia(state, 5000, 1 / 60, 900), 0);
   assert.equal(waterSettling(state), false);
-  const a = Math.max(...stopFrom(1500, 0.8, 60).settle);
-  const b = Math.max(...stopFrom(1500, 0.8, 120).settle);
-  const c = Math.max(...stopFrom(1500, 0.8, 30).settle);
-  assert.ok(Math.abs(a - b) < 1 && Math.abs(a - c) < 1.5, `${a} ${b} ${c}`);
+  const at = (fps) => { const run = stopFrom(1500, 0.8, fps); return [run.during.at(-1), run.settle[Math.round(fps * 0.4)]]; };
+  const a = at(60), b = at(120), c = at(30);
+  assert.ok(Math.abs(a[0] - b[0]) < 1 && Math.abs(a[0] - c[0]) < 1.5, `${a[0]} ${b[0]} ${c[0]}`);
+  assert.ok(Math.abs(a[1] - b[1]) < 1.5 && Math.abs(a[1] - c[1]) < 3, `${a[1]} ${b[1]} ${c[1]}`);
   // A frozen frame (dt 0) or a missing scroll changes nothing
   assert.equal(stepWaterInertia(state, 5000, 0, 900), 0);
   assert.equal(stepWaterInertia(state, NaN, 1 / 60, 900), 0);
@@ -176,6 +189,32 @@ test('sea states stay within what reads as water', () => {
   assert.ok(SEA_STATES.languages.cross > 0 && Object.values(SEA_STATES).filter((s) => s.cross > 0).length === 1);
 });
 
+test('each sea is told from its neighbours by how its lines of water move, not by a nuance', () => {
+  const order = ['experience', 'skills', 'education', 'languages', 'interests', 'contact'];
+  const seas = [SEA_OPEN, ...order.map((id) => SEA_STATES[id])];
+  for (const s of seas) {
+    assert.ok(s.run >= 0.4 && s.run <= 3, 'a line is between a short dash and most of a screen');
+    assert.ok(s.lanes >= 0.5 && s.lanes <= 1.5);
+    assert.ok(s.speed > 0 && s.speed <= 2);
+  }
+  // Walking down the page, each section's lines differ from the last one's by a good margin in
+  // at least one of: their length, their speed, or the water turning (set, crossing)
+  for (let i = 1; i < seas.length; i++) {
+    const a = seas[i - 1], b = seas[i];
+    const ratio = (x, y) => Math.max(x, y) / Math.min(x, y);
+    const apart = Math.max(ratio(a.run, b.run), ratio(a.speed, b.speed), ratio(a.set, b.set), a.cross !== b.cross ? 2 : 1);
+    assert.ok(apart >= 1.6, `${order[i - 1] ?? 'open'}: only ${apart} apart from the water above`);
+  }
+  assert.ok(SEA_STATES.skills.speed > SEA_STATES.education.speed * 3, 'skills is quick, education rolls');
+  assert.ok(SEA_STATES.skills.run < SEA_STATES.experience.run / 2.5, 'skills is choppy, experience runs long');
+  assert.ok(SEA_STATES.contact.speed < 0.1, 'contact barely moves');
+  assert.ok(SEA_STATES.interests.set < 1, 'in interests the lines turn with the eddies');
+  const packed = packSea(layoutSea(PAGE, 900), 1);
+  assert.equal(packed.c.length, SEA_MAX_STATES * 4);
+  assert.equal(Math.fround(packed.c[4]), Math.fround(SEA_STATES.experience.run));
+  assert.equal(Math.fround(packed.c[4 + 2]), Math.fround(SEA_STATES.experience.speed));
+});
+
 // --- Wake -----------------------------------------------------------------------------------
 
 /** A straight whale 960 px long, snout at `x`, heading along (dx, dy). */
@@ -187,7 +226,7 @@ const spine = (x, y, dx = 1, dy = 0) => {
 
 test('a swimming whale becomes four bodies along its spine, heading snout first', () => {
   const tracker = newWakeTracker();
-  const out = { bodies: Array.from({ length: WAKE_BODIES }, () => ({ x: 0, y: 0, r: 1, ux: 0, uy: 0, strength: 0, churn: 0 })), count: 0 };
+  const out = { bodies: Array.from({ length: WAKE_BODIES }, () => ({ x: 0, y: 0, r: 1, ux: 0, uy: 0, strength: 0, churn: 0, spread: 1, wash: false, bow: 0, flank: 0 })), count: 0 };
   trackWake(tracker, [spine(1000, 400)], 1, 0, 1 / 30, 900, out);
   assert.equal(out.count, 0, 'no speed is known on the first step');
   trackWake(tracker, [spine(1004, 400)], 1, 0, 1 / 30, 900, out);
@@ -195,17 +234,37 @@ test('a swimming whale becomes four bodies along its spine, heading snout first'
   for (let i = 0; i < 4; i++) {
     const b = out.bodies[i];
     assert.ok(Math.abs(b.ux - 1) < 1e-6 && Math.abs(b.uy) < 1e-6);
-    assert.ok(b.strength > 0.5 && b.strength < 0.75, `an eighth of its length a second moves the water about two thirds: ${b.strength}`);
+    assert.ok(b.strength > 0.85, `an eighth of its length a second is a brisk whale: ${b.strength}`);
     assert.ok(b.r > 30 && b.r < 130);
   }
   assert.ok(out.bodies[1].r > out.bodies[0].r && out.bodies[1].r > out.bodies[3].r, 'the girth is widest behind the flippers');
+  // The head and the girth part the water (a crescent off the bow, bands along the flanks);
+  // the tail stock and the flukes drive the animal and throw their water astern
+  assert.deepEqual(out.bodies.slice(0, 4).map((b) => b.wash), [false, false, true, true]);
+  assert.ok(out.bodies[0].bow > 0.1 && out.bodies[0].flank > 0.1 && out.bodies[1].flank > 0.1 && out.bodies[1].bow === 0);
+  assert.ok(out.bodies[0].bow < out.bodies[3].churn / 2, "what the head sheds is slight beside the flukes' trail");
   assert.equal(out.bodies[0].churn, 0);
-  assert.ok(out.bodies[3].churn > 0.5, 'the flukes stir the water');
+  assert.ok(out.bodies[3].churn > 0.8 && out.bodies[3].churn > out.bodies[2].churn, 'the flukes stir the water most');
+});
+
+test('a whale at its usual cruise already moves the water well: the wake does not wait for a sprint', () => {
+  // On the page a whale covers about a twentieth of its length a second (measured: 30 to 55 px/s
+  // for an animal 740 to 940 px long). The first wake was scaled for 0.12 lengths a second and
+  // never rose above a third of its strength.
+  const tracker = newWakeTracker();
+  const out = { bodies: Array.from({ length: WAKE_BODIES }, () => ({ x: 0, y: 0, r: 1, ux: 0, uy: 0, strength: 0, churn: 0, spread: 1, wash: false, bow: 0, flank: 0 })), count: 0 };
+  trackWake(tracker, [spine(1000, 400)], 1, 0, 1 / 30, 900, out);
+  trackWake(tracker, [spine(1000 + 45 / 30, 400)], 1, 0, 1 / 30, 900, out);
+  assert.equal(out.count, 4);
+  assert.ok(out.bodies[1].strength > 0.5 && out.bodies[1].strength < 0.75, `${out.bodies[1].strength}`);
+  // And a whale that barely drifts leaves the water nearly alone
+  trackWake(tracker, [spine(1000 + 49 / 30, 400)], 1, 0, 1 / 30, 900, out);
+  assert.ok(out.count === 0 || out.bodies[1].strength < 0.1);
 });
 
 test('the page scrolling past a whale moves the water a little, its own swimming far more', () => {
   const tracker = newWakeTracker();
-  const out = { bodies: Array.from({ length: WAKE_BODIES }, () => ({ x: 0, y: 0, r: 1, ux: 0, uy: 0, strength: 0, churn: 0 })), count: 0 };
+  const out = { bodies: Array.from({ length: WAKE_BODIES }, () => ({ x: 0, y: 0, r: 1, ux: 0, uy: 0, strength: 0, churn: 0, spread: 1, wash: false, bow: 0, flank: 0 })), count: 0 };
   trackWake(tracker, [spine(1000, 400)], 1, 5000, 1 / 30, 900, out);
   trackWake(tracker, [spine(1000, 400)], 1, 5000, 1 / 30, 900, out);
   assert.equal(out.count, 0, 'a still whale in still water leaves it alone');
@@ -232,7 +291,7 @@ test('the page scrolling past a whale moves the water a little, its own swimming
 
 test('two whales fill the eight bodies and never more', () => {
   const tracker = newWakeTracker();
-  const out = { bodies: Array.from({ length: WAKE_BODIES }, () => ({ x: 0, y: 0, r: 1, ux: 0, uy: 0, strength: 0, churn: 0 })), count: 0 };
+  const out = { bodies: Array.from({ length: WAKE_BODIES }, () => ({ x: 0, y: 0, r: 1, ux: 0, uy: 0, strength: 0, churn: 0, spread: 1, wash: false, bow: 0, flank: 0 })), count: 0 };
   const whales = (x) => [spine(1000 + x, 300), spine(600 - x, 700, -1, 0), spine(0, 0)];
   trackWake(tracker, whales(0), 1, 0, 1 / 30, 900, out);
   trackWake(tracker, whales(5), 1, 0, 1 / 30, 900, out);
@@ -240,11 +299,13 @@ test('two whales fill the eight bodies and never more', () => {
   assert.ok(out.bodies[4].ux < -0.99, 'the second whale swims the other way');
 });
 
-test('water inside a body moves with it, water around it is pushed on and flares, and far water is left alone', () => {
+test('water at a body\'s surface moves with it, water around it is pushed on and flares, and far water is left alone', () => {
   const body = { x: 0, y: 0, r: 100, ux: 1, uy: 0, strength: 1, churn: 0 };
   const at = (dx, dy) => bodyFlow(body, dx, dy, [0, 0]);
-  assert.deepEqual(at(0, 0), [1, 0]);
-  assert.deepEqual(at(60, -40), [1, 0]);
+  // The middle of the body is the animal, not water: nothing is drawn moving there
+  assert.deepEqual(at(0, 0), [0, 0]);
+  assert.ok(at(60, -40)[0] > 0.4 && at(60, -40)[0] < 0.6 && at(60, -40)[1] === 0);
+  assert.deepEqual(at(80, 60), [1, 0]);
   // Ahead and astern on the axis the water is pushed on; abeam it hardly moves (what slips back
   // and what is drawn along nearly cancel)
   assert.ok(at(150, 0)[0] > 0.3 && Math.abs(at(150, 0)[1]) < 1e-9);
@@ -268,8 +329,8 @@ test('the flow at a point adds every body by its strength', () => {
     { x: 0, y: 0, r: 100, ux: 1, uy: 0, strength: 0.5, churn: 0 },
     { x: 0, y: 0, r: 100, ux: 0, uy: 1, strength: 0.25, churn: 0 }
   ] };
-  assert.deepEqual(wakeFlowAt(10, 10, [0, 0], wake), [0.5, 0.25]);
-  assert.deepEqual(wakeFlowAt(10, 10, [0, 0], { count: 0, bodies: wake.bodies }), [0, 0]);
+  assert.deepEqual(wakeFlowAt(80, 60, [0, 0], wake), [0.5, 0.25]);
+  assert.deepEqual(wakeFlowAt(80, 60, [0, 0], { count: 0, bodies: wake.bodies }), [0, 0]);
 });
 
 test('marine snow is carried by a wake, never far, and drifts home when the water is still', () => {

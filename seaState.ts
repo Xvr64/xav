@@ -31,25 +31,35 @@ export interface SeaState {
    * low, and the strokes turn with every eddy.
    */
   set: number;
+  /**
+   * The lines of moving water that travel along the currents where glyphs follow the flow
+   * (asciiOcean.ts): how long one line is (1 is about 300 px of stroke), how closely the lines
+   * lie (1 is a line every five rows or so) and how fast they travel (1 is about 55 px a second).
+   * This is what tells one sea from another at a glance: long slow lines, short quick ones,
+   * two sets crossing, lines that curl, lines that barely move.
+   */
+  run: number;
+  lanes: number;
+  speed: number;
 }
 
 /** The ocean as it has always been: the cover, the Globe's journey and the profile. */
-export const SEA_OPEN: SeaState = { grain: 1, reach: 1, pace: 1, ripple: 0.32, warp: 1.7, cross: 0, shimmer: 1, set: 1.7 };
+export const SEA_OPEN: SeaState = { grain: 1, reach: 1, pace: 1, ripple: 0.32, warp: 1.7, cross: 0, shimmer: 1, set: 1.7, run: 1, lanes: 1, speed: 1 };
 
 /** By section id. A section without an entry keeps the state of the water above it. */
 export const SEA_STATES: Readonly<Record<string, SeaState>> = {
-  // Long, gentle currents
-  experience: { grain: 0.9, reach: 2.1, pace: 0.8, ripple: 0.22, warp: 1.3, cross: 0, shimmer: 0.8, set: 2.6 },
-  // Finer, more energetic movement
-  skills: { grain: 1.32, reach: 0.9, pace: 1.6, ripple: 0.4, warp: 1.7, cross: 0, shimmer: 1.35, set: 1.4 },
-  // Broad, slow-moving swells
-  education: { grain: 0.62, reach: 1.5, pace: 0.55, ripple: 0.14, warp: 1.1, cross: 0, shimmer: 0.7, set: 2.2 },
-  // Softly intersecting currents
-  languages: { grain: 1, reach: 2, pace: 0.85, ripple: 0.2, warp: 0.9, cross: 0.42, shimmer: 0.9, set: 1.1 },
-  // Slow organic eddies
-  interests: { grain: 0.85, reach: 0.85, pace: 0.6, ripple: 0.2, warp: 3.4, cross: 0, shimmer: 0.8, set: 0.7 },
+  // Long, gentle currents: unbroken level lines, travelling steadily
+  experience: { grain: 0.85, reach: 2.2, pace: 0.8, ripple: 0.2, warp: 1.2, cross: 0, shimmer: 0.8, set: 3, run: 1.9, lanes: 0.9, speed: 0.85 },
+  // Finer, more energetic movement: short lines, close together, quick
+  skills: { grain: 1.45, reach: 0.85, pace: 1.7, ripple: 0.42, warp: 1.8, cross: 0, shimmer: 1.4, set: 1.5, run: 0.5, lanes: 1.45, speed: 1.9 },
+  // Broad, slow-moving swells: few, long, heavy lines, far apart
+  education: { grain: 0.55, reach: 1.5, pace: 0.5, ripple: 0.12, warp: 1.1, cross: 0, shimmer: 0.7, set: 2.1, run: 2.6, lanes: 0.55, speed: 0.42 },
+  // Softly intersecting currents: two sets of lines crossing
+  languages: { grain: 1, reach: 2, pace: 0.85, ripple: 0.2, warp: 0.9, cross: 0.38, shimmer: 0.9, set: 2.4, run: 1.25, lanes: 0.85, speed: 0.75 },
+  // Slow organic eddies: the lines curl with the water
+  interests: { grain: 0.8, reach: 0.8, pace: 0.6, ripple: 0.2, warp: 3.4, cross: 0, shimmer: 0.8, set: 0.62, run: 0.9, lanes: 0.8, speed: 0.55 },
   // Nearly still water
-  contact: { grain: 0.8, reach: 1.3, pace: 0.12, ripple: 0.16, warp: 1.2, cross: 0, shimmer: 0.3, set: 3 }
+  contact: { grain: 0.75, reach: 1.4, pace: 0.12, ripple: 0.14, warp: 1.2, cross: 0, shimmer: 0.3, set: 3.2, run: 1.6, lanes: 0.7, speed: 0.07 }
 };
 
 /** The most states and meetings the ocean's shader holds (the open water, then six sections). */
@@ -111,20 +121,22 @@ export function seaAt(layout: SeaLayout, y: number): { from: number; to: number;
   return { from: nearest, to: nearest + 1, mix: smoothstep(edge.at - edge.half, edge.at + edge.half, y) };
 }
 
-/** The layout as the shader takes it: two vec4 per state, one vec2 per meeting (scaled to device px). */
+/** The layout as the shader takes it: three vec4 per state, one vec2 per meeting (scaled to device px). */
 export function packSea(layout: SeaLayout, ratio: number) {
   const a = new Float32Array(SEA_MAX_STATES * 4);
   const b = new Float32Array(SEA_MAX_STATES * 4);
+  const c = new Float32Array(SEA_MAX_STATES * 4);
   const edges = new Float32Array(SEA_MAX_EDGES * 2);
   for (let i = 0; i < SEA_MAX_STATES; i++) {
     const s = layout.states[Math.min(i, layout.states.length - 1)];
     a.set([s.grain, s.reach, s.pace, s.ripple], i * 4);
     b.set([s.warp, s.cross, s.shimmer, s.set], i * 4);
+    c.set([s.run, s.lanes, s.speed, 0], i * 4);
   }
   for (let i = 0; i < SEA_MAX_EDGES; i++) {
     const e = layout.edges[i];
     // A meeting that does not exist sits out of reach: nothing is ever nearest to it
     edges.set(e ? [e.at * ratio, e.half * ratio] : [1e9, 1], i * 2);
   }
-  return { a, b, edges, count: layout.edges.length };
+  return { a, b, c, edges, count: layout.edges.length };
 }

@@ -4,6 +4,46 @@
 
 **Update, 15 November 2026:** all four behaviours are now on by default (`OCEAN_EFFECT_DEFAULTS` in `oceanExperiments.ts`) and the `?ocean=` parameter works on the live site too: `?ocean=original` shows the previous ocean, `?ocean=-wake` drops one behaviour, `?ocean=flow,sea` shows exactly those. The sections below describe the state when the effects were still off by default.
 
+## Update 2: visibility pass (15 November 2026, working tree only)
+
+On the live site the four effects could barely be told from the ocean without them. Measured on the ocean's own canvas at real contrast (`node dev/phase3-visible.mjs`), that was true, and each effect was rebuilt. Sections 1 to 5 below describe the first version and are superseded where they differ from this table.
+
+Why they could not be seen:
+
+- **Everything.** Ocean glyphs sit 15 to 25 levels (of 255) off the water; the whales sit about 90 off. The effects only rearranged those glyphs and were forbidden any more ink.
+- **Wake.** The whales mostly hold their place on screen (30 to 55 px/s) while their flukes beat, so water marked "where the whale has been" lay under the animal itself. Its strength was scaled for an animal swimming three times faster, and the trail's display threshold cut it off after half a second.
+- **Flow.** Only the choice of glyph changed (`=` and `+` became `-` and `~`), with no movement along the direction.
+- **Inertia.** A 3 to 12 px lead that sprang back within 0.7 s.
+- **Sea states.** Different settings of the same faint field, with contrast and density deliberately held equal.
+
+What each one is now:
+
+| Effect | Now | Before → after, 1440 px (390 px) |
+|---|---|---|
+| Inertia | The water follows the page a little way behind (further the faster it goes, 84 px at most) and, when the page stops, carries on the same way until it has caught up. One direction, no spring-back. | Travel after a 1,500 px/s stop: 16 px, half of it backwards, 0.76 s → 64 px, none backwards, 1.35 s (same) |
+| Flow | Currents are drawn as lines of strokes (`- ~ ≈ / \`) that follow the streamlines and travel along them, broken into runs so the whole line is seen to move. The bed between them is dots. | Pixels that differ from the ocean without flow: 0.9% → 2.7% (2.8%). Pixels changing per half second: 0.8% → 1.5% (1.75%) |
+| Wake | The tail and flukes throw stirred water astern in a plume that pulses with the beat, drifts back and fades; a slight crescent off the bow and bands along the flanks. Strokes lie along the whale's path, in a paler ink. Nothing is stirred while the page scrolls past the whales. | Pixels that differ from no wake: 0.08% → 0.97% (0.02% → 0.89%). Strongest marks: 23 → 58 levels off. Trail seen for 0.5 s → 5 s (1 s → 4.5 s) |
+| Sea states | Each section sets the length, spacing and speed of its lines as well as the currents: long level lines (Experience), short quick ones (Skills), few long slow ones (Education), two sets crossing (Languages), lines that curl (Interests), nearly still (Contact). | Share of pixels changing per half second with flow + sea, Contact to Skills: 0.25–0.79% → 0.48–1.19% |
+
+Cost, same harness as section 3, two trials, committed tree against this one with everything on:
+
+| | Before | After |
+|---|---|---|
+| CV read, frame mean / p95 (1440) | 17.2 / 50.0 ms | 17.4 / 50.0 ms |
+| Globe film, mean / p95 (1440) | 12.9 / 16.9 ms | 12.2 / 16.8 ms |
+| Idle, mean / p95 (1440) | 8.3 / 8.5 ms | 8.3 / 8.5 ms |
+| Stop-and-go scroll, mean / p95 (1440) | 10.6 / 16.8 ms | 10.3 / 16.8 ms |
+| CV read, mean / p95 (390) | 13.4 / 37.5 ms | 13.0 / 33.3 ms |
+| Idle, mean / p95 (390) | 8.3 / 8.6 ms | 8.3 / 8.6 ms |
+| Ocean draw, median | 0.1–0.2 ms | 0.1 ms |
+| Shader link, cold (1440 / 390) | 9.7 / 11.8 ms | 13.4 / 15.4 ms |
+
+`?ocean=original` still links the two original shaders, untouched (unit test, and no change to those lines in the diff). Glyph count with everything on is about 10% above the original ocean's.
+
+Clips, before and after side by side (same whale path, then a scroll and a stop): [visibility-1440.gif](artifacts/phase3/visibility-1440.gif), [visibility-1440-wake-actual-size.gif](artifacts/phase3/visibility-1440-wake-actual-size.gif), [visibility-390.gif](artifacts/phase3/visibility-390.gif). Raw numbers: [visible-before.json](artifacts/phase3/visible-before.json), [visible-after.json](artifacts/phase3/visible-after.json).
+
+Not verified: a physical phone (Chrome touch emulation only, 390 and 320 px), and how it feels to your eye in motion, which the clips and numbers can only approximate.
+
 ## Summary
 
 Four behaviours were added to the ocean renderer, each behind its own development flag and **all off by default**. With no flag set the site draws exactly the ocean it drew before (measured, see section 7).

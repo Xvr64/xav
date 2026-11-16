@@ -36,18 +36,28 @@ import { WAKE, WAKE_BODIES, newWakeTracker, oceanWake, trackWake } from './ocean
 // THE LIVING OCEAN (oceanExperiments.ts) adds four behaviours, each on its own switch. With all
 // of them off the two passes above are exactly the shaders below, untouched. With any of them on
 // the cell pass is `livingCells`: the same currents, read at a point the wake has moved, in the
-// sea state of the section they lie in, with glyphs that take the current's direction; and a
-// third, tiny pass (WAKE_STEP) keeps the water's memory of the whales, thirty times a second.
+// sea state of the section they lie in, drawn as lines of strokes that travel the way the water
+// runs; the screen pass is `LIVING_SCREEN`, which lets those lines stand a little further off the
+// water than the bed they cross; and a third, tiny pass (WAKE_STEP) keeps the water's memory of
+// the whales, thirty times a second.
+//
+// What can be seen of each behaviour is measured, not judged by eye: dev/phase3-visible.mjs. The
+// first version of all four changed under one pixel in a hundred and could not be told from the
+// ocean without them.
 
 const DEV = !!(import.meta as any).env?.DEV;
 const SAMPLES = 24;
 const CHARACTERS = ' .·:-~=+≈';
-/** The ramp, then the two strokes of a current that leaves the level (indices 9 and 10). */
-const FLOW_CHARACTERS = CHARACTERS + '/\\';
+/** The ramp, then the strokes of water that leaves the level: two leans and an upright (indices 9, 10 and 11). */
+const FLOW_CHARACTERS = CHARACTERS + '/\\|';
 /** How often the water's memory of the whales advances (the ocean's resting cadence). */
 const WAKE_HZ = 30;
+/** The least radius a whale's body is given in the wake, in rows of glyphs. */
+const WAKE_MIN_ROWS = 2.6;
+/** How many runs a line of moving water is broken into along its length (livingCells' stream). */
+const FLOW_GRAIN = 5;
 /** Wake steps the ocean keeps simulating after the last whale has moved it: long enough to fade. */
-const WAKE_LINGER = 6 * WAKE_HZ;
+const WAKE_LINGER = 11 * WAKE_HZ;
 const FONT = "'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
 const IDLE_FPS = 30;
 /** CSS px per unit of the currents' noise: the size of one swell. */
@@ -176,6 +186,12 @@ void main() {
  * that they can be read in a sea state (SEA), at a point the wake has moved (WAKE) and at two
  * neighbouring points, which give the direction the water runs in (FLOW).
  *
+ * What the living ocean adds is drawn as LINES OF MOVING WATER: runs of strokes ( - ~ ≈ / \ )
+ * that lie along the way the water goes and are a little firmer than the bed of dots they pass
+ * through. The currents' own lines travel along the streamlines; a whale's wake is the same
+ * strokes, laid along its path, fading. A line is the only thing here allowed more ink than the
+ * ocean had, and never as much as a whale.
+ *
  * Nothing here has a memory or a clock of its own beyond `uTime`: a glyph is a pure function of
  * its place on the page, the time and the wake under it, so it never flickers between frames.
  */
@@ -193,10 +209,20 @@ uniform float uUnit;
 uniform float uTime;
 uniform float uCount;
 uniform vec4 uGlyph[${SAMPLES}];
+// How far the water is from the page (device px, waterInertia.ts): its layers do not all run as far
+uniform float uLead;
+#ifdef FLOW
+// The lines of moving water on this screen: length, spacing, speed, and how much of a line shows in quiet water
+uniform vec4 uFlow;
+// How a line is drawn: the share of its cells that hold a stroke, its ink, how far that ink is
+// lifted off the water, and the share of the bed's dots kept between the lines
+uniform vec4 uFlowShow;
+#endif
 #ifdef SEA
-// Per state: grain, reach, pace, ripple · warp, crossing angle, shimmer, set (seaState.ts)
+// Per state: grain, reach, pace, ripple · warp, crossing angle, shimmer, set · run, lanes, speed (seaState.ts)
 uniform vec4 uSeaA[${SEA_MAX_STATES}];
 uniform vec4 uSeaB[${SEA_MAX_STATES}];
+uniform vec4 uSeaC[${SEA_MAX_STATES}];
 // Where state i meets state i + 1 (px from the top of the page), and half the water they share
 uniform vec2 uSeaEdge[${SEA_MAX_EDGES}];
 #endif
@@ -204,8 +230,8 @@ uniform vec2 uSeaEdge[${SEA_MAX_EDGES}];
 uniform sampler2D uWake;
 // Rows the page has moved since the wake was last stepped
 uniform float uWakeRow;
-// How far moved water carries the currents (px), its say in a glyph's direction, and how much
-// it brings out the glyphs (how many, how heavy)
+// How far moved water carries the currents (px), the share of a wake's cells that hold a stroke,
+// their ink, and how far that ink is lifted off the water
 uniform vec4 uWakeGain;
 #endif
 out vec4 outCell;
@@ -214,8 +240,10 @@ ${COMMON}
 // Without SEA there is one: the ocean as it has always been.
 vec4 seaA0 = vec4(1.0, 1.0, 1.0, 0.32);
 vec4 seaB0 = vec4(1.7, 0.0, 1.0, 1.7);
+vec4 seaC0 = vec4(1.0, 1.0, 1.0, 0.0);
 vec4 seaA1 = vec4(1.0, 1.0, 1.0, 0.32);
 vec4 seaB1 = vec4(1.7, 0.0, 1.0, 1.7);
+vec4 seaC1 = vec4(1.0, 1.0, 1.0, 0.0);
 float seaMix = 0.0;
 
 // One state's currents at a point of the page (px): long swells near the surface (stretched
@@ -246,17 +274,56 @@ float currents(vec2 at, float stretch, float t, vec4 a, vec4 b) {
   return clamp(0.5 + (swell * (1.0 - a.w) + ripple * a.w - 0.5) * contrast, 0.0, 1.0);
 }
 
+// Two waters meeting: their values crossfade (never their settings, which would shear the
+// drift), and keep their contrast through the middle
+float meet(float f, float g) {
+  float keep = inversesqrt(seaMix * seaMix + (1.0 - seaMix) * (1.0 - seaMix));
+  return clamp(0.5 + (mix(f, g, seaMix) - 0.5) * keep, 0.0, 1.0);
+}
+
 float water(vec2 at, float stretch, float t) {
   float f = currents(at, stretch, t, seaA0, seaB0);
 #ifdef SEA
-  // Two waters meeting: their values crossfade (never their settings, which would shear the
-  // drift), and keep their contrast through the middle
-  float g = currents(at, stretch, t, seaA1, seaB1);
-  float keep = inversesqrt(seaMix * seaMix + (1.0 - seaMix) * (1.0 - seaMix));
-  f = clamp(0.5 + (mix(f, g, seaMix) - 0.5) * keep, 0.0, 1.0);
+  f = meet(f, currents(at, stretch, t, seaA1, seaB1));
 #endif
   return f;
 }
+
+#ifdef FLOW
+// One state's lines of moving water through a point: how much of a line is here (x) and the way
+// it runs, as a doubled angle (yz), so that two flows add up whichever way each is said to point.
+// The water runs sideways (the state's set) and the currents bend it: their field is the stream
+// function of what they add, so a line of water follows the level lines of  y + field / set.
+// A slow noise read in those two coordinates (far along the line, close across it) is therefore
+// drawn out along the streamlines, and sliding it along the first makes the lines travel.
+vec3 stream(vec2 at, float f, vec2 slope, float t, vec4 b, vec4 c) {
+  vec2 p = at / uUnit;
+  float bend = 1.0 / b.w;
+  float cs = cos(b.y);
+  float sn = sin(b.y);
+  float along = 1.9 * uFlow.x / c.x;
+  float across = 15.0 * uFlow.y * c.y;
+  float travel = t * 0.098 * uFlow.z * c.z * along;
+  vec2 turn = bend * vec2(slope.y, -slope.x);
+  vec2 pr = vec2(cs * p.x + sn * p.y, cs * p.y - sn * p.x);
+  vec2 on = vec2(pr.x * along - travel, (pr.y + f * bend) * across);
+  // A line that only slid along itself would show nothing moving but its two ends: it is broken
+  // into runs by a finer grain that travels with it, so the whole length is seen to stream
+  float here = smoothstep(0.535, 0.65, noise(on)) * smoothstep(0.37, 0.5, noise(on * vec2(${FLOW_GRAIN.toFixed(1)}, 0.4) + vec2(0.0, 9.7)));
+  vec2 run = vec2(cs, sn) + turn;
+  if (b.y > 0.0) {
+    // The second set of a crossing sea: leaning the other way, a little slower
+    vec2 po = vec2(cs * p.x - sn * p.y, cs * p.y + sn * p.x);
+    vec2 oo = vec2(po.x * along - travel * 0.7 + 17.3, (po.y + f * bend) * across + 5.1);
+    float other = smoothstep(0.535, 0.65, noise(oo)) * smoothstep(0.37, 0.5, noise(oo * vec2(${FLOW_GRAIN.toFixed(1)}, 0.4) + vec2(0.0, 9.7)));
+    if (other > here) {
+      here = other;
+      run = vec2(cs, -sn) + turn;
+    }
+  }
+  return vec3(here, vec2(run.x * run.x - run.y * run.y, 2.0 * run.x * run.y) / max(dot(run, run), 1.0e-4));
+}
+#endif
 
 void main() {
   // The cell's place on the page: column, and row counted from the top of the document
@@ -278,15 +345,20 @@ void main() {
   seaMix = smoothstep(uSeaEdge[edge].x - uSeaEdge[edge].y, uSeaEdge[edge].x + uSeaEdge[edge].y, centre.y);
   seaA0 = uSeaA[edge];
   seaB0 = uSeaB[edge];
+  seaC0 = uSeaC[edge];
   seaA1 = uSeaA[edge + 1];
   seaB1 = uSeaB[edge + 1];
+  seaC1 = uSeaC[edge + 1];
   shimmer = mix(seaB0.z, seaB1.z, seaMix);
 #endif
 
+  // Water that is catching up with the page does not all travel as one sheet: broad bodies of
+  // it run a little further or less far than the lattice, so a stop is seen to pass through it
   vec2 at = centre;
+  at.y += uLead * (noise(centre / uUnit * vec2(0.6, 1.1) + vec2(3.1, 8.7)) - 0.5) * 1.7;
+
+  // The water's memory of the whales here: the way it was moved, and how much of that is left
   vec2 wake = vec2(0.0);
-  float churn = 0.0;
-  // How strongly the water here has been moved, and how much of that shows in the glyphs
   float moved = 0.0;
   float stirred = 0.0;
 #ifdef WAKE
@@ -295,71 +367,116 @@ void main() {
   if (spot.y >= 0 && spot.y < size.y && spot.x < size.x) {
     vec4 memory = texelFetch(uWake, spot, 0);
     wake = (memory.rg * 255.0 - 128.0) / 127.0;
-    churn = memory.b;
+    moved = length(wake);
+    stirred = smoothstep(0.02, 0.36, memory.b);
   }
-  moved = length(wake);
-  stirred = smoothstep(0.04, 0.5, moved);
   // Water a whale has moved carries the currents with it, so they bend along its path
   at -= wake * uWakeGain.x;
 #endif
 
-  float field = water(at, g.z, t);
+  float field = currents(at, g.z, t, seaA0, seaB0);
+#ifdef SEA
+  float fieldAbove = field;
+  float fieldBelow = currents(at, g.z, t, seaA1, seaB1);
+  field = meet(fieldAbove, fieldBelow);
+#endif
   float v = smoothstep(0.38, 0.72, field);
   float pick = hash12(cell + 0.37);
   float level = hash12(cell * 1.73 + 4.1);
   // Each cell retunes its glyph slowly, at its own moment: a shimmer, never a flicker
   float tick = floor(t * 1.6 * shimmer + level * 7.0);
   float wobble = (hash12(cell * 2.31 + tick * 17.7) - 0.5) * 0.16;
-#ifdef WAKE
-  // Moved water shows: a few more glyphs, a little heavier, fading out cell by cell as it settles
-  float tone = clamp(v + wobble + churn * 0.1 + stirred * uWakeGain.w, 0.0, 1.0);
-#else
   float tone = clamp(v + wobble, 0.0, 1.0);
-#endif
   float index = clamp(floor(tone * (uCount - 1.0) + 0.5), 1.0, uCount - 1.0);
+  // The bed: the share of cells that hold a glyph, and their ink
+  float present = g.x * (0.3 + v);
+  float ink = smoothstep(0.06, 0.42, v) * mix(0.5, 1.0, level);
+  float lift = 0.0;
+  // A line of moving water through this cell: how much of one, the way it runs (doubled angle),
+  // the share of its cells that hold a stroke, and their ink
+  float stroke = 0.0;
+  vec2 line = vec2(1.0, 0.0);
+  float filled = 0.0;
+  float inked = 0.0;
 
 #ifdef FLOW
-  // The water runs sideways, the way the swell drifts (the state's set), and the field bends
-  // it: the field is the stream function of what it adds, so the water runs along its lines of
-  // equal height, a quarter turn from the slope, and never piles up.
   float probe = uCellPx.y;
   vec2 slope = vec2(water(at + vec2(probe, 0.0), g.z, t) - field, water(at + vec2(0.0, probe), g.z, t) - field) * (uUnit / probe);
-  vec2 run = vec2(mix(seaB0.w, seaB1.w, seaMix) + slope.y, -slope.x);
-  // Kept as a direction without an arrow (the doubled angle), so that two flows add up whichever
-  // way each is said to point
-  vec2 line = vec2(run.x * run.x - run.y * run.y, 2.0 * run.x * run.y) / max(length(run), 1.0e-4);
-#ifdef WAKE
-  line += vec2(wake.x * wake.x - wake.y * wake.y, 2.0 * wake.x * wake.y) / max(moved, 1.0e-4) * uWakeGain.y;
+#ifdef SEA
+  vec3 above = stream(at, fieldAbove, slope, t, seaB0, seaC0);
+  vec3 below = stream(at, fieldBelow, slope, t, seaB1, seaC1);
+  stroke = mix(above.x, below.x, seaMix);
+  line = above.yz * (above.x + 0.05) * (1.0 - seaMix) + below.yz * (below.x + 0.05) * seaMix;
+#else
+  vec3 lines = stream(at, field, slope, t, seaB0, seaC0);
+  stroke = lines.x;
+  line = lines.yz;
 #endif
-  vec2 heading = line / max(length(line), 1.0e-4);
-  // Each cell leans a little its own way, so the border between two strokes is never a line
-  float levelness = heading.x + (hash12(cell * 3.17 + 9.2) - 0.5) * 0.2;
-  // Below this tone the water is quiet and keeps its dots ( . · : ); above it a glyph is a stroke:
-  // slack water where there is no slope to speak of, level strokes by weight ( - ~ ≈ ), or a lean
-  if (tone >= 0.4375) {
-    if (length(slope) < 0.3 && tone < 0.6) index = 3.0;
-    else if (levelness > 0.5) index = tone < 0.6 ? 4.0 : (tone < 0.82 ? 5.0 : 8.0);
+  // The lines are strongest where the currents are, and thin out in quiet water
+  stroke *= mix(uFlow.w, 1.0, smoothstep(0.08, 0.5, v));
+  filled = uFlowShow.x;
+  inked = uFlowShow.y;
+  lift = stroke * uFlowShow.z;
+  // Between the lines the bed is quiet: dots only, and a few less of them, so that the lines
+  // carry the water's movement and the ocean holds no more ink than it did
+  index = 1.0 + floor(min(tone, 0.999) * 3.0);
+  present *= uFlowShow.w;
+  ink *= 0.9;
+#endif
+
+#ifdef WAKE
+  // Moved water is a line of its own, laid the way the whale went. Freshly moved water is
+  // unsettled: its strokes change weight a few times a second, each cell at its own moment
+  float unsettled = (hash12(cell * 1.37 + floor(t * 4.0 + level * 5.0) * 7.3) - 0.5) * 0.36 * stirred;
+  float trail = clamp(stirred + unsettled, 0.0, 1.0);
+  vec2 trailLine = moved > 0.02 ? vec2(wake.x * wake.x - wake.y * wake.y, 2.0 * wake.x * wake.y) / (moved * moved) : vec2(1.0, 0.0);
+  line = line * stroke * (1.0 - stirred) + trailLine * trail;
+  filled = mix(filled, uWakeGain.y, stirred);
+  inked = mix(inked, uWakeGain.z, stirred);
+  lift = max(lift * (1.0 - stirred), stirred * uWakeGain.w);
+  stroke = max(stroke * (1.0 - 0.7 * stirred), trail);
+#endif
+
+#if defined(FLOW) || defined(WAKE)
+  if (stroke > 0.3) {
+    vec2 heading = line / max(length(line), 1.0e-4);
+    // Each cell leans a little its own way, so the border between two strokes is never a line
+    float levelness = heading.x + (hash12(cell * 3.17 + 9.2) - 0.5) * 0.2;
+    float weight = stroke + (level - 0.5) * 0.22;
+    // Level strokes by weight ( - ~ ≈ ), a lean where the water turns, and where it runs
+    // straight up or down the page the upright pair
+    if (levelness > 0.5) index = weight < 0.56 ? 4.0 : (weight < 0.84 ? 5.0 : 8.0);
+    else if (levelness < -0.62) index = weight < 0.7 ? 3.0 : 11.0;
     else index = heading.y > 0.0 ? 10.0 : 9.0;
+    float drawn = smoothstep(0.3, 0.72, stroke);
+    present = max(present, filled * drawn);
+    ink = max(ink, inked * drawn * mix(0.72, 1.0, level));
   }
 #endif
 
-#ifdef WAKE
-  float present = step(pick, g.x * (0.3 + v) + stirred * uWakeGain.z);
-  float alpha = present * g.y * max(smoothstep(0.06, 0.42, v), stirred * 0.85) * mix(0.5, 1.0, level);
-#else
-  float present = step(pick, g.x * (0.3 + v));
-  float alpha = present * g.y * smoothstep(0.06, 0.42, v) * mix(0.5, 1.0, level);
-#endif
-  outCell = vec4(index / 255.0, alpha, field, 1.0);
+  float alpha = step(pick, present) * min(1.0, g.y * ink);
+  // Moved water also lights the water itself a little, like any current
+  outCell = vec4(index / 255.0, alpha, clamp(field + stirred * 0.1, 0.0, 1.0), lift);
 }`;
+
+/** The screen pass of the living ocean: the one above, with a line's ink lifted off the water by the cell's own measure. */
+const LIVING_SCREEN = SCREEN.replace(
+  'vec3 color = mix(water, ink, cell.g * coverage);',
+  `// Lifted ink leaves the water's colour for the pale of broken water (in the deep) or a deeper
+  // blue (near the surface, where the ink is the darker of the two)
+  float deep = step(dot(water, vec3(0.2126, 0.7152, 0.0722)), dot(ink, vec3(0.2126, 0.7152, 0.0722)));
+  vec3 lifted = mix(ink, mix(ink * 0.55, vec3(0.80, 0.87, 0.96), deep), cell.a);
+  vec3 color = mix(water, lifted, cell.g * coverage);`
+);
 
 /**
  * The water's memory of the whales: one texel per glyph cell, on the cells' own lattice. Red and
- * green hold the flow a whale has given the water (128 is rest), blue how churned it is. Each
+ * green hold the flow a whale has given the water (128 is rest), blue how stirred it is. Each
  * step the moved water drifts on along its own direction, spreads a little and fades; where a
- * whale's body is (oceanWake.ts) the water takes the flow around it. Every other step the stored
- * values are rounded toward rest, so however slowly the flow fades it always comes back to rest
- * exactly, three or four seconds after the whale has gone.
+ * whale's body is (oceanWake.ts) the water takes the flow around it, and what its tail and flukes
+ * stir is carried astern in their wash: that is the trail. Every other step the stored values are
+ * rounded toward rest, so however slowly the water settles it always comes back to rest exactly,
+ * some ten seconds after the whale has gone (the trail can be seen for about eight).
  */
 const WAKE_STEP = `#version 300 es
 precision highp float;
@@ -367,14 +484,16 @@ uniform sampler2D uPrev;
 uniform vec2 uCellPx;
 // Rows the page has moved since the last step
 uniform float uRowShift;
-// Flow kept per step, churn kept, drift (px per step at full flow), spread
+// Flow kept per step, stir kept, drift (px per step at full flow), spread
 uniform vec4 uKeep;
 // How far the water under a body takes its flow in one step, and whether this step rounds the
 // stored flow toward rest (1) or to the nearest value (0)
 uniform vec2 uTake;
-// Centre (cells), radius (px), strength · unit direction, churn
+// Centre (cells), radius (px), strength · unit direction, stir, the stir's reach (radii) ·
+// what it sheds off the bow and along the flanks
 uniform vec4 uBody[${WAKE_BODIES}];
 uniform vec4 uMove[${WAKE_BODIES}];
+uniform vec4 uShed[${WAKE_BODIES}];
 out vec4 outWake;
 const vec4 REST = vec4(128.0 / 255.0, 128.0 / 255.0, 0.0, 1.0);
 
@@ -397,41 +516,78 @@ void main() {
   vec2 px = cell * uCellPx;
   for (int i = 0; i < ${WAKE_BODIES}; i++) {
     vec4 body = uBody[i];
-    if (body.w <= 0.0) continue;
+    if (body.w == 0.0) continue;
     vec2 d = px - body.xy * uCellPx;
     float d2 = dot(d, d);
     float r2 = d2 / (body.z * body.z);
+    if (body.w < 0.0) {
+      // A driving body (the tail, the flukes): the water is thrown astern in a wash that widens
+      // and slackens, and carries what the body has stirred away behind the animal
+      vec2 astern = uMove[i].xy;
+      float aft = dot(d, astern) / body.z;
+      if (aft > -1.0 && aft < ${WAKE.washLength.toFixed(1)}) {
+        float abeam = (d.x * astern.y - d.y * astern.x) / body.z;
+        float wide = 1.0 + ${WAKE.washFlare.toFixed(2)} * max(aft, 0.0);
+        float inside = smoothstep(-1.0, 0.2, aft) * (1.0 - smoothstep(${(WAKE.washLength * 0.5).toFixed(1)}, ${WAKE.washLength.toFixed(1)}, aft)) * exp(-abeam * abeam / (wide * wide) * 1.5);
+        flow = mix(flow, astern * (-body.w), uTake.x * inside);
+      }
+      churn = max(churn, min(1.0, uMove[i].z * 1.3) * exp(-r2 * ${WAKE.stirFall.toFixed(2)} / (uMove[i].w * uMove[i].w)));
+      continue;
+    }
     if (r2 >= ${(WAKE.reach * WAKE.reach).toFixed(1)}) continue;
     vec2 along = uMove[i].xy;
     vec2 want = along;
     float within = 1.0;
-    float share = 1.0;
+    // Under the body the water is the animal: it moves fully only at its surface
+    float share = r2;
     if (r2 > 1.0) {
       // Outside the body the water is pushed on and slips around it: between a doublet and the
       // body's own heading (oceanWake.ts), fading with distance
       vec2 n = d * inversesqrt(d2);
-      want = mix(2.0 * dot(along, n) * n - along, along, ${WAKE.along.toFixed(2)});
+      want = mix(2.0 * dot(along, n) * n - along, along, ${WAKE.slip.toFixed(2)});
       within = 1.0 - smoothstep(${(WAKE.reach * WAKE.reach * 0.45).toFixed(2)}, ${(WAKE.reach * WAKE.reach).toFixed(1)}, r2);
-      share = within / r2;
+      share = within * inversesqrt(r2);
     }
     flow = mix(flow, want * (body.w * share), uTake.x * within);
-    churn = max(churn, uMove[i].z * exp(-r2 * 0.9));
+    // What a body that parts the water sheds: a band just outside its outline, pressed ahead of
+    // the bow as a crescent and slipping back along each flank
+    float off = sqrt(r2) - ${WAKE.shedAt.toFixed(2)};
+    float ahead = d2 > 0.0 ? dot(d, along) * inversesqrt(d2) : 0.0;
+    float band = exp(-off * off * ${WAKE.shedFall.toFixed(1)});
+    float shed = max(uShed[i].x * smoothstep(0.1, 0.8, ahead), uShed[i].y * (1.0 - smoothstep(0.35, 0.8, abs(ahead))));
+    churn = max(churn, min(1.0, shed * 1.3) * band);
   }
 
   float speed = length(flow);
   if (speed > 1.0) flow /= speed;
   vec2 steps = sign(flow) * floor(abs(flow) * 127.0 + 0.5 * (1.0 - uTake.y));
-  outWake = vec4((128.0 + steps) / 255.0, floor(clamp(churn, 0.0, 1.0) * 255.0) / 255.0, 1.0);
+  outWake = vec4((128.0 + steps) / 255.0, floor(clamp(churn, 0.0, 1.0) * 255.0 + 0.5 * (1.0 - uTake.y)) / 255.0, 1.0);
 }`;
 
 /** What one wake step keeps and takes (WAKE_STEP's uKeep and uTake), at WAKE_HZ. */
-const WAKE_KEEP = { flow: 0.98, churn: 0.95, drift: 1.3, spread: 0.2, take: 0.13 };
+const WAKE_KEEP = { flow: 0.986, churn: 0.994, drift: 2.3, spread: 0.1, take: 0.14 };
 /**
- * How the wake shows in the cells: currents carried up to this many cell heights, its weight in a
- * glyph's direction, and how much fully moved water adds to the share of cells that hold a glyph
- * and to their weight. Never to their ink: a wake is more of the same water, not a light.
+ * How the wake shows in the cells: currents carried up to this many cell heights, the share of
+ * fully moved cells that hold a stroke, their ink (1 is the ocean's own at its firmest) and how
+ * far that ink is lifted off the water: enough to be seen at a glance beside a whale, a good way
+ * short of the whale's own engraving.
  */
-const WAKE_SHOW = { carry: 2.2, direction: 6, density: 0.38, weight: 0.36 };
+const WAKE_SHOW = { carry: 3.4, density: 0.66, ink: 1.3, lift: 0.34 };
+/**
+ * The lines of moving water (livingCells' uFlow and uFlowShow). A phone's screen is a quarter as
+ * wide, so its lines are shorter and a little closer, or one line would span the screen and
+ * nothing would be seen to travel. `quiet` is how much of a line shows away from the currents,
+ * `bed` how many of the bed's dots stay between the lines.
+ */
+const FLOW_SHOW = {
+  wide: { length: 1, lanes: 1, speed: 1 },
+  narrow: { length: 1.9, lanes: 1.12, speed: 0.8 },
+  quiet: 0.7,
+  density: 0.9,
+  ink: 1.18,
+  lift: 0.16,
+  bed: 0.74
+};
 
 export interface AsciiOcean {
   destroy: () => void;
@@ -469,7 +625,7 @@ export function createAsciiOcean(canvas: HTMLCanvasElement): AsciiOcean {
   // The living ocean: which behaviours are on, and what each one keeps between frames
   const fx: OceanEffects = { ...oceanEffects };
   const living = () => fx.flow || fx.wake || fx.sea;
-  const characters = () => (fx.flow ? FLOW_CHARACTERS : CHARACTERS);
+  const characters = () => (living() ? FLOW_CHARACTERS : CHARACTERS);
   const inertia = newWaterInertia();
   /** How far the water is ahead of the page this frame (CSS px). */
   let lead = 0;
@@ -477,6 +633,7 @@ export function createAsciiOcean(canvas: HTMLCanvasElement): AsciiOcean {
   const wakeTracker = newWakeTracker();
   const wakeBodies = new Float32Array(WAKE_BODIES * 4);
   const wakeMoves = new Float32Array(WAKE_BODIES * 4);
+  const wakeSheds = new Float32Array(WAKE_BODIES * 4);
   /** Seconds since the last wake step, the lattice row it was stepped at, and steps left to fade. */
   let wakeClock = 0;
   let wakeRow = 0;
@@ -492,27 +649,31 @@ export function createAsciiOcean(canvas: HTMLCanvasElement): AsciiOcean {
   // --- WebGL resources ----------------------------------------------------------------------
   let cells: ReturnType<typeof link> = null;
   let wakeStep: ReturnType<typeof link> = null;
+  let screen: ReturnType<typeof link> = null;
   /** Link the cell pass for the behaviours that are on; if the living ocean cannot be built here, the ocean as it was. */
   const build = () => {
     if (!gl) return;
     const started = performance.now();
     if (cells) gl.deleteProgram(cells.program);
     if (wakeStep) gl.deleteProgram(wakeStep.program);
+    if (screen) gl.deleteProgram(screen.program);
     cells = link(gl, living() ? livingCells(fx) : CELLS);
     wakeStep = fx.wake && cells ? link(gl, WAKE_STEP) : null;
-    if (living() && (!cells || (fx.wake && !wakeStep))) {
+    screen = link(gl, living() ? LIVING_SCREEN : SCREEN);
+    if (living() && (!cells || !screen || (fx.wake && !wakeStep))) {
       if (cells) gl.deleteProgram(cells.program);
       if (wakeStep) gl.deleteProgram(wakeStep.program);
+      if (screen) gl.deleteProgram(screen.program);
       fx.flow = fx.wake = fx.sea = false;
       wakeStep = null;
       cells = link(gl, CELLS);
+      screen = link(gl, SCREEN);
     }
     stats.compileMs = performance.now() - started;
     stats.firstDrawMs = -1;
     stats.living = living();
   };
   build();
-  const screen = gl ? link(gl, SCREEN) : null;
   let vao: WebGLVertexArrayObject | null = null;
   let cellTexture: WebGLTexture | null = null;
   let cellFramebuffer: WebGLFramebuffer | null = null;
@@ -669,10 +830,17 @@ export function createAsciiOcean(canvas: HTMLCanvasElement): AsciiOcean {
     }
     wakeBodies.fill(0);
     wakeMoves.fill(0);
+    wakeSheds.fill(0);
     for (let i = 0; i < oceanWake.count; i++) {
       const body = oceanWake.bodies[i];
-      wakeBodies.set([(body.x * view.ratio - offsetX) / cellW, ((body.y + water) * view.ratio) / cellH - firstRow, body.r * view.ratio, body.strength], i * 4);
-      wakeMoves.set([body.ux, body.uy, body.churn, 0], i * 4);
+      // A driving body is told apart by the sign of its strength, and given the way astern
+      const way = body.wash ? -1 : 1;
+      // On a phone a whale's flukes are a cell or two across: what they move is given room enough
+      // to be drawn (WAKE_MIN_ROWS), or the wake would be lost between the glyphs
+      const radius = Math.max(body.r * view.ratio, WAKE_MIN_ROWS * cellH);
+      wakeBodies.set([(body.x * view.ratio - offsetX) / cellW, ((body.y + water) * view.ratio) / cellH - firstRow, radius, body.strength * way], i * 4);
+      wakeMoves.set([body.ux * way, body.uy * way, body.churn, body.spread], i * 4);
+      wakeSheds.set([body.bow, body.flank, 0, 0], i * 4);
     }
     const back = 1 - wakeFront;
     gl.bindFramebuffer(gl.FRAMEBUFFER, wakeFramebuffers[back]);
@@ -688,6 +856,7 @@ export function createAsciiOcean(canvas: HTMLCanvasElement): AsciiOcean {
     gl.uniform2f(wu.uTake, WAKE_KEEP.take, wakeSteps++ % 2);
     gl.uniform4fv(wu.uBody, wakeBodies);
     gl.uniform4fv(wu.uMove, wakeMoves);
+    gl.uniform4fv(wu.uShed, wakeSheds);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     wakeFront = back;
     wakeRow = firstRow;
@@ -722,12 +891,19 @@ export function createAsciiOcean(canvas: HTMLCanvasElement): AsciiOcean {
     gl.uniform1f(cu.uViewH, canvas.height);
     gl.uniform1f(cu.uUnit, WORLD_UNIT * view.ratio);
     gl.uniform1f(cu.uTime, time);
-    // The ramp's own length: with flow-aligned glyphs the atlas also holds the strokes
-    gl.uniform1f(cu.uCount, fx.flow ? [...CHARACTERS].length : atlas.count);
+    // The ramp's own length: the living ocean's atlas also holds the strokes
+    gl.uniform1f(cu.uCount, [...CHARACTERS].length);
+    if (living()) gl.uniform1f(cu.uLead, (lattice - scroll) * view.ratio);
+    if (fx.flow) {
+      const lines = view.width < 768 ? FLOW_SHOW.narrow : FLOW_SHOW.wide;
+      gl.uniform4f(cu.uFlow, lines.length, lines.lanes, lines.speed, FLOW_SHOW.quiet);
+      gl.uniform4f(cu.uFlowShow, FLOW_SHOW.density, FLOW_SHOW.ink, FLOW_SHOW.lift, FLOW_SHOW.bed);
+    }
     gl.uniform4fv(cu.uGlyph, glyphs);
     if (fx.sea) {
       gl.uniform4fv(cu.uSeaA, sea.a);
       gl.uniform4fv(cu.uSeaB, sea.b);
+      gl.uniform4fv(cu.uSeaC, sea.c);
       gl.uniform2fv(cu.uSeaEdge, sea.edges);
     }
     if (fx.wake) {
@@ -735,7 +911,7 @@ export function createAsciiOcean(canvas: HTMLCanvasElement): AsciiOcean {
       gl.bindTexture(gl.TEXTURE_2D, wakeTextures[wakeFront]);
       gl.uniform1i(cu.uWake, 2);
       gl.uniform1f(cu.uWakeRow, firstRow - wakeRow);
-      gl.uniform4f(cu.uWakeGain, WAKE_SHOW.carry * cellH, WAKE_SHOW.direction, WAKE_SHOW.density, WAKE_SHOW.weight);
+      gl.uniform4f(cu.uWakeGain, WAKE_SHOW.carry * cellH, WAKE_SHOW.density, WAKE_SHOW.ink, WAKE_SHOW.lift);
       gl.activeTexture(gl.TEXTURE0);
     }
     gl.drawArrays(gl.TRIANGLES, 0, 3);

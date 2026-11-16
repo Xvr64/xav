@@ -8,6 +8,7 @@
 //   node dev/phase3.mjs motion                     inertia trace, glyph stability, wake build-up and fade
 //   node dev/phase3.mjs perf [trials] [modes] [configs]   frame pacing, CPU, heap, ocean draw cost, compile time
 //   node dev/phase3.mjs identical                  flags off: the ocean's frames equal the baseline's (PHASE2_BASE)
+//   node dev/phase3-visible.mjs [after|before]     how much of each behaviour can be seen, in numbers
 //
 // Output: artifacts/phase3 (or PHASE3_OUT).
 import { resolve } from 'node:path';
@@ -131,19 +132,20 @@ async function motion() {
           const o = window.__asciiOcean, out = { during: [], after: [] }; const t0 = performance.now(); let stopped = 0;
           const f = (t) => {
             const s = (t - t0) / 1000;
-            if (s < 0.7) { scrollTo(0, ${y0} + s * ${speed}); out.during.push(o.stats().lead); }
+            if (s < 1.2) { scrollTo(0, ${y0} + s * ${speed}); out.during.push(o.stats().lead); }
             else { if (!stopped) stopped = t; out.after.push([Math.round(t - stopped), Math.round(o.stats().lead * 100) / 100]); }
-            if (s < 2.4) requestAnimationFrame(f); else resolve(out);
+            if (s < 4.2) requestAnimationFrame(f); else resolve(out);
           };
           requestAnimationFrame(f);
         })`);
-        const steady = trace.during.slice(Math.floor(trace.during.length * 0.6));
-        const peak = trace.after.reduce((a, b) => (Math.abs(b[1]) > Math.abs(a[1]) ? b : a), [0, 0]);
-        const settled = trace.after.find(([ms, lead], i) => ms > peak[0] && Math.abs(lead) < 0.5 && trace.after.slice(i).every((x) => Math.abs(x[1]) < 0.5));
+        // The water follows a steady way behind a steady scroll, and after the stop carries on the
+        // same way until it has caught up (waterInertia.ts): how far behind, how long, and whether
+        // it ever runs past the page
+        const settled = trace.after.find(([, lead], i) => Math.abs(lead) < 0.5 && trace.after.slice(i).every((x) => Math.abs(x[1]) < 0.5));
         r.inertia[speed] = {
-          steadyLagPx: Math.round(Math.max(...steady.map(Math.abs)) * 100) / 100,
-          peakPx: peak[1], peakAtMs: peak[0], settledAtMs: settled ? settled[0] : null,
-          restExact: trace.after.at(-1)[1] === 0, overshootBack: Math.min(...trace.after.map((x) => x[1]))
+          behindPx: Math.round(-trace.during.at(-1) * 100) / 100,
+          carriesOnPx: Math.round(-trace.after[0][1] * 100) / 100, settledAtMs: settled ? settled[0] : null,
+          restExact: trace.after.at(-1)[1] === 0, runsPastPx: Math.max(0, ...trace.after.map((x) => x[1]))
         };
       }
       console.log('MOTION inertia', view, JSON.stringify(r.inertia));

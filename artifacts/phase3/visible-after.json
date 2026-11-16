@@ -1,0 +1,1022 @@
+{
+  "320": {
+    "flow": {
+      "experience": {
+        "standOff": {
+          "none": 18.1,
+          "flow": 20.1,
+          "both": 18.1
+        },
+        "against": {
+          "flow": {
+            "share": 3.06,
+            "mean": 17.5,
+            "p95": 36.4
+          },
+          "sea": {
+            "share": 2.02,
+            "mean": 14.4,
+            "p95": 25.6
+          },
+          "both": {
+            "share": 3.42,
+            "mean": 16.4,
+            "p95": 32
+          }
+        },
+        "movingInHalfSecond": {
+          "none": {
+            "share": 0.9,
+            "mean": 14.5,
+            "p95": 25
+          },
+          "flow": {
+            "share": 1.71,
+            "mean": 20,
+            "p95": 43
+          },
+          "sea": {
+            "share": 0.73,
+            "mean": 13.4,
+            "p95": 23
+          },
+          "both": {
+            "share": 1,
+            "mean": 17.6,
+            "p95": 37
+          }
+        }
+      },
+      "skills": {
+        "standOff": {
+          "none": 13,
+          "flow": 15.2,
+          "both": 13.3
+        },
+        "against": {
+          "flow": {
+            "share": 2.1,
+            "mean": 18,
+            "p95": 37.1
+          },
+          "sea": {
+            "share": 7.73,
+            "mean": 12.8,
+            "p95": 26.3
+          },
+          "both": {
+            "share": 7.39,
+            "mean": 12.7,
+            "p95": 26.8
+          }
+        },
+        "movingInHalfSecond": {
+          "none": {
+            "share": 0.71,
+            "mean": 14.4,
+            "p95": 26.4
+          },
+          "flow": {
+            "share": 1.53,
+            "mean": 19.2,
+            "p95": 38.6
+          },
+          "sea": {
+            "share": 1.01,
+            "mean": 14.5,
+            "p95": 27.9
+          },
+          "both": {
+            "share": 1.64,
+            "mean": 18.9,
+            "p95": 38
+          }
+        }
+      },
+      "education": {
+        "standOff": {
+          "none": 11.6,
+          "flow": 15.3,
+          "both": 22.5
+        },
+        "against": {
+          "flow": {
+            "share": 1.92,
+            "mean": 18.4,
+            "p95": 38.9
+          },
+          "sea": {
+            "share": 10.87,
+            "mean": 12.4,
+            "p95": 26.3
+          },
+          "both": {
+            "share": 11.3,
+            "mean": 13.9,
+            "p95": 35.3
+          }
+        },
+        "movingInHalfSecond": {
+          "none": {
+            "share": 0.5,
+            "mean": 14.6,
+            "p95": 27.1
+          },
+          "flow": {
+            "share": 1.6,
+            "mean": 19.8,
+            "p95": 42.2
+          },
+          "sea": {
+            "share": 0.8,
+            "mean": 14.1,
+            "p95": 26
+          },
+          "both": {
+            "share": 0.96,
+            "mean": 17.9,
+            "p95": 39
+          }
+        }
+      },
+      "languages": {
+        "standOff": {
+          "none": 12.2,
+          "flow": 16.7,
+          "both": 14.2
+        },
+        "against": {
+          "flow": {
+            "share": 2.43,
+            "mean": 19.4,
+            "p95": 42.2
+          },
+          "sea": {
+            "share": 2.38,
+            "mean": 14.9,
+            "p95": 28.6
+          },
+          "both": {
+            "share": 3.11,
+            "mean": 17.4,
+            "p95": 36.6
+          }
+        },
+        "movingInHalfSecond": {
+          "none": {
+            "share": 0.83,
+            "mean": 15.8,
+            "p95": 29.9
+          },
+          "flow": {
+            "share": 1.49,
+            "mean": 20.4,
+            "p95": 43.6
+          },
+          "sea": {
+            "share": 0.55,
+            "mean": 15.4,
+            "p95": 28.9
+          },
+          "both": {
+            "share": 1.08,
+            "mean": 18.8,
+            "p95": 39
+          }
+        }
+      },
+      "interests": {
+        "standOff": {
+          "none": 22,
+          "flow": 22.9,
+          "both": 23.4
+        },
+        "against": {
+          "flow": {
+            "share": 4.44,
+            "mean": 17.7,
+            "p95": 35.9
+          },
+          "sea": {
+            "share": 12.6,
+            "mean": 12.5,
+            "p95": 26.3
+          },
+          "both": {
+            "share": 13.49,
+            "mean": 13.4,
+            "p95": 30.1
+          }
+        },
+        "movingInHalfSecond": {
+          "none": {
+            "share": 1.72,
+            "mean": 14.9,
+            "p95": 27.6
+          },
+          "flow": {
+            "share": 2.17,
+            "mean": 20.3,
+            "p95": 40.8
+          },
+          "sea": {
+            "share": 0.59,
+            "mean": 14.6,
+            "p95": 26.8
+          },
+          "both": {
+            "share": 1.52,
+            "mean": 19.8,
+            "p95": 40.4
+          }
+        }
+      },
+      "contact": {
+        "standOff": {
+          "none": 19.9,
+          "flow": 19.4,
+          "both": 16.1
+        },
+        "against": {
+          "flow": {
+            "share": 2.76,
+            "mean": 18.4,
+            "p95": 39.8
+          },
+          "sea": {
+            "share": 26.63,
+            "mean": 11.4,
+            "p95": 23.2
+          },
+          "both": {
+            "share": 27.33,
+            "mean": 11,
+            "p95": 20.9
+          }
+        },
+        "movingInHalfSecond": {
+          "none": {
+            "share": 0.88,
+            "mean": 15.1,
+            "p95": 29.5
+          },
+          "flow": {
+            "share": 1.92,
+            "mean": 20.8,
+            "p95": 43.8
+          },
+          "sea": {
+            "share": 0.53,
+            "mean": 15,
+            "p95": 27.9
+          },
+          "both": {
+            "share": 0.39,
+            "mean": 17.2,
+            "p95": 36.9
+          }
+        }
+      }
+    },
+    "sea": {},
+    "wake": {
+      "whileSwimming": [
+        {
+          "stirredCells": 19.1,
+          "movedCells": 23.3,
+          "bodies": 8
+        },
+        {
+          "stirredCells": 9.8,
+          "movedCells": 16.8,
+          "bodies": 8
+        },
+        {
+          "stirredCells": 10.2,
+          "movedCells": 21.9,
+          "bodies": 8
+        },
+        {
+          "stirredCells": 14.8,
+          "movedCells": 29.3,
+          "bodies": 8
+        }
+      ],
+      "againstNoWake": {
+        "share": 0.84,
+        "mean": 27.5,
+        "p95": 67.4
+      },
+      "standOff": {
+        "with": 14.7,
+        "without": 9.9
+      },
+      "trailSeenForSeconds": 4.5,
+      "restExactAfterSeconds": 7
+    },
+    "inertia": {
+      "600": {
+        "behindWhileScrolling": 32.7,
+        "travelAfterStopPx": 32.7,
+        "reversesPx": 0,
+        "stillAfterMs": 1160,
+        "restExact": true
+      },
+      "1500": {
+        "behindWhileScrolling": 63.3,
+        "travelAfterStopPx": 63.5,
+        "reversesPx": 0,
+        "stillAfterMs": 1352,
+        "restExact": true
+      },
+      "3000": {
+        "behindWhileScrolling": 78.9,
+        "travelAfterStopPx": 79.1,
+        "reversesPx": 0,
+        "stillAfterMs": 1444,
+        "restExact": true
+      }
+    },
+    "errors": []
+  },
+  "390": {
+    "flow": {
+      "experience": {
+        "standOff": {
+          "none": 14.2,
+          "flow": 16.1,
+          "both": 12.7
+        },
+        "against": {
+          "flow": {
+            "share": 2.19,
+            "mean": 17.6,
+            "p95": 34.4
+          },
+          "sea": {
+            "share": 6.4,
+            "mean": 11.5,
+            "p95": 23.7
+          },
+          "both": {
+            "share": 5.98,
+            "mean": 11.3,
+            "p95": 23.1
+          }
+        },
+        "movingInHalfSecond": {
+          "none": {
+            "share": 0.73,
+            "mean": 14.7,
+            "p95": 26.6
+          },
+          "flow": {
+            "share": 1.58,
+            "mean": 18.7,
+            "p95": 36.4
+          },
+          "sea": {
+            "share": 0.61,
+            "mean": 14.3,
+            "p95": 25.5
+          },
+          "both": {
+            "share": 0.41,
+            "mean": 15.4,
+            "p95": 29.4
+          }
+        }
+      },
+      "skills": {
+        "standOff": {
+          "none": 13.9,
+          "flow": 15.4,
+          "both": 11.3
+        },
+        "against": {
+          "flow": {
+            "share": 2.19,
+            "mean": 18,
+            "p95": 37.4
+          },
+          "sea": {
+            "share": 5.82,
+            "mean": 12.7,
+            "p95": 25.8
+          },
+          "both": {
+            "share": 5.69,
+            "mean": 13.3,
+            "p95": 29.1
+          }
+        },
+        "movingInHalfSecond": {
+          "none": {
+            "share": 0.66,
+            "mean": 14.2,
+            "p95": 26.4
+          },
+          "flow": {
+            "share": 1.61,
+            "mean": 19.7,
+            "p95": 40.2
+          },
+          "sea": {
+            "share": 1.07,
+            "mean": 14.7,
+            "p95": 27.6
+          },
+          "both": {
+            "share": 1.48,
+            "mean": 18.7,
+            "p95": 37.9
+          }
+        }
+      },
+      "education": {
+        "standOff": {
+          "none": 14.2,
+          "flow": 16.4,
+          "both": 19.3
+        },
+        "against": {
+          "flow": {
+            "share": 2.49,
+            "mean": 18.3,
+            "p95": 39.6
+          },
+          "sea": {
+            "share": 5.47,
+            "mean": 13.7,
+            "p95": 27.2
+          },
+          "both": {
+            "share": 6.21,
+            "mean": 16.3,
+            "p95": 40.9
+          }
+        },
+        "movingInHalfSecond": {
+          "none": {
+            "share": 0.84,
+            "mean": 15.2,
+            "p95": 28
+          },
+          "flow": {
+            "share": 1.72,
+            "mean": 20,
+            "p95": 42.9
+          },
+          "sea": {
+            "share": 0.81,
+            "mean": 14.1,
+            "p95": 25.1
+          },
+          "both": {
+            "share": 0.96,
+            "mean": 17.9,
+            "p95": 39.4
+          }
+        }
+      },
+      "languages": {
+        "standOff": {
+          "none": 21.9,
+          "flow": 19.9,
+          "both": 21.7
+        },
+        "against": {
+          "flow": {
+            "share": 3.95,
+            "mean": 17.4,
+            "p95": 34.9
+          },
+          "sea": {
+            "share": 18.43,
+            "mean": 12.1,
+            "p95": 24.7
+          },
+          "both": {
+            "share": 18.78,
+            "mean": 12.1,
+            "p95": 25.4
+          }
+        },
+        "movingInHalfSecond": {
+          "none": {
+            "share": 1.29,
+            "mean": 14.7,
+            "p95": 27.2
+          },
+          "flow": {
+            "share": 2,
+            "mean": 20.3,
+            "p95": 39.9
+          },
+          "sea": {
+            "share": 1.41,
+            "mean": 14.3,
+            "p95": 25.9
+          },
+          "both": {
+            "share": 1.82,
+            "mean": 18.1,
+            "p95": 36.7
+          }
+        }
+      },
+      "interests": {
+        "standOff": {
+          "none": 17.4,
+          "flow": 18.6,
+          "both": 18.9
+        },
+        "against": {
+          "flow": {
+            "share": 2.87,
+            "mean": 18.7,
+            "p95": 40.9
+          },
+          "sea": {
+            "share": 25.14,
+            "mean": 11.9,
+            "p95": 24.9
+          },
+          "both": {
+            "share": 24.22,
+            "mean": 11.5,
+            "p95": 22.7
+          }
+        },
+        "movingInHalfSecond": {
+          "none": {
+            "share": 0.93,
+            "mean": 15.5,
+            "p95": 29.6
+          },
+          "flow": {
+            "share": 1.81,
+            "mean": 20.9,
+            "p95": 44.6
+          },
+          "sea": {
+            "share": 1.55,
+            "mean": 14.6,
+            "p95": 27
+          },
+          "both": {
+            "share": 1.84,
+            "mean": 18.9,
+            "p95": 43.3
+          }
+        }
+      },
+      "contact": {
+        "standOff": {
+          "none": 19.1,
+          "flow": 18.5,
+          "both": 14.9
+        },
+        "against": {
+          "flow": {
+            "share": 3.25,
+            "mean": 18.3,
+            "p95": 39.4
+          },
+          "sea": {
+            "share": 8.39,
+            "mean": 13,
+            "p95": 27.7
+          },
+          "both": {
+            "share": 8.24,
+            "mean": 12.8,
+            "p95": 28.1
+          }
+        },
+        "movingInHalfSecond": {
+          "none": {
+            "share": 1.39,
+            "mean": 15.4,
+            "p95": 30.7
+          },
+          "flow": {
+            "share": 1.8,
+            "mean": 20.7,
+            "p95": 44.6
+          },
+          "sea": {
+            "share": 0.54,
+            "mean": 14.6,
+            "p95": 28
+          },
+          "both": {
+            "share": 0.37,
+            "mean": 15.7,
+            "p95": 30.9
+          }
+        }
+      }
+    },
+    "sea": {},
+    "wake": {
+      "whileSwimming": [
+        {
+          "stirredCells": 13.8,
+          "movedCells": 15.4,
+          "bodies": 8
+        },
+        {
+          "stirredCells": 7.2,
+          "movedCells": 13.2,
+          "bodies": 8
+        },
+        {
+          "stirredCells": 7.2,
+          "movedCells": 18.4,
+          "bodies": 8
+        },
+        {
+          "stirredCells": 11,
+          "movedCells": 26.5,
+          "bodies": 8
+        }
+      ],
+      "againstNoWake": {
+        "share": 0.89,
+        "mean": 21.2,
+        "p95": 57
+      },
+      "standOff": {
+        "with": 17.6,
+        "without": 15.1
+      },
+      "trailSeenForSeconds": 4.5,
+      "restExactAfterSeconds": 6.5
+    },
+    "inertia": {
+      "600": {
+        "behindWhileScrolling": 32.1,
+        "travelAfterStopPx": 32.2,
+        "reversesPx": 0,
+        "stillAfterMs": 1160,
+        "restExact": true
+      },
+      "1500": {
+        "behindWhileScrolling": 63.3,
+        "travelAfterStopPx": 63.5,
+        "reversesPx": 0,
+        "stillAfterMs": 1360,
+        "restExact": true
+      },
+      "3000": {
+        "behindWhileScrolling": 78.4,
+        "travelAfterStopPx": 78.5,
+        "reversesPx": 0,
+        "stillAfterMs": 1452,
+        "restExact": true
+      }
+    },
+    "errors": []
+  },
+  "1440": {
+    "flow": {
+      "experience": {
+        "standOff": {
+          "none": 17.4,
+          "flow": 16.2,
+          "both": 14.1
+        },
+        "against": {
+          "flow": {
+            "share": 2.61,
+            "mean": 17.4,
+            "p95": 37.5
+          },
+          "sea": {
+            "share": 8.77,
+            "mean": 12.5,
+            "p95": 25.4
+          },
+          "both": {
+            "share": 8.65,
+            "mean": 12.6,
+            "p95": 27
+          }
+        },
+        "movingInHalfSecond": {
+          "none": {
+            "share": 1.05,
+            "mean": 14.5,
+            "p95": 27
+          },
+          "flow": {
+            "share": 1.39,
+            "mean": 19.2,
+            "p95": 40.7
+          },
+          "sea": {
+            "share": 0.77,
+            "mean": 14.1,
+            "p95": 25.3
+          },
+          "both": {
+            "share": 0.63,
+            "mean": 17.3,
+            "p95": 36.9
+          }
+        }
+      },
+      "skills": {
+        "standOff": {
+          "none": 16.2,
+          "flow": 17.8,
+          "both": 12.4
+        },
+        "against": {
+          "flow": {
+            "share": 2.88,
+            "mean": 18.2,
+            "p95": 40.3
+          },
+          "sea": {
+            "share": 10.34,
+            "mean": 12.5,
+            "p95": 25.1
+          },
+          "both": {
+            "share": 9.82,
+            "mean": 12.6,
+            "p95": 25.9
+          }
+        },
+        "movingInHalfSecond": {
+          "none": {
+            "share": 1.05,
+            "mean": 14.6,
+            "p95": 26.7
+          },
+          "flow": {
+            "share": 1.67,
+            "mean": 19.5,
+            "p95": 41.9
+          },
+          "sea": {
+            "share": 1,
+            "mean": 14.1,
+            "p95": 25.2
+          },
+          "both": {
+            "share": 1.19,
+            "mean": 18.5,
+            "p95": 38.5
+          }
+        }
+      },
+      "education": {
+        "standOff": {
+          "none": 14.6,
+          "flow": 19.2,
+          "both": 13.3
+        },
+        "against": {
+          "flow": {
+            "share": 2.65,
+            "mean": 19,
+            "p95": 43.4
+          },
+          "sea": {
+            "share": 6.9,
+            "mean": 12.6,
+            "p95": 25.3
+          },
+          "both": {
+            "share": 6.64,
+            "mean": 12.7,
+            "p95": 26
+          }
+        },
+        "movingInHalfSecond": {
+          "none": {
+            "share": 0.82,
+            "mean": 14.7,
+            "p95": 26.8
+          },
+          "flow": {
+            "share": 1.74,
+            "mean": 19.9,
+            "p95": 43.9
+          },
+          "sea": {
+            "share": 0.61,
+            "mean": 14.2,
+            "p95": 26
+          },
+          "both": {
+            "share": 0.58,
+            "mean": 17.8,
+            "p95": 37.8
+          }
+        }
+      },
+      "languages": {
+        "standOff": {
+          "none": 18.8,
+          "flow": 15.5,
+          "both": 21.2
+        },
+        "against": {
+          "flow": {
+            "share": 2.75,
+            "mean": 17.6,
+            "p95": 37.9
+          },
+          "sea": {
+            "share": 11.23,
+            "mean": 12.5,
+            "p95": 26.1
+          },
+          "both": {
+            "share": 12.32,
+            "mean": 13.6,
+            "p95": 31.2
+          }
+        },
+        "movingInHalfSecond": {
+          "none": {
+            "share": 1.21,
+            "mean": 15.2,
+            "p95": 29
+          },
+          "flow": {
+            "share": 1.29,
+            "mean": 19.5,
+            "p95": 44.1
+          },
+          "sea": {
+            "share": 0.93,
+            "mean": 14.7,
+            "p95": 27.1
+          },
+          "both": {
+            "share": 1.31,
+            "mean": 18.7,
+            "p95": 41
+          }
+        }
+      },
+      "interests": {
+        "standOff": {
+          "none": 17.4,
+          "flow": 16.4,
+          "both": 13.9
+        },
+        "against": {
+          "flow": {
+            "share": 2.75,
+            "mean": 18.4,
+            "p95": 41.4
+          },
+          "sea": {
+            "share": 11.56,
+            "mean": 12.5,
+            "p95": 26.3
+          },
+          "both": {
+            "share": 11.69,
+            "mean": 12.7,
+            "p95": 27.9
+          }
+        },
+        "movingInHalfSecond": {
+          "none": {
+            "share": 1.12,
+            "mean": 15.4,
+            "p95": 29.3
+          },
+          "flow": {
+            "share": 1.47,
+            "mean": 20.6,
+            "p95": 47.4
+          },
+          "sea": {
+            "share": 0.76,
+            "mean": 14.8,
+            "p95": 27.6
+          },
+          "both": {
+            "share": 1,
+            "mean": 18.9,
+            "p95": 40.7
+          }
+        }
+      },
+      "contact": {
+        "standOff": {
+          "none": 16.7,
+          "flow": 17,
+          "both": 15.6
+        },
+        "against": {
+          "flow": {
+            "share": 2.62,
+            "mean": 18.8,
+            "p95": 42.6
+          },
+          "sea": {
+            "share": 10.77,
+            "mean": 12.3,
+            "p95": 26
+          },
+          "both": {
+            "share": 11.2,
+            "mean": 12.8,
+            "p95": 29.3
+          }
+        },
+        "movingInHalfSecond": {
+          "none": {
+            "share": 1.02,
+            "mean": 15.5,
+            "p95": 29.9
+          },
+          "flow": {
+            "share": 1.59,
+            "mean": 20.8,
+            "p95": 47.7
+          },
+          "sea": {
+            "share": 0.42,
+            "mean": 14.7,
+            "p95": 27
+          },
+          "both": {
+            "share": 0.48,
+            "mean": 17.5,
+            "p95": 36.8
+          }
+        }
+      }
+    },
+    "sea": {},
+    "wake": {
+      "whileSwimming": [
+        {
+          "stirredCells": 19.8,
+          "movedCells": 29.3,
+          "bodies": 8
+        },
+        {
+          "stirredCells": 16.9,
+          "movedCells": 32.9,
+          "bodies": 8
+        },
+        {
+          "stirredCells": 16.2,
+          "movedCells": 38.8,
+          "bodies": 8
+        },
+        {
+          "stirredCells": 16.5,
+          "movedCells": 45.1,
+          "bodies": 8
+        }
+      ],
+      "againstNoWake": {
+        "share": 0.97,
+        "mean": 21.7,
+        "p95": 58.4
+      },
+      "standOff": {
+        "with": 19.2,
+        "without": 15.7
+      },
+      "trailSeenForSeconds": 5,
+      "restExactAfterSeconds": 7.5
+    },
+    "inertia": {
+      "600": {
+        "behindWhileScrolling": 32.8,
+        "travelAfterStopPx": 32.8,
+        "reversesPx": 0,
+        "stillAfterMs": 1160,
+        "restExact": true
+      },
+      "1500": {
+        "behindWhileScrolling": 63.8,
+        "travelAfterStopPx": 63.9,
+        "reversesPx": 0,
+        "stillAfterMs": 1344,
+        "restExact": true
+      },
+      "3000": {
+        "behindWhileScrolling": 79,
+        "travelAfterStopPx": 79.1,
+        "reversesPx": 0,
+        "stillAfterMs": 1427,
+        "restExact": true
+      }
+    },
+    "errors": []
+  }
+}

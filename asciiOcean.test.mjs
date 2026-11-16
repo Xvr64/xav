@@ -177,16 +177,21 @@ test('each behaviour builds only what it needs', t => {
   assert.deepEqual(defines(ALL), { programs: 3, defines: '#define FLOW #define WAKE #define SEA' });
 });
 
-test('inertia: the water runs on after the page stops, comes back to it, and never moves the page', t => {
+test('inertia: the water follows the page, carries on after it stops until it has caught up, and never moves the page', t => {
   const b = ocean(t, 1440, 900, 1, false, { inertia: true });
   b.tick();
   let y = 500;
-  for (let i = 0; i < 40; i++) { y += 25; b.win.scrollY = y; b.emit('scroll'); b.tick(); }
-  assert.ok(Math.abs(lattice(b, 1) - y) < 1, 'steady scroll: the water is with the page');
-  const ahead = [];
-  for (let i = 0; i < 90; i++) { b.tick(); ahead.push(lattice(b, 1) - y); }
-  assert.ok(Math.max(...ahead) > 2 && Math.max(...ahead) < 15, `runs on ${Math.max(...ahead)} px`);
-  assert.equal(ahead.at(-1), 0, 'and is back with the page');
+  const behind = [];
+  for (let i = 0; i < 120; i++) { y += 25; b.win.scrollY = y; b.emit('scroll'); b.tick(); behind.push(y - lattice(b, 1)); }
+  // About 1,560 px/s: the water has settled a steady way behind the page, within its limit
+  assert.ok(behind.at(-1) > 40 && behind.at(-1) <= waterInertia.WATER_INERTIA.limit, `${behind.at(-1)} px behind`);
+  assert.ok(Math.abs(behind.at(-1) - behind.at(-20)) < 0.5, 'and holds there: it moves as fast as the page');
+  const after = [];
+  for (let i = 0; i < 180; i++) { b.tick(); after.push(y - lattice(b, 1)); }
+  for (let i = 1; i < after.length; i++) assert.ok(after[i] <= after[i - 1] + 1e-9, 'it only ever closes on the page');
+  assert.ok(after[20] > behind.at(-1) * 0.25, 'still under way a third of a second after the stop');
+  assert.ok(Math.min(...after) >= 0, 'never past it');
+  assert.equal(after.at(-1), 0, 'and is back with the page');
   assert.equal(b.win.scrollY, y);
 });
 
@@ -212,9 +217,14 @@ test('wake: a third small pass runs only while a whale is moving the water', t =
   const before = b.draws;
   swim(1006); b.tick(40);
   assert.equal(b.draws - before, 3, 'the wake steps, then the two passes');
-  // The whales leave: the wake fades for a few seconds, then the pass stops
+  // The whales leave: the wake fades for some ten seconds (its trail is seen for about eight),
+  // then the pass stops
   b.whales.presence = 0;
-  for (let i = 0; i < 200; i++) b.tick(40);
+  for (let i = 0; i < 120; i++) b.tick(40);
+  const fading = b.draws;
+  b.tick(40);
+  assert.equal(b.draws - fading, 3, 'still fading four seconds on');
+  for (let i = 0; i < 240; i++) b.tick(40);
   const after = b.draws;
   b.tick(40);
   assert.equal(b.draws - after, 2);

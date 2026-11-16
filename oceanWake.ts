@@ -21,20 +21,68 @@ export const WAKE = {
   girthOfLength: 0.115,
   /** Each body's radius as a share of that. */
   girth: [0.72, 1, 0.68, 0.5],
-  /** How much each body churns the water behind it (the flukes do the stirring). */
-  churn: [0, 0, 0.2, 1],
-  /** Speed through the water (whale lengths per second) at which a body moves it about two thirds as fast as it can. */
-  speed: 0.12,
+  /**
+   * How much each body stirs the water it passes through. What is stirred stays where it was
+   * left and fades there, so this is the trail: the flukes lay most of it, the tail stock some,
+   * and the body itself little (the animal covers that water for a long while after).
+   */
+  churn: [0, 0, 0.5, 1],
+  /**
+   * What the bodies that part the water shed instead: a crescent pressed ahead of the head, and
+   * a thin band slipping back along each flank of the head and the girth, just outside the
+   * animal's outline (`shedAt` radii out, this sharply drawn). The water there runs astern, so
+   * the bands stream back along the body and into the flukes' wash.
+   */
+  bow: [0.2, 0, 0, 0],
+  flank: [0.16, 0.18, 0, 0],
+  shedAt: 1.22,
+  shedFall: 7,
+  /** How far the shader's flow outside a body is drawn from the doublet toward its heading (lower: the flanks slip back faster). */
+  slip: 0.2,
+  /** How fast the stir falls off around a body (per radius squared): it reaches about a radius beyond it. */
+  stirFall: 1.4,
+  /**
+   * How far each body's stir reaches, in its own radii. The flukes are far wider than the tail
+   * stock that carries them, and their trail is the part of a wake the animal never covers.
+   */
+  stirReach: [1, 1, 1, 1.15],
+  /**
+   * Speed through the water (whale lengths per second) at which a body moves it about two thirds
+   * as fast as it can. A cruising humpback covers a twentieth of its length a second and its
+   * flukes beat three times as fast: measured against a brisker animal, as it first was, the
+   * wake never rose above a third of its strength and could not be seen.
+   */
+  speed: 0.05,
   /** Share of the page's scroll past a whale that counts as the whale moving through the water. */
-  scroll: 0.08,
+  scroll: 0.025,
+  /**
+   * While the page scrolls the whales stay with the reader, so the page's water streams past
+   * them: a whale the width of the screen would stir every bit of water it is carried through and
+   * leave half the screen in strokes. So a body stirs the water only while the page holds still
+   * or creeps: fully below the first of these (radii of water passing per step), not at all above
+   * the second. The trail it has already left stays where it is in the water and scrolls away
+   * with the page.
+   */
+  stillWater: [0.02, 0.1],
   /**
    * Outside a body, how far the water's flow is drawn from the pure doublet toward the body's own
    * heading: the doublet turns a quarter circle off the bow and the quarter, which reads as
    * chevrons in glyphs; this keeps a flare.
    */
   along: 0.55,
+  /**
+   * Which bodies drive the animal: the tail stock and the flukes. They do not push the water on
+   * as the head and the girth do; they throw it astern. A whale on this page mostly holds its
+   * place on screen while it swims (the reader travels with it), so water left where it has been
+   * would never trail far: what is seen behind a swimming whale is the water its flukes send
+   * back, beat after beat.
+   */
+  wash: [false, false, true, true],
+  /** How far astern a driving body's wash runs before it slackens (radii), and how it widens on the way (radii per radius). */
+  washLength: 6,
+  washFlare: 0.2,
   /** Beyond this many radii a body no longer moves the water. */
-  reach: 3,
+  reach: 3.6,
   /** A body that travels further than this share of the screen in one step has been moved, not swum. */
   jump: 0.3
 } as const;
@@ -53,11 +101,18 @@ export interface WakeBody {
   /** How strongly it moves the water, 0–1. */
   strength: number;
   churn: number;
+  /** How far its stir reaches, in radii. */
+  spread: number;
+  /** It drives the animal: the water it moves is thrown astern (asciiOcean.ts). */
+  wash: boolean;
+  /** What it sheds ahead of it and along its flanks, 0–1. */
+  bow: number;
+  flank: number;
 }
 
 /** The bodies as they are now. Written by the ocean every wake step, read by the marine snow. */
 export const oceanWake: { bodies: WakeBody[]; count: number } = {
-  bodies: Array.from({ length: WAKE_BODIES }, () => ({ x: 0, y: 0, r: 1, ux: 1, uy: 0, strength: 0, churn: 0 })),
+  bodies: Array.from({ length: WAKE_BODIES }, () => ({ x: 0, y: 0, r: 1, ux: 1, uy: 0, strength: 0, churn: 0, spread: 1, wash: false, bow: 0, flank: 0 })),
   count: 0
 };
 
@@ -69,6 +124,11 @@ export interface WakeTracker {
   water: number;
 }
 export const newWakeTracker = (): WakeTracker => ({ x: new Float64Array(WAKE_BODIES).fill(NaN), y: new Float64Array(WAKE_BODIES).fill(NaN), water: NaN });
+
+const smoothstep = (a: number, b: number, v: number) => {
+  const t = Math.max(0, Math.min(1, (v - a) / (b - a)));
+  return t * t * (3 - 2 * t);
+};
 
 /**
  * Read the whales' spines into bodies. `water` is how far the water's lattice has scrolled (CSS
@@ -123,22 +183,27 @@ export function trackWake(
       body.ux = ax / axis;
       body.uy = ay / axis;
       body.strength = strength;
-      body.churn = WAKE.churn[k] * strength;
+      const stirs = strength * (1 - smoothstep(WAKE.stillWater[0], WAKE.stillWater[1], Math.abs(passed) / r));
+      body.churn = WAKE.churn[k] * stirs;
+      body.spread = WAKE.stirReach[k];
+      body.wash = WAKE.wash[k];
+      body.bow = WAKE.bow[k] * stirs;
+      body.flank = WAKE.flank[k] * stirs;
     }
   }
   out.count = count;
 }
 
-const smoothstep = (a: number, b: number, v: number) => {
-  const t = Math.max(0, Math.min(1, (v - a) / (b - a)));
-  return t * t * (3 - 2 * t);
-};
 
 /**
  * The flow one body sets up at a point `dx, dy` from its centre, as a share of its own speed:
- * with it inside; outside, between a doublet (pushed on ahead and astern, slipping back abeam)
- * and the body's own heading, fading out by `WAKE.reach` radii. The shader has the same arithmetic
- * (WAKE_STEP in asciiOcean.ts).
+ * with it at its surface, and less and less toward its middle (that water is the animal, and
+ * what the ocean draws there would only muddy it); outside, between a doublet (pushed on ahead and astern, slipping back abeam)
+ * and the body's own heading, falling with distance (not its square: a body this size moves
+ * water a good way off, and what it moves must reach past its own outline to be seen) and
+ * fading out by `WAKE.reach` radii. This is the flow the marine snow rides. The ocean's own
+ * memory (WAKE_STEP in asciiOcean.ts) starts from the same arithmetic and then lets the flanks
+ * slip back faster and the tail throw its water astern.
  */
 export function bodyFlow(body: WakeBody, dx: number, dy: number, out: [number, number]): [number, number] {
   const d2 = dx * dx + dy * dy;
@@ -150,15 +215,15 @@ export function bodyFlow(body: WakeBody, dx: number, dy: number, out: [number, n
     return out;
   }
   if (r2 <= 1) {
-    out[0] = body.ux;
-    out[1] = body.uy;
+    out[0] = body.ux * r2;
+    out[1] = body.uy * r2;
     return out;
   }
   const inv = 1 / Math.sqrt(d2);
   const nx = dx * inv;
   const ny = dy * inv;
   const along = body.ux * nx + body.uy * ny;
-  const fall = (1 - smoothstep(edge * 0.45, edge, r2)) / r2;
+  const fall = (1 - smoothstep(edge * 0.45, edge, r2)) / Math.sqrt(r2);
   out[0] = ((2 * along * nx - body.ux) * (1 - WAKE.along) + body.ux * WAKE.along) * fall;
   out[1] = ((2 * along * ny - body.uy) * (1 - WAKE.along) + body.uy * WAKE.along) * fall;
   return out;
