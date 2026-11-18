@@ -1,0 +1,284 @@
+[
+  {
+    "width": 1440,
+    "words": 271,
+    "coverage": {
+      "missed": [],
+      "sections": [
+        "home",
+        "introduction",
+        "experience",
+        "skills",
+        "education",
+        "languages",
+        "interests",
+        "contact"
+      ]
+    },
+    "slow": {
+      "partial": 661,
+      "cascade": true,
+      "failures": [],
+      "scrollStepTimes": {
+        "frames": 74,
+        "mean": 33.66,
+        "p50": 31,
+        "p95": 69,
+        "p99": 96.8,
+        "max": 96.8,
+        "over34": 24
+      }
+    },
+    "idle": {
+      "partialWords": 11,
+      "mutations": 0
+    },
+    "input": {
+      "trackpadDistance": 48,
+      "mouseWheelDistance": 120
+    },
+    "sections": [
+      {
+        "id": "experience",
+        "partial": true,
+        "readable": true,
+        "failures": []
+      },
+      {
+        "id": "skills",
+        "partial": true,
+        "readable": true,
+        "failures": []
+      },
+      {
+        "id": "education",
+        "partial": true,
+        "readable": true,
+        "failures": []
+      },
+      {
+        "id": "languages",
+        "partial": true,
+        "readable": true,
+        "failures": []
+      },
+      {
+        "id": "interests",
+        "partial": true,
+        "readable": true,
+        "failures": []
+      },
+      {
+        "id": "contact",
+        "partial": true,
+        "readable": true,
+        "failures": []
+      }
+    ],
+    "reverse": {
+      "mutations": 0,
+      "unresolved": 0
+    },
+    "controllerMs": {
+      "frames": 275,
+      "mean": 0.6,
+      "p50": 0.4,
+      "p95": 1.9,
+      "p99": 2.6,
+      "max": 3.5,
+      "over34": 0
+    },
+    "errors": [],
+    "overflow": false
+  },
+  {
+    "width": 390,
+    "words": 271,
+    "coverage": {
+      "missed": [],
+      "sections": [
+        "home",
+        "introduction",
+        "experience",
+        "skills",
+        "education",
+        "languages",
+        "interests",
+        "contact"
+      ]
+    },
+    "slow": {
+      "partial": 657,
+      "cascade": true,
+      "failures": [],
+      "scrollStepTimes": {
+        "frames": 74,
+        "mean": 25.25,
+        "p50": 22.7,
+        "p95": 57.1,
+        "p99": 79.8,
+        "max": 79.8,
+        "over34": 6
+      }
+    },
+    "idle": {
+      "partialWords": 9,
+      "mutations": 0
+    },
+    "input": {
+      "touchDistance": 165
+    },
+    "sections": [
+      {
+        "id": "experience",
+        "partial": true,
+        "readable": true,
+        "failures": []
+      },
+      {
+        "id": "skills",
+        "partial": true,
+        "readable": true,
+        "failures": []
+      },
+      {
+        "id": "education",
+        "partial": true,
+        "readable": true,
+        "failures": []
+      },
+      {
+        "id": "languages",
+        "partial": true,
+        "readable": true,
+        "failures": []
+      },
+      {
+        "id": "interests",
+        "partial": true,
+        "readable": true,
+        "failures": []
+      },
+      {
+        "id": "contact",
+        "partial": true,
+        "readable": true,
+        "failures": []
+      }
+    ],
+    "reverse": {
+      "mutations": 0,
+      "unresolved": 0
+    },
+    "controllerMs": {
+      "frames": 276,
+      "mean": 0.47,
+      "p50": 0.4,
+      "p95": 1.4,
+      "p99": 2.4,
+      "max": 2.8,
+      "over34": 0
+    },
+    "errors": [],
+    "overflow": false
+  },
+  {
+    "width": 320,
+    "words": 271,
+    "coverage": {
+      "missed": [],
+      "sections": [
+        "home",
+        "introduction",
+        "experience",
+        "skills",
+        "education",
+        "languages",
+        "interests",
+        "contact"
+      ]
+    },
+    "slow": {
+      "partial": 632,
+      "cascade": true,
+      "failures": [],
+      "scrollStepTimes": {
+        "frames": 74,
+        "mean": 22.27,
+        "p50": 19.9,
+        "p95": 52.7,
+        "p99": 68,
+        "max": 68,
+        "over34": 5
+      }
+    },
+    "idle": {
+      "partialWords": 6,
+      "mutations": 0
+    },
+    "input": {
+      "touchDistance": 165
+    },
+    "sections": [
+      {
+        "id": "experience",
+        "partial": true,
+        "readable": true,
+        "failures": []
+      },
+      {
+        "id": "skills",
+        "partial": true,
+        "readable": true,
+        "failures": []
+      },
+      {
+        "id": "education",
+        "partial": true,
+        "readable": true,
+        "failures": []
+      },
+      {
+        "id": "languages",
+        "partial": true,
+        "readable": true,
+        "failures": []
+      },
+      {
+        "id": "interests",
+        "partial": true,
+        "readable": true,
+        "failures": []
+      },
+      {
+        "id": "contact",
+        "partial": true,
+        "readable": true,
+        "failures": []
+      }
+    ],
+    "reverse": {
+      "mutations": 0,
+      "unresolved": 0
+    },
+    "controllerMs": {
+      "frames": 279,
+      "mean": 0.45,
+      "p50": 0.4,
+      "p95": 1.2,
+      "p99": 2.2,
+      "max": 3.4,
+      "over34": 0
+    },
+    "errors": [],
+    "overflow": false
+  },
+  {
+    "reducedInitial": true,
+    "pass": true
+  },
+  {
+    "reducedInitial": false,
+    "pass": true
+  }
+]
