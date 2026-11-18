@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { publishFixedCopy } from './oceanDirection';
 import { gaugePosition } from './gaugePosition';
+import { magneticCV } from './magneticCVState';
 import { CV_SECTIONS } from './sections';
 
 // ============================================================================
@@ -17,7 +18,8 @@ import { CV_SECTIONS } from './sections';
 // To remove it: delete <DepthGauge /> from the page and the "Depth gauge" block in terminal.css.
 
 /** The gauge's stations are the CV's chapters (sections.ts), one tick each. */
-export const GAUGE_SECTIONS = CV_SECTIONS;
+const [profile, experience, skills, education, ...closing] = CV_SECTIONS;
+export const GAUGE_SECTIONS = magneticCV ? [profile, experience, education, skills, ...closing] : CV_SECTIONS;
 
 /** Distance between two ticks (px); terminal.css reads it as --gauge-step. */
 export const GAUGE_STEP = 30;
@@ -121,7 +123,7 @@ export const DepthGauge: React.FC = () => {
       <ol>
         {GAUGE_SECTIONS.map((section, i) => (
           <li key={section.id}>
-            <a href={`#${section.id}`} onClick={goTo(section.id)} aria-current={active === i ? 'location' : undefined}>
+            <a href={`#${section.id}`} onClick={magneticCV ? undefined : goTo(section.id)} aria-current={active === i ? 'location' : undefined}>
               <span className="depth-gauge-label">{section.label}</span>
               <span className="depth-gauge-tick" aria-hidden="true" />
             </a>

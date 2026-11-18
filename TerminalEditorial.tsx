@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Volume2, VolumeX } from 'lucide-react';
+import { magneticCV, passage, easedPhase, chapterBounds, MAGNETIC_CHAPTERS } from './magneticCVState';
 import { entryEndFor } from './terminalMotion';
 import { advanceEncryptedLine, encryptedEntryProgress, encryptedCharacterState, ENCRYPTED_CHARSET, ENCRYPTED_ENTRY_END, type EncryptedLineState } from './encryptedMotion';
 import { creation, HERO_TEXT_AT } from './creationTimeline';
@@ -36,6 +37,7 @@ type Word = {
 };
 type Line = EncryptedLineState & {
   block: HTMLElement;
+  chapter: HTMLElement | null;
   top: number;
   entryEnd: number;
   voice: 'title' | 'meta' | 'body';
@@ -81,12 +83,17 @@ export function useEditorialScroll() {
       viewport = innerHeight;
       const y = scrollY;
       const maxScroll = Math.max(0, document.documentElement.scrollHeight - viewport);
+      const chapterSpans = new Map<HTMLElement, { top: number; end: number }>();
+      // A chapter's arrival screen resolves at its top; any lines below the fold resolve by its reading edge.
+      if (magneticCV) document.querySelectorAll<HTMLElement>(MAGNETIC_CHAPTERS).forEach(el =>
+        chapterSpans.set(el, chapterBounds(el, y, viewport)));
       const blocks = new Map<HTMLElement, Line[]>();
       const lines: Line[] = [];
       words = [];
       document.querySelectorAll<HTMLElement>(ELIGIBLE).forEach(text => {
         if (text.closest(EXCLUDED)) return;
         const block = blockOf(text);
+        const chapter = magneticCV ? text.closest<HTMLElement>('[data-editorial-section]') : null;
         const siblings = blocks.get(block) ?? [];
         blocks.set(block, siblings);
         text.querySelectorAll<HTMLElement>('.ascii-word').forEach(el => {
@@ -113,7 +120,9 @@ export function useEditorialScroll() {
           let line = siblings.find(candidate => Math.abs(candidate.top - top) <= 6);
           if (!line) {
             const voice = block.closest('.meta, dt, time') ? 'meta' : block.closest('h2, h3') ? 'title' : 'body';
-            line = { block, top, entryEnd: entryEndFor(top - maxScroll, viewport, ENCRYPTED_ENTRY_END), count: 0, voice,
+            const span = chapter ? chapterSpans.get(chapter) : undefined;
+            const restY = span ? (top < span.top + viewport ? span.top : span.end) : maxScroll;
+            line = { block, chapter, top, entryEnd: entryEndFor(top - restY, viewport, ENCRYPTED_ENTRY_END), count: 0, voice,
               words: [], currentP: 0, revealState: 'hidden' };
             siblings.push(line);
             lines.push(line);
@@ -175,9 +184,15 @@ export function useEditorialScroll() {
       const updates: { word: Word; line: Line; p: number }[] = [];
       const remaining: Line[] = [];
       for (const line of pendingLines) {
-        const zone = encryptedEntryProgress(line.top - y, viewport, line.entryEnd);
+        let zone = encryptedEntryProgress(line.top - y, viewport, line.entryEnd);
         const forced = media.matches || (focused && line.words.some(word => focused.contains(word.el)));
-        const next = advanceEncryptedLine(line, zone, delta, forced || (initial && zone > 0));
+        let movement = delta;
+        if (magneticCV && passage.destination === line.chapter && line.chapter) {
+          const title = !!line.block.closest('h2');
+          zone = Math.min(zone, easedPhase(passage.progress, title ? .48 : .61, title ? .81 : .98));
+          movement = passage.direction;
+        }
+        const next = advanceEncryptedLine(line, zone, movement, forced || (initial && zone > 0));
         const unchanged = next.currentP === line.currentP;
         Object.assign(line, next);
         if (line.currentP < 1) remaining.push(line);
@@ -248,8 +263,10 @@ export function useEditorialScroll() {
     document.addEventListener('visibilitychange', onVisibility);
     media.addEventListener('change', invalidate);
     document.fonts.ready.then(() => { if (!disposed) invalidate(); });
+    if (magneticCV) passage.requestDecode = schedule;
     render();
     return () => {
+      if (magneticCV) passage.requestDecode = null;
       disposed = true;
       cancelAnimationFrame(frame);
       resize.disconnect();

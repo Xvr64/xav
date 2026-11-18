@@ -29,6 +29,9 @@ import {
   WhaleStretch,
   toTitleCase
 } from './OceanEntry';
+import { magneticCV } from './magneticCVState';
+import { mountMagneticCV } from './magneticCV';
+import './magneticCV.css';
 import { GLOBAL_PORTFOLIO_CSS } from './portfolioStyles';
 
 // ============================================================================
@@ -68,7 +71,84 @@ const FloatingSectionHeader: React.FC<FloatingSectionHeaderProps> = ({ title, la
   </header>
 );
 
+const Skills = () => (
+  <section id="skills" data-editorial-section className="relative">
+    <RevealBlock variant="section">
+      <FloatingSectionHeader layout="benchmark" title="Skills & tools" />
+    </RevealBlock>
+
+    {/* An index: each discipline's tools on one ruled row. The CV's summaries and
+        classifications stay in cvData; on the page the tools speak for themselves. */}
+    <div className="skill-index">
+      {CV_DATA.skills.map((category, idx) => (
+        <RevealBlock key={category.id} delayMs={idx * 110} className="skill-row ed-grid">
+          <h3 className="skill-label meta">
+            <BioWords text={category.title} />
+          </h3>
+          <ul className="skill-items">
+            {category.items.map((skill) => (
+              <li key={skill.name} className="item">
+                <BioWords text={skill.name} />
+              </li>
+            ))}
+          </ul>
+        </RevealBlock>
+      ))}
+    </div>
+  </section>
+);
+
+const Education = () => (
+  <section id="education" data-editorial-section className="relative">
+    <RevealBlock variant="section">
+      <FloatingSectionHeader layout="indented" title="Education" />
+    </RevealBlock>
+
+    {/* Two tiers: the degree reads first as an entry; the schools before it follow as a
+        ruled list. Every row keeps the same lines: date on a, name on b, place on c. */}
+    <div className="edu-list">
+      {CV_DATA.education.map((edu, idx) => (
+        <RevealBlock key={edu.id} delayMs={idx * 80}>
+          {idx === 1 && (
+            <p className="edu-tier-label meta">
+              <BioWords text="Schools" />
+            </p>
+          )}
+          <article className={`edu-entry ed-grid relative ${edu.degree ? 'edu-entry--degree' : 'edu-entry--school'}`}>
+            <p className="edu-when meta">
+              <BioWords text={edu.date} />
+            </p>
+            <div className="edu-body">
+              <h3 className={edu.degree ? 'entry-title' : 'item'}>
+                <BioWords text={edu.institution} />
+              </h3>
+              {edu.degree && (
+                <p className="edu-degree">
+                  <BioWords text={edu.degree} />
+                </p>
+              )}
+              {edu.highlights && edu.highlights.length > 0 && (
+                <div className="edu-highlights">
+                  {edu.highlights.map((h, hIdx) => (
+                    <p key={hIdx} className="body-copy text-[#2B353B]">
+                      <BioWords text={h} />
+                    </p>
+                  ))}
+                </div>
+              )}
+            </div>
+            <p className="edu-where meta">
+              <BioWords text={edu.locationLabel} />
+            </p>
+          </article>
+        </RevealBlock>
+      ))}
+    </div>
+  </section>
+);
+
 export default function App() {
+  React.useLayoutEffect(() => magneticCV ? mountMagneticCV() : undefined, []);
   useEditorialScroll();
   useEffect(() => mountLanternCursor(), []);
 
@@ -156,7 +236,7 @@ export default function App() {
   }, []);
 
   return (
-    <div className="terminal-portfolio min-h-screen w-full max-w-full bg-[var(--ocean-background)] text-[#171717] antialiased selection:bg-neutral-700 selection:text-[#EDEDED]">
+    <div className={`terminal-portfolio ${magneticCV ? 'magnetic-cv' : ''} min-h-screen w-full max-w-full bg-[var(--ocean-background)] text-[#171717] antialiased selection:bg-neutral-700 selection:text-[#EDEDED]`}>
       <style>{GLOBAL_PORTFOLIO_CSS}</style>
       <CreationIntro />
 
@@ -254,79 +334,7 @@ export default function App() {
             </div>
           </section>
 
-          {/* SECTION 04: SKILLS & TECHNOLOGY (Open Typographic Landscape) */}
-          <section id="skills" data-editorial-section className="relative">
-            <RevealBlock variant="section">
-              <FloatingSectionHeader layout="benchmark" title="Skills & tools" />
-            </RevealBlock>
-
-            {/* An index: each discipline's tools on one ruled row. The CV's summaries and
-                classifications stay in cvData; on the page the tools speak for themselves. */}
-            <div className="skill-index">
-              {CV_DATA.skills.map((category, idx) => (
-                <RevealBlock key={category.id} delayMs={idx * 110} className="skill-row ed-grid">
-                  <h3 className="skill-label meta">
-                    <BioWords text={category.title} />
-                  </h3>
-                  <ul className="skill-items">
-                    {category.items.map((skill) => (
-                      <li key={skill.name} className="item">
-                        <BioWords text={skill.name} />
-                      </li>
-                    ))}
-                  </ul>
-                </RevealBlock>
-              ))}
-            </div>
-          </section>
-
-          {/* SECTION 05: EDUCATION (Chronological Narrative Flow) */}
-          <section id="education" data-editorial-section className="relative">
-            <RevealBlock variant="section">
-              <FloatingSectionHeader layout="indented" title="Education" />
-            </RevealBlock>
-
-            {/* Two tiers: the degree reads first as an entry; the schools before it follow as a
-                ruled list. Every row keeps the same lines: date on a, name on b, place on c. */}
-            <div className="edu-list">
-              {CV_DATA.education.map((edu, idx) => (
-                <RevealBlock key={edu.id} delayMs={idx * 80}>
-                  {idx === 1 && (
-                    <p className="edu-tier-label meta">
-                      <BioWords text="Schools" />
-                    </p>
-                  )}
-                  <article className={`edu-entry ed-grid relative ${edu.degree ? 'edu-entry--degree' : 'edu-entry--school'}`}>
-                    <p className="edu-when meta">
-                      <BioWords text={edu.date} />
-                    </p>
-                    <div className="edu-body">
-                      <h3 className={edu.degree ? 'entry-title' : 'item'}>
-                        <BioWords text={edu.institution} />
-                      </h3>
-                      {edu.degree && (
-                        <p className="edu-degree">
-                          <BioWords text={edu.degree} />
-                        </p>
-                      )}
-                      {edu.highlights && edu.highlights.length > 0 && (
-                        <div className="edu-highlights">
-                          {edu.highlights.map((h, hIdx) => (
-                            <p key={hIdx} className="body-copy text-[#2B353B]">
-                              <BioWords text={h} />
-                            </p>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                    <p className="edu-where meta">
-                      <BioWords text={edu.locationLabel} />
-                    </p>
-                  </article>
-                </RevealBlock>
-              ))}
-            </div>
-          </section>
+          {magneticCV ? <><Education /><Skills /></> : <><Skills /><Education /></>}
 
           {/* SECTION 06: LANGUAGES (Open Typographic Matrix) */}
           <section id="languages" data-editorial-section className="relative">

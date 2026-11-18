@@ -1,0 +1,33 @@
+@media screen {
+  .terminal-portfolio.magnetic-cv .cv-arch > section + section { margin-top: 0 !important; }
+  .terminal-portfolio.magnetic-cv .cv-arch { margin-top: 0 !important; }
+  .terminal-portfolio.magnetic-cv :is(#introduction, .cv-arch > section) {
+    box-sizing: border-box;
+    min-height: 100dvh;
+    padding-block: clamp(48px, 7vh, 84px);
+    scroll-margin-top: -4.5rem;
+  }
+  .magnetic-cv #introduction { align-content: center; }
+  .magnetic-cv .cv-arch > section {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+  .magnetic-cv [data-cv-muted] { opacity: 0; pointer-events: none; }
+  .magnetic-cv [data-cv-depart] .ascii-visual { opacity: var(--cv-type); }
+  .magnetic-cv [data-cv-depart] .ascii-word[data-drift]::after {
+    content: attr(data-drift) / "";
+    position: absolute;
+    left: 0;
+    top: 50%;
+    pointer-events: none;
+    user-select: none;
+    color: currentColor;
+    font: 400 clamp(10px, .8em, 22px)/1 var(--font-mono, monospace);
+    letter-spacing: .16em;
+    opacity: var(--cv-foam);
+    transform: translate(calc(var(--cv-dx) * var(--cv-slip)), var(--cv-dy));
+  }
+  .magnetic-cv [data-cv-arrive] { opacity: var(--cv-title); }
+  .magnetic-cv [data-cv-arrive] > :not(:first-child) { opacity: var(--cv-body); }
+}
