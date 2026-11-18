@@ -1,0 +1,1187 @@
+{
+  "browser": "Chrome headless on Windows, desktop and emulated touch. Each performance run used a fresh browser profile and a local production build.",
+  "performanceMethod": "Median of three frame-time p95 values in each condition. Idle for 1.2 s, jump to Experience then scroll one viewport at 600 CSS px/s, followed by continuous scroll for 2200 CSS px at 600 px/s. These are requestAnimationFrame intervals for the page.",
+  "performance": [
+    {
+      "width": 390,
+      "version": "before",
+      "runs": 3,
+      "idleP95ms": 8.7,
+      "scrollP95ms": 16.9,
+      "jumpP95ms": 50.2
+    },
+    {
+      "width": 390,
+      "version": "after",
+      "runs": 3,
+      "idleP95ms": 8.5,
+      "scrollP95ms": 16.7,
+      "jumpP95ms": 41.8
+    },
+    {
+      "width": 1440,
+      "version": "before",
+      "runs": 3,
+      "idleP95ms": 8.5,
+      "scrollP95ms": 33.4,
+      "jumpP95ms": 91.8
+    },
+    {
+      "width": 1440,
+      "version": "after",
+      "runs": 3,
+      "idleP95ms": 8.5,
+      "scrollP95ms": 41.8,
+      "jumpP95ms": 108.5
+    }
+  ],
+  "measurements": [
+    {
+      "w": 390,
+      "tag": "after",
+      "idx": 0,
+      "idle": {
+        "frames": 144,
+        "mean": 8.35,
+        "p50": 8.3,
+        "p95": 8.9,
+        "p99": 9.1,
+        "max": 9.4,
+        "over34": 0
+      },
+      "jump": {
+        "frames": 92,
+        "mean": 15.33,
+        "p50": 8.4,
+        "p95": 41.8,
+        "p99": 125.1,
+        "max": 125.1,
+        "over34": 7
+      },
+      "scroll": {
+        "frames": 360,
+        "mean": 10.2,
+        "p50": 8.4,
+        "p95": 16.7,
+        "p99": 33.7,
+        "max": 50.1,
+        "over34": 3
+      },
+      "errors": []
+    },
+    {
+      "w": 390,
+      "tag": "before",
+      "idx": 1,
+      "idle": {
+        "frames": 144,
+        "mean": 8.35,
+        "p50": 8.3,
+        "p95": 8.5,
+        "p99": 8.8,
+        "max": 8.8,
+        "over34": 0
+      },
+      "jump": {
+        "frames": 84,
+        "mean": 16.69,
+        "p50": 8.4,
+        "p95": 50.2,
+        "p99": 125.2,
+        "max": 125.2,
+        "over34": 7
+      },
+      "scroll": {
+        "frames": 367,
+        "mean": 9.98,
+        "p50": 8.4,
+        "p95": 16.8,
+        "p99": 41.8,
+        "max": 58.4,
+        "over34": 5
+      },
+      "errors": []
+    },
+    {
+      "w": 390,
+      "tag": "before",
+      "idx": 2,
+      "idle": {
+        "frames": 144,
+        "mean": 8.35,
+        "p50": 8.3,
+        "p95": 8.7,
+        "p99": 9,
+        "max": 9.1,
+        "over34": 0
+      },
+      "jump": {
+        "frames": 106,
+        "mean": 13.23,
+        "p50": 8.4,
+        "p95": 33.5,
+        "p99": 108.5,
+        "max": 108.7,
+        "over34": 5
+      },
+      "scroll": {
+        "frames": 368,
+        "mean": 9.96,
+        "p50": 8.4,
+        "p95": 16.9,
+        "p99": 41.7,
+        "max": 58.4,
+        "over34": 5
+      },
+      "errors": []
+    },
+    {
+      "w": 390,
+      "tag": "after",
+      "idx": 3,
+      "idle": {
+        "frames": 144,
+        "mean": 8.35,
+        "p50": 8.3,
+        "p95": 8.5,
+        "p99": 8.8,
+        "max": 8.9,
+        "over34": 0
+      },
+      "jump": {
+        "frames": 91,
+        "mean": 15.41,
+        "p50": 8.4,
+        "p95": 41.8,
+        "p99": 141.8,
+        "max": 141.8,
+        "over34": 7
+      },
+      "scroll": {
+        "frames": 366,
+        "mean": 10.06,
+        "p50": 8.4,
+        "p95": 16.8,
+        "p99": 41.8,
+        "max": 42.3,
+        "over34": 4
+      },
+      "errors": []
+    },
+    {
+      "w": 390,
+      "tag": "after",
+      "idx": 4,
+      "idle": {
+        "frames": 144,
+        "mean": 8.34,
+        "p50": 8.3,
+        "p95": 8.5,
+        "p99": 9.2,
+        "max": 9.2,
+        "over34": 0
+      },
+      "jump": {
+        "frames": 102,
+        "mean": 13.75,
+        "p50": 8.4,
+        "p95": 33.5,
+        "p99": 108.5,
+        "max": 125.2,
+        "over34": 4
+      },
+      "scroll": {
+        "frames": 366,
+        "mean": 10.01,
+        "p50": 8.4,
+        "p95": 16.7,
+        "p99": 41.7,
+        "max": 41.9,
+        "over34": 5
+      },
+      "errors": []
+    },
+    {
+      "w": 390,
+      "tag": "before",
+      "idx": 5,
+      "idle": {
+        "frames": 144,
+        "mean": 8.35,
+        "p50": 8.3,
+        "p95": 8.7,
+        "p99": 8.9,
+        "max": 9.2,
+        "over34": 0
+      },
+      "jump": {
+        "frames": 67,
+        "mean": 21.05,
+        "p50": 16.6,
+        "p95": 66.8,
+        "p99": 125.2,
+        "max": 125.2,
+        "over34": 7
+      },
+      "scroll": {
+        "frames": 264,
+        "mean": 13.91,
+        "p50": 8.4,
+        "p95": 41.8,
+        "p99": 66.9,
+        "max": 91.8,
+        "over34": 15
+      },
+      "errors": []
+    },
+    {
+      "w": 1440,
+      "tag": "after",
+      "idx": 0,
+      "idle": {
+        "frames": 144,
+        "mean": 8.35,
+        "p50": 8.3,
+        "p95": 8.4,
+        "p99": 8.5,
+        "max": 8.6,
+        "over34": 0
+      },
+      "jump": {
+        "frames": 46,
+        "mean": 32.65,
+        "p50": 24.7,
+        "p95": 108.5,
+        "p99": 208.6,
+        "max": 208.6,
+        "over34": 9
+      },
+      "scroll": {
+        "frames": 263,
+        "mean": 13.96,
+        "p50": 8.4,
+        "p95": 41.8,
+        "p99": 66.7,
+        "max": 66.8,
+        "over34": 15
+      },
+      "errors": []
+    },
+    {
+      "w": 1440,
+      "tag": "before",
+      "idx": 1,
+      "idle": {
+        "frames": 144,
+        "mean": 8.35,
+        "p50": 8.3,
+        "p95": 8.5,
+        "p99": 8.5,
+        "max": 8.7,
+        "over34": 0
+      },
+      "jump": {
+        "frames": 58,
+        "mean": 25.9,
+        "p50": 16.7,
+        "p95": 108.4,
+        "p99": 192,
+        "max": 192,
+        "over34": 8
+      },
+      "scroll": {
+        "frames": 276,
+        "mean": 13.27,
+        "p50": 8.4,
+        "p95": 33.4,
+        "p99": 58.5,
+        "max": 83.4,
+        "over34": 12
+      },
+      "errors": []
+    },
+    {
+      "w": 1440,
+      "tag": "before",
+      "idx": 2,
+      "idle": {
+        "frames": 144,
+        "mean": 8.35,
+        "p50": 8.3,
+        "p95": 8.5,
+        "p99": 8.5,
+        "max": 8.7,
+        "over34": 0
+      },
+      "jump": {
+        "frames": 53,
+        "mean": 28.34,
+        "p50": 16.8,
+        "p95": 91.8,
+        "p99": 191.9,
+        "max": 191.9,
+        "over34": 7
+      },
+      "scroll": {
+        "frames": 285,
+        "mean": 12.89,
+        "p50": 8.4,
+        "p95": 33.3,
+        "p99": 58.7,
+        "max": 66.9,
+        "over34": 12
+      },
+      "errors": []
+    },
+    {
+      "w": 1440,
+      "tag": "after",
+      "idx": 3,
+      "idle": {
+        "frames": 144,
+        "mean": 8.35,
+        "p50": 8.3,
+        "p95": 8.5,
+        "p99": 8.6,
+        "max": 8.7,
+        "over34": 0
+      },
+      "jump": {
+        "frames": 36,
+        "mean": 41.96,
+        "p50": 25.1,
+        "p95": 150.2,
+        "p99": 233.6,
+        "max": 233.6,
+        "over34": 7
+      },
+      "scroll": {
+        "frames": 263,
+        "mean": 13.96,
+        "p50": 8.4,
+        "p95": 41.8,
+        "p99": 66.9,
+        "max": 75.2,
+        "over34": 15
+      },
+      "errors": []
+    },
+    {
+      "w": 1440,
+      "tag": "after",
+      "idx": 4,
+      "idle": {
+        "frames": 144,
+        "mean": 8.35,
+        "p50": 8.4,
+        "p95": 8.5,
+        "p99": 8.5,
+        "max": 8.5,
+        "over34": 0
+      },
+      "jump": {
+        "frames": 45,
+        "mean": 33.94,
+        "p50": 24.9,
+        "p95": 100.1,
+        "p99": 208.6,
+        "max": 208.6,
+        "over34": 9
+      },
+      "scroll": {
+        "frames": 283,
+        "mean": 12.95,
+        "p50": 8.4,
+        "p95": 33.4,
+        "p99": 58.5,
+        "max": 75.1,
+        "over34": 12
+      },
+      "errors": []
+    },
+    {
+      "w": 1440,
+      "tag": "before",
+      "idx": 5,
+      "idle": {
+        "frames": 144,
+        "mean": 8.35,
+        "p50": 8.3,
+        "p95": 8.5,
+        "p99": 8.5,
+        "max": 8.7,
+        "over34": 0
+      },
+      "jump": {
+        "frames": 56,
+        "mean": 27.72,
+        "p50": 16.7,
+        "p95": 75.2,
+        "p99": 208.5,
+        "max": 208.5,
+        "over34": 9
+      },
+      "scroll": {
+        "frames": 233,
+        "mean": 15.8,
+        "p50": 16.6,
+        "p95": 58.3,
+        "p99": 66.9,
+        "max": 83.6,
+        "over34": 15
+      },
+      "errors": []
+    }
+  ],
+  "unitTestsPassed": 241,
+  "typeCheck": "passed",
+  "build": "passed",
+  "decode": [
+    {
+      "width": 1440,
+      "words": 271,
+      "coverage": {
+        "missed": [],
+        "sections": [
+          "home",
+          "introduction",
+          "experience",
+          "skills",
+          "education",
+          "languages",
+          "interests",
+          "contact"
+        ]
+      },
+      "slow": {
+        "partial": 1672,
+        "cascade": true,
+        "failures": [],
+        "scrollStepTimes": {
+          "frames": 87,
+          "mean": 31.03,
+          "p50": 27.8,
+          "p95": 58.5,
+          "p99": 77.6,
+          "max": 77.6,
+          "over34": 21
+        }
+      },
+      "idle": {
+        "partialWords": 52,
+        "mutations": 0
+      },
+      "partialReverse": {
+        "words": 52,
+        "settled": true,
+        "mutations": 0
+      },
+      "input": {
+        "trackpadDistance": 48,
+        "mouseWheelDistance": 120
+      },
+      "sections": [
+        {
+          "id": "experience",
+          "partial": true,
+          "readable": true,
+          "failures": []
+        },
+        {
+          "id": "skills",
+          "partial": true,
+          "readable": true,
+          "failures": []
+        },
+        {
+          "id": "education",
+          "partial": true,
+          "readable": true,
+          "failures": []
+        },
+        {
+          "id": "languages",
+          "partial": true,
+          "readable": true,
+          "failures": []
+        },
+        {
+          "id": "interests",
+          "partial": true,
+          "readable": true,
+          "failures": []
+        },
+        {
+          "id": "contact",
+          "partial": true,
+          "readable": true,
+          "failures": []
+        }
+      ],
+      "reverse": {
+        "mutations": 0,
+        "unresolved": 0
+      },
+      "controllerMs": {
+        "frames": 441,
+        "mean": 0.5,
+        "p50": 0.4,
+        "p95": 1.4,
+        "p99": 2.5,
+        "max": 3.3,
+        "over34": 0
+      },
+      "errors": [],
+      "overflow": false
+    },
+    {
+      "width": 390,
+      "words": 271,
+      "coverage": {
+        "missed": [],
+        "sections": [
+          "home",
+          "introduction",
+          "experience",
+          "skills",
+          "education",
+          "languages",
+          "interests",
+          "contact"
+        ]
+      },
+      "slow": {
+        "partial": 1611,
+        "cascade": true,
+        "failures": [],
+        "scrollStepTimes": {
+          "frames": 87,
+          "mean": 25.75,
+          "p50": 24,
+          "p95": 47.7,
+          "p99": 66.2,
+          "max": 66.2,
+          "over34": 9
+        }
+      },
+      "idle": {
+        "partialWords": 41,
+        "mutations": 0
+      },
+      "partialReverse": {
+        "words": 41,
+        "settled": true,
+        "mutations": 0
+      },
+      "input": {
+        "touchDistance": 165
+      },
+      "sections": [
+        {
+          "id": "experience",
+          "partial": true,
+          "readable": true,
+          "failures": []
+        },
+        {
+          "id": "skills",
+          "partial": true,
+          "readable": true,
+          "failures": []
+        },
+        {
+          "id": "education",
+          "partial": true,
+          "readable": true,
+          "failures": []
+        },
+        {
+          "id": "languages",
+          "partial": true,
+          "readable": true,
+          "failures": []
+        },
+        {
+          "id": "interests",
+          "partial": true,
+          "readable": true,
+          "failures": []
+        },
+        {
+          "id": "contact",
+          "partial": true,
+          "readable": true,
+          "failures": []
+        }
+      ],
+      "reverse": {
+        "mutations": 0,
+        "unresolved": 0
+      },
+      "controllerMs": {
+        "frames": 442,
+        "mean": 0.46,
+        "p50": 0.4,
+        "p95": 1.2,
+        "p99": 1.9,
+        "max": 2.9,
+        "over34": 0
+      },
+      "errors": [],
+      "overflow": false
+    },
+    {
+      "width": 320,
+      "words": 271,
+      "coverage": {
+        "missed": [],
+        "sections": [
+          "home",
+          "introduction",
+          "experience",
+          "skills",
+          "education",
+          "languages",
+          "interests",
+          "contact"
+        ]
+      },
+      "slow": {
+        "partial": 1474,
+        "cascade": true,
+        "failures": [],
+        "scrollStepTimes": {
+          "frames": 87,
+          "mean": 22.75,
+          "p50": 20.5,
+          "p95": 45.5,
+          "p99": 60.8,
+          "max": 60.8,
+          "over34": 6
+        }
+      },
+      "idle": {
+        "partialWords": 34,
+        "mutations": 0
+      },
+      "partialReverse": {
+        "words": 34,
+        "settled": true,
+        "mutations": 0
+      },
+      "input": {
+        "touchDistance": 165
+      },
+      "sections": [
+        {
+          "id": "experience",
+          "partial": true,
+          "readable": true,
+          "failures": []
+        },
+        {
+          "id": "skills",
+          "partial": true,
+          "readable": true,
+          "failures": []
+        },
+        {
+          "id": "education",
+          "partial": true,
+          "readable": true,
+          "failures": []
+        },
+        {
+          "id": "languages",
+          "partial": true,
+          "readable": true,
+          "failures": []
+        },
+        {
+          "id": "interests",
+          "partial": true,
+          "readable": true,
+          "failures": []
+        },
+        {
+          "id": "contact",
+          "partial": true,
+          "readable": true,
+          "failures": []
+        }
+      ],
+      "reverse": {
+        "mutations": 0,
+        "unresolved": 0
+      },
+      "controllerMs": {
+        "frames": 445,
+        "mean": 0.47,
+        "p50": 0.4,
+        "p95": 1.2,
+        "p99": 2.4,
+        "max": 3.8,
+        "over34": 0
+      },
+      "errors": [],
+      "overflow": false
+    },
+    {
+      "reducedInitial": true,
+      "pass": true
+    },
+    {
+      "reducedInitial": false,
+      "pass": true
+    }
+  ],
+  "wordCoverage": [
+    {
+      "width": 1440,
+      "words": 271,
+      "animated": 271,
+      "unresolved": 0,
+      "missed": []
+    },
+    {
+      "width": 390,
+      "words": 271,
+      "animated": 271,
+      "unresolved": 0,
+      "missed": []
+    }
+  ],
+  "wakeAndReducedMotion": {
+    "wave": {
+      "varied": 192,
+      "max": 1.6,
+      "lockedMoves": 0
+    },
+    "a": [
+      9.838000000000028,
+      257,
+      true
+    ],
+    "b": [
+      9.838000000000028,
+      257,
+      true
+    ]
+  },
+  "journeyAndLinks": {
+    "390": {
+      "idle": {
+        "frames": 420,
+        "mean": 8.35,
+        "p50": 8.3,
+        "p95": 8.7,
+        "p99": 8.9,
+        "max": 8.9,
+        "over34": 0,
+        "draws": 94
+      },
+      "pass": [
+        {
+          "t": 8.258266666666687,
+          "z": 0.07875740769841624,
+          "b": [
+            {
+              "left": -66,
+              "right": 350,
+              "top": 486,
+              "bottom": 687
+            },
+            {
+              "left": -11,
+              "right": 258,
+              "top": 173,
+              "bottom": 291
+            }
+          ],
+          "draws": 153,
+          "ms": 0.9287195832198709
+        },
+        {
+          "t": 14.267133333333334,
+          "z": -0.14093726163914358,
+          "b": [
+            {
+              "left": -41,
+              "right": 241,
+              "top": 463,
+              "bottom": 663
+            },
+            {
+              "left": -48,
+              "right": 258,
+              "top": 84,
+              "bottom": 288
+            }
+          ],
+          "draws": 162,
+          "ms": 0.9201505125299724
+        },
+        {
+          "t": 21.2260666666669,
+          "z": 0.07762732066478333,
+          "b": [
+            {
+              "left": 63,
+              "right": 368,
+              "top": 548,
+              "bottom": 811
+            },
+            {
+              "left": 99,
+              "right": 377,
+              "top": 158,
+              "bottom": 329
+            }
+          ],
+          "draws": 171,
+          "ms": 0.883592054760937
+        },
+        {
+          "t": 27.251466666667188,
+          "z": 0.8535394563547196,
+          "b": [
+            {
+              "left": 3,
+              "right": 512,
+              "top": 452,
+              "bottom": 910
+            },
+            {
+              "left": 141,
+              "right": 419,
+              "top": 214,
+              "bottom": 360
+            }
+          ],
+          "draws": 179,
+          "ms": 0.8290980871858576
+        },
+        {
+          "t": 31.251433333334024,
+          "z": 0.9309143882969231,
+          "b": [
+            {
+              "left": -12,
+              "right": 680,
+              "top": 271,
+              "bottom": 836
+            },
+            {
+              "left": 92,
+              "right": 301,
+              "top": 165,
+              "bottom": 394
+            }
+          ],
+          "draws": 188,
+          "ms": 0.8385249786916096
+        },
+        {
+          "t": 36.26850000000049,
+          "z": 0.7555628588358948,
+          "b": [
+            {
+              "left": 58,
+              "right": 609,
+              "top": 440,
+              "bottom": 799
+            },
+            {
+              "left": 85,
+              "right": 358,
+              "top": 267,
+              "bottom": 412
+            }
+          ],
+          "draws": 197,
+          "ms": 0.7963852005264535
+        },
+        {
+          "t": 42.23573333333352,
+          "z": -0.012086006384701718,
+          "b": [
+            {
+              "left": 168,
+              "right": 489,
+              "top": 568,
+              "bottom": 754
+            },
+            {
+              "left": 133,
+              "right": 366,
+              "top": 211,
+              "bottom": 363
+            }
+          ],
+          "draws": 206,
+          "ms": 0.7712794888769788
+        },
+        {
+          "t": 50.26113333333309,
+          "z": -0.028986682024261023,
+          "b": [
+            {
+              "left": 210,
+              "right": 497,
+              "top": 513,
+              "bottom": 878
+            },
+            {
+              "left": 10,
+              "right": 237,
+              "top": 125,
+              "bottom": 311
+            }
+          ],
+          "draws": 214,
+          "ms": 0.7281373009492502
+        }
+      ],
+      "experience": {
+        "hash": "#experience",
+        "title": 173.53125
+      },
+      "scroll": {
+        "frames": 126,
+        "mean": 11.19,
+        "p50": 8.4,
+        "p95": 33.3,
+        "p99": 50.1,
+        "max": 58.5,
+        "over34": 5
+      },
+      "contact": {
+        "hash": "#contact",
+        "email": "mailto:Heryxx44@gmail.com",
+        "top": 412.578125,
+        "overflow": 0
+      },
+      "pdf": {
+        "status": 200,
+        "signature": "%PDF-"
+      },
+      "cities": [
+        "Doha",
+        "Paris",
+        "Jakarta",
+        "Moscow",
+        "Singapore",
+        "Pau",
+        "Shanghai"
+      ],
+      "errors": []
+    },
+    "1440": {
+      "idle": {
+        "frames": 420,
+        "mean": 8.35,
+        "p50": 8.3,
+        "p95": 8.6,
+        "p99": 8.9,
+        "max": 9.3,
+        "over34": 0,
+        "draws": 96
+      },
+      "pass": [
+        {
+          "t": 8.241400000000013,
+          "z": 0.03334856050469637,
+          "b": [
+            {
+              "left": -52,
+              "right": 923,
+              "top": -92,
+              "bottom": 937
+            },
+            {
+              "left": 17,
+              "right": 751,
+              "top": -51,
+              "bottom": 362
+            }
+          ],
+          "draws": 151,
+          "ms": 0.7573001214509553
+        },
+        {
+          "t": 14.241866666666663,
+          "z": -0.23021800835752707,
+          "b": [
+            {
+              "left": 133,
+              "right": 791,
+              "top": 145,
+              "bottom": 955
+            },
+            {
+              "left": -90,
+              "right": 594,
+              "top": -56,
+              "bottom": 555
+            }
+          ],
+          "draws": 160,
+          "ms": 0.6832253539385215
+        },
+        {
+          "t": 21.24243333333357,
+          "z": 0.06762852031702497,
+          "b": [
+            {
+              "left": 385,
+              "right": 1178,
+              "top": -18,
+              "bottom": 982
+            },
+            {
+              "left": 340,
+              "right": 1008,
+              "top": -49,
+              "bottom": 383
+            }
+          ],
+          "draws": 168,
+          "ms": 0.6686455625702811
+        },
+        {
+          "t": 27.242600000000504,
+          "z": 0.8477366218845794,
+          "b": [
+            {
+              "left": 311,
+              "right": 1706,
+              "top": -338,
+              "bottom": 1185
+            },
+            {
+              "left": 564,
+              "right": 1146,
+              "top": -36,
+              "bottom": 613
+            }
+          ],
+          "draws": 176,
+          "ms": 0.6371222521432364
+        },
+        {
+          "t": 31.25986666666733,
+          "z": 0.925713097946804,
+          "b": [
+            {
+              "left": 256,
+              "right": 2187,
+              "top": -360,
+              "bottom": 1112
+            },
+            {
+              "left": 477,
+              "right": 840,
+              "top": -1,
+              "bottom": 609
+            }
+          ],
+          "draws": 186,
+          "ms": 0.6446928313469112
+        },
+        {
+          "t": 36.235300000000464,
+          "z": 0.7589522854810384,
+          "b": [
+            {
+              "left": 526,
+              "right": 2048,
+              "top": -92,
+              "bottom": 1042
+            },
+            {
+              "left": 479,
+              "right": 1129,
+              "top": -18,
+              "bottom": 414
+            }
+          ],
+          "draws": 195,
+          "ms": 0.6588951468657728
+        },
+        {
+          "t": 42.2439666666668,
+          "z": -0.012564192591988908,
+          "b": [
+            {
+              "left": 784,
+              "right": 1667,
+              "top": 351,
+              "bottom": 907
+            },
+            {
+              "left": 512,
+              "right": 1170,
+              "top": 7,
+              "bottom": 475
+            }
+          ],
+          "draws": 203,
+          "ms": 0.6510772624328445
+        },
+        {
+          "t": 50.227799999999704,
+          "z": -0.014765697073413223,
+          "b": [
+            {
+              "left": 940,
+              "right": 1730,
+              "top": 131,
+              "bottom": 983
+            },
+            {
+              "left": 41,
+              "right": 651,
+              "top": -48,
+              "bottom": 464
+            }
+          ],
+          "draws": 212,
+          "ms": 0.6569794814882335
+        }
+      ],
+      "experience": {
+        "hash": "#experience",
+        "title": 179.890625
+      },
+      "scroll": {
+        "frames": 104,
+        "mean": 14.44,
+        "p50": 8.4,
+        "p95": 41.7,
+        "p99": 58.4,
+        "max": 83.5,
+        "over34": 7
+      },
+      "contact": {
+        "hash": "#contact",
+        "email": "mailto:Heryxx44@gmail.com",
+        "top": 426.375,
+        "overflow": 0
+      },
+      "pdf": {
+        "status": 200,
+        "signature": "%PDF-"
+      },
+      "cities": [
+        "Doha",
+        "Paris",
+        "Jakarta",
+        "Moscow",
+        "Singapore",
+        "Pau",
+        "Shanghai"
+      ],
+      "errors": []
+    }
+  }
+}

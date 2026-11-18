@@ -6,7 +6,7 @@ import { createDissolve, measureLetters } from './arrivalDissolve';
 import { HANDOFF, endHandoff, handoff, handoffRunning } from './journeyHandoff';
 import { creation, triggerCreationGesture } from './creationTimeline';
 import { charGlyph, isDecodable } from './terminalMotion';
-import { CV_PDF_URL } from './cvData';
+import { CV_DATA, CV_PDF_URL } from './cvData';
 import './journeyArrival.css';
 
 type Phase = 'choosing' | 'leaving' | 'gone';
@@ -216,18 +216,19 @@ export function JourneyArrival() {
     >
       <canvas ref={canvas} className="journey-field" aria-hidden="true" />
       <div ref={stage} className="journey-stage">
-        {/* The one exit that needs no journey */}
         <p ref={masthead} className="journey-masthead">
+          <span>International Business · ESSCA</span>
+          <a className="journey-masthead-cv" href={CV_DATA.emailHref}>Contact</a>
           <a className="journey-masthead-cv" href={CV_PDF_URL} target="_blank" rel="noopener noreferrer">
             CV <span aria-hidden="true">↗</span>
             <span className="journey-sr"> (PDF, opens in a new tab)</span>
           </a>
         </p>
         <h2 ref={title} id="journey-title" className="journey-title">
-          <span className="journey-title-line">Choose your</span>{' '}
-          <em className="journey-title-line journey-title-turn">journey.</em>
+          <span className="journey-title-line">Xavier</span>{' '}
+          <em className="journey-title-line journey-title-turn">Hery</em>
         </h2>
-        <p ref={dek} id="journey-dek" className="journey-dek">Three ways to discover the same profile.</p>
+        <p ref={dek} id="journey-dek" className="journey-dek">Choose a journey through my studies and work across borders.</p>
         <ol ref={list} className="journey-list" aria-label="Journeys" data-any-active={lit ? '' : undefined}>
           {JOURNEYS.map(journey => (
             <li key={journey.id} className="journey-item">

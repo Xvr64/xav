@@ -27,9 +27,9 @@ export const VIEWPORT_ZONES = {
  * edge; but a line near the end of the page may never scroll that high (`lowestTop` is its top
  * at maximum scroll), so its entry zone slides down to finish just before the page stops.
  */
-export function entryEndFor(lowestTop: number, viewport: number): number {
-  if (viewport <= 0) return VIEWPORT_ZONES.ENTRY_END;
-  return Math.max(VIEWPORT_ZONES.ENTRY_END, lowestTop / viewport + 0.03);
+export function entryEndFor(lowestTop: number, viewport: number, readingBottom: number = VIEWPORT_ZONES.ENTRY_END): number {
+  if (viewport <= 0) return readingBottom;
+  return Math.max(readingBottom, lowestTop / viewport + 0.03);
 }
 
 /**

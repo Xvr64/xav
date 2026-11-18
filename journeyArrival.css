@@ -97,6 +97,7 @@ html[data-arrival='open'] { overflow: hidden !important; }
   text-decoration-color: rgba(232, 240, 244, 0.35);
   transition: text-decoration-color 160ms;
 }
+.journey-masthead > :first-child { margin-right: auto; }
 .journey-masthead-cv:hover { text-decoration-color: currentColor; }
 .journey-masthead-cv:focus-visible { outline: 1px solid currentColor; outline-offset: 5px; }
 .journey-sr {
@@ -313,7 +314,7 @@ html[data-arrival='open'] { overflow: hidden !important; }
 .journey[data-recommended] .journey-rule-rest { opacity: 0; }
 
 /* The woken journey */
-.journey-list[data-any-active] .journey:not([data-active]) { opacity: 0.62; }
+.journey-list[data-any-active] .journey:not([data-active]) { opacity: 0.83; }
 .journey[data-active] .journey-name { color: #ffffff; transform: translateX(10px); }
 .journey[data-active] .journey-line { color: var(--arrival-ink-2); transform: translateX(10px); }
 .journey[data-active] .journey-index { color: var(--arrival-sea); }

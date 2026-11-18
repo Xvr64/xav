@@ -4,9 +4,7 @@ import { publishFixedCopy } from './oceanDirection';
 
 /**
  * The page's fixed corner: sound on/off and the CV link, persistent across the whole portfolio.
- * Nothing else lives up there. Copy scrolling up to the top of the screen has already scrambled
- * out by the time it reaches the corner (the decode's exit band, terminalMotion.ts), so the
- * controls never sit over readable text.
+ * The contact shortcut jumps directly to the correspondence details.
  *
  * The controls are copy like any other: each publishes its box so the whales thin behind it
  * (the reading veil of whaleVeil.ts). Measured on layout changes only.
@@ -38,6 +36,7 @@ export const SectionIndex: React.FC<{ cvUrl: string }> = ({ cvUrl }) => {
   return (
     <aside ref={root} className="fixed-top-controls" aria-label="Site actions">
       <DecodeSoundToggle />
+      <a className="fixed-cv-link meta" href="#contact">Contact</a>
       <a
         href={cvUrl}
         target="_blank"

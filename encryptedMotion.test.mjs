@@ -5,10 +5,13 @@ import { advanceEncryptedLine, encryptedEntryProgress, encryptedCharacterState, 
 const hidden = () => ({ revealState: 'hidden', currentP: 0 });
 
 test('each line follows its own entrance position with a spatial cascade', () => {
+  assert.equal(encryptedEntryProgress(950, 1000), 0);
+  assert.ok(Math.abs(encryptedEntryProgress(785, 1000) - 0.5) < 1e-9);
+  assert.equal(encryptedEntryProgress(620, 1000), 1);
   const progress = [850, 875, 900].map(top => encryptedEntryProgress(top, 1000));
   assert.ok(progress[0] > progress[1] && progress[1] > progress[2]);
   let state = hidden();
-  for (let top = 1000; top >= 830; top -= 2) {
+  for (let top = 1000; top >= 610; top -= 2) {
     const previous = state;
     const zone = encryptedEntryProgress(top, 1000);
     state = advanceEncryptedLine(state, zone, 2);
@@ -19,7 +22,7 @@ test('each line follows its own entrance position with a spatial cascade', () =>
 });
 
 test('fast scrolling and skipped viewports resolve immediately with no timer backlog', () => {
-  for (const top of [600, 0, -2000]) {
+  for (const top of [550, 0, -2000]) {
     assert.deepEqual(advanceEncryptedLine(hidden(), encryptedEntryProgress(top, 900), 5000),
       { revealState: 'revealed', currentP: 1 });
   }
@@ -51,6 +54,12 @@ test('reduced motion settles even future lines and never rearms them', () => {
 test('bottom-of-page lines and zero-height viewports are readable', () => {
   assert.equal(encryptedEntryProgress(970, 1000, 1), 1);
   assert.equal(encryptedEntryProgress(0, 0), 1);
+});
+
+test('adjusted bottom-of-page entrances do not animate below the viewport', () => {
+  for (const top of [1000, 1050, 1200]) assert.equal(encryptedEntryProgress(top, 1000, 0.9), 0);
+  assert.ok(encryptedEntryProgress(990, 1000, 0.9) > 0);
+  assert.equal(encryptedEntryProgress(890, 1000, 0.9), 1);
 });
 
 test('locked characters stay correct; suffix glyphs are deterministic and scroll-driven', () => {

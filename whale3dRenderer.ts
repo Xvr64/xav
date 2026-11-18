@@ -2,16 +2,13 @@
  * The 3D whales drawn as ASCII, in three GPU passes:
  *
  *   1. Geometry — the articulated whales (whale3dAnatomy.ts), skinned in the vertex shader from a
- *      shared float texture of spine frames (whale3dPose.ts), are rendered into two render targets
- *      (MRT): ink (pigment × light, darker toward the silhouette), linear depth and view normal in
- *      the first; the mouth and eye masks, a far-whale tone and coverage in the second.
+ *      shared float texture of spine frames (whale3dPose.ts), are rendered to three attachments:
+ *      ink, depth and normal; mouth, eye, body axis and coverage; and anatomical surface marks.
  *   2. Cells — one fragment per character cell samples its patch of that G-buffer. "Luminance"
  *      maps mean ink to a density ramp of glyphs measured from the font. "Shape" engraves: the
  *      silhouette closes wherever a cell is partly covered (oriented by the coverage gradient),
- *      a structure tensor of depth, normals and the mouth mask draws inner contours, and the body
- *      takes an engraver's tone scale — stipple in the light, lines along the body spaced by
- *      tone, cross-hatching across them in shadow — with the throat grooves, the tubercles of
- *      the rostrum and the eye from a third target of surface marks.
+ *      a structure tensor of depth and normals draws inner contours. Font-measured glyph density
+ *      models the flank, with separate marks for the throat grooves, jaw, tubercles and eye.
  *   3. Composite — each screen pixel looks up its cell's glyph in an atlas drawn at the exact
  *      device cell size and writes premultiplied ink: no halos, no rectangle around the whales.
  *
@@ -69,10 +66,10 @@ export interface WhaleState {
 export const WHALE_LOOK = {
   ink: [24, 60, 89] as [number, number, number],
   inkFar: [44, 84, 116] as [number, number, number],
-  contrast: 1.45,
-  farFade: 0.12,
-  gamma: 1.3,
-  tone: 0.18
+  contrast: 1.28,
+  farFade: 0.32,
+  gamma: 1.08,
+  tone: 0.08
 };
 
 export const DEFAULT_STYLE: AsciiStyle = {
@@ -92,8 +89,8 @@ export const DEFAULT_STYLE: AsciiStyle = {
 
 // ---- Glyph atlas -----------------------------------------------------------------------------
 
-export const ATLAS_CHARS = [' ', '.', '·', ':', '-', '=', '+', '*', 'x', '#', '%', '@', '_', '/', '\\', '|', '(', ')', 'o', '~', ',', "'", '`', ';', '"', '^', '°', '•'];
-const RAMP_CANDIDATES = ['.', '·', ':', ';', '+', '*', 'x', '#'];
+export const ATLAS_CHARS = [' ', '.', ':', '-', '=', '+', '*', 'x', '#', '%', '@', '_', '/', '\\', '|', '(', ')', 'o', '~', ',', "'", '`', ';', '"', '^'];
+const RAMP_CANDIDATES = ['.', "'", ':', ';', '+', '*', 'x', '#', '%', '@'];
 export const glyphIndex = (ch: string) => ATLAS_CHARS.indexOf(ch);
 const ATLAS_COLS = 8;
 
@@ -167,6 +164,10 @@ void skinWhale(float spine, vec3 offset, vec3 nrm, float part, int row, out vec3
     bool left = part < 1.5;
     vec4 fq = skinTexel(left ? 0 : 1, row + 2);
     vec3 pv = left ? uPivotL : uPivotR;
+    float flex = skinTexel(3, row + 2).z;
+    float span = off.x / 0.33;
+    off.y += flex * span * span;
+    nn.x -= nn.y * 2.0 * flex * span / 0.33;
     off = vec3(pv.xy, pv.z - sz) + qrot(fq, off);
     nn = qrot(fq, nn);
   } else if (part > 2.5 && part < 3.5) {
@@ -252,7 +253,7 @@ void main() {
   // wet sheen, the flank turns through a core shadow below it, and the countershading keeps the
   // throat and belly pale beneath that shadow
   float shade = 1.0 - clamp(lambert, 0.0, 1.0);
-  float core = smoothstep(0.0, -0.5, lambert);
+  float core = 1.0 - smoothstep(-0.5, 0.15, lambert);
   float sheen = pow(max(dot(n, normalize(uLight + vec3(0.0, 0.0, 1.0))), 0.0), 14.0);
   float ink = pigment * (0.4 + 0.52 * pow(shade, 1.3)) + 0.24 * core * (1.0 - 0.4 * pigment) + 0.3 * rim * rim * rim - 0.2 * sheen * pigment;
   ink = smoothstep(0.04, 0.97, ink);
@@ -309,8 +310,7 @@ uniform float uGamma;
 uniform float uTone;
 uniform vec4 uEdgeA;   // indices: '-', '_', '/', '\'
 uniform vec4 uEdgeB;    // indices: '|', '(', ')', 'o'
-uniform vec4 uMarkG;    // indices: '=', '°', '•', ':'
-uniform vec4 uToneG;    // indices: '·', '+', 'x', '#'
+uniform float uEyeGlyph;
 uniform sampler2D uMarks;
 out vec4 outCell;
 
@@ -347,8 +347,8 @@ void main() {
     }
   }
   if (probe <= 0.0) { outCell = vec4(0.0); return; }
-  const int SX = 4;
-  const int SY = 5;
+  const int SX = 3;
+  const int SY = 4;
   float covSum = 0.0, inkSum = 0.0, depthSum = 0.0, eyeSum = 0.0, mouthSum = 0.0;
   float pleatSum = 0.0, grooveSum = 0.0, knobSum = 0.0, appSum = 0.0;
   float jxx = 0.0, jyy = 0.0, jxy = 0.0, silE = 0.0, inE = 0.0;
@@ -408,7 +408,6 @@ void main() {
   float ink = covSum > 0.0 ? inkSum / covSum : 0.0;
   float depth = covSum > 0.0 ? depthSum / covSum : 0.0;
   bool lum = uShape < 0.5 || (cellIx.x * uCell.x) / uCanvas.x < uSplit;
-  float d = bayer4(cellIx);
 
   float glyph = 0.0;
   float alpha = 0.0;
@@ -448,9 +447,8 @@ void main() {
     bool along = axisLen > 0.55;
     // The jaw line runs with the head; its crease mask is too thin to orient itself reliably
     if (mouthLine && !silhouette && along) lineA = axisA;
-    bool level = axisA < 0.42 || axisA > 2.72;
     if (eye > 0.14 && coverage > 0.4) {
-      glyph = uMarkG.z;
+      glyph = uEyeGlyph;
       alpha = 1.0;
     } else if (silhouette || contour || mouthLine) {
       vec2 cen = covSum > 0.0 ? covCentroid / covSum : vec2(0.5);
@@ -472,53 +470,16 @@ void main() {
       alpha = 0.95;
     } else if (pleat > 0.45 && coverage > 0.5) {
       // Throat grooves engraved along the body: doubled lines where they run level
-      glyph = along ? (level ? (groove > 0.3 ? uMarkG.x : uEdgeA.x) : strokeGlyph(axisA)) : uMarkG.w;
-      alpha = 0.55 + 0.4 * max(v, groove);
+      glyph = groove > 0.56 && along ? strokeGlyph(axisA) : rampGlyph(v * 0.74, cellIx);
+      alpha = 0.38 + 0.52 * max(v, groove);
       cls = 0.4;
     } else if (coverage > 0.3) {
-      // The body's mass as an engraver's tone scale: stipple in the light, hatching that runs
-      // along the body through the mid tones, crosshatch in the shadow. No cell inside the body
-      // is left empty except in the brightest light, so the form keeps its weight.
-      float t = clamp(v * (app > 0.5 ? 0.8 : 1.0) + uTone * (app > 0.5 ? 0.5 : 1.0), 0.0, 1.0);
-      float q = clamp(t * 6.0 + (d - 0.5) * 0.9, 0.0, 6.0);
-      // Foreshortened (head- or tail-on) the body has no stroke direction to hatch along: carry
-      // its tone a step lighter in stipple, so the form stays modelled instead of setting as a block
-      if (!along) q = max(0.0, q - 1.1);
-      int L = int(floor(q + 0.5));
-      cls = 0.2 + 0.1 * float(L);
-      // Engraved lines are spaced across the stroke direction: every other line in the light
-      // tones, every line in the mid tones (the spacing, not the glyph, carries the tone)
-      float sa = sin(axisA), ca = cos(axisA);
-      float perp = -(cellIx.x + 0.5) * uCell.x * sa - (cellIx.y + 0.5) * uCell.y * ca;
-      float pitch = uCell.x * abs(sa) + uCell.y * abs(ca);
-      bool onLine = mod(floor(perp / pitch), 2.0) < 0.5;
-      if (L == 0) {
-        if (d < 0.4) { glyph = uToneG.x; alpha = 0.45; }
-      } else if (L == 1) {
-        if (along && onLine) { glyph = strokeGlyph(axisA); alpha = 0.5; }
-        else if (d < 0.5) { glyph = uToneG.x; alpha = 0.55; }
-      } else if (L == 2) {
-        if (!along) { glyph = uMarkG.w; alpha = 0.7; }
-        else if (onLine) { glyph = strokeGlyph(axisA); alpha = 0.72; }
-        else if (d < 0.35) { glyph = uToneG.x; alpha = 0.55; }
-      } else if (L == 3) {
-        // Lines on every row; the in-between rows only partly, so the tone still breathes
-        if (!along) { glyph = uToneG.y; alpha = 0.8; }
-        else if (onLine || d < 0.55) { glyph = level ? (onLine ? uMarkG.x : uEdgeA.x) : strokeGlyph(axisA); alpha = 0.8; }
-        else { glyph = uToneG.x; alpha = 0.6; }
-      } else if (L == 4) {
-        // Cross-hatching: strokes along the body, and between them doubled lines (level) or
-        // crossings, so the deeper tone reads as denser engraving, never as a picket of bars
-        glyph = !along ? uToneG.y : (onLine ? strokeGlyph(axisA) : (level ? uMarkG.x : uToneG.y));
-        alpha = 0.88;
-      } else if (L == 5) {
-        glyph = d < 0.5 ? uToneG.z : (along ? strokeGlyph(axisA) : uToneG.y);
-        alpha = 0.94;
-      } else {
-        // The deepest core shadow only: dense, but dithered so it never sets as a flat block
-        glyph = d < 0.6 ? uToneG.w : uToneG.z;
-        alpha = 1.0;
-      }
+      // Continuous density describes the turning flank. Reserve directional cuts for
+      // the outline and pleats so a level animal never becomes horizontal stripes.
+      float t = clamp(v * (app > 0.5 ? 0.82 : 1.0) + uTone, 0.0, 1.0);
+      glyph = rampGlyph(t, cellIx);
+      alpha = mix(0.36, 1.0, smoothstep(0.0, 0.8, t));
+      cls = 0.2 + 0.6 * t;
     }
   }
   // B: tone toward the far ink with depth (the farther of two whales recedes)
@@ -744,8 +705,7 @@ export class WhaleAsciiRenderer {
         uTone: { value: 0 },
         uEdgeA: { value: new THREE.Vector4(glyphIndex('-'), glyphIndex('_'), glyphIndex('/'), glyphIndex('\\')) },
         uEdgeB: { value: new THREE.Vector4(glyphIndex('|'), glyphIndex('('), glyphIndex(')'), glyphIndex('o')) },
-        uMarkG: { value: new THREE.Vector4(glyphIndex('='), glyphIndex('°'), glyphIndex('•'), glyphIndex(':')) },
-        uToneG: { value: new THREE.Vector4(glyphIndex('·'), glyphIndex('+'), glyphIndex('x'), glyphIndex('#')) },
+        uEyeGlyph: { value: glyphIndex('@') },
         uMarks: { value: null }
       }
     });

@@ -16,21 +16,26 @@
       ]
     },
     "slow": {
-      "partial": 661,
+      "partial": 1672,
       "cascade": true,
       "failures": [],
       "scrollStepTimes": {
-        "frames": 74,
-        "mean": 33.66,
-        "p50": 31,
-        "p95": 69,
-        "p99": 96.8,
-        "max": 96.8,
-        "over34": 24
+        "frames": 87,
+        "mean": 30.44,
+        "p50": 27.3,
+        "p95": 61.3,
+        "p99": 81.8,
+        "max": 81.8,
+        "over34": 21
       }
     },
     "idle": {
-      "partialWords": 11,
+      "partialWords": 52,
+      "mutations": 0
+    },
+    "partialReverse": {
+      "words": 52,
+      "settled": true,
       "mutations": 0
     },
     "input": {
@@ -80,12 +85,12 @@
       "unresolved": 0
     },
     "controllerMs": {
-      "frames": 275,
-      "mean": 0.6,
+      "frames": 441,
+      "mean": 0.52,
       "p50": 0.4,
-      "p95": 1.9,
-      "p99": 2.6,
-      "max": 3.5,
+      "p95": 1.5,
+      "p99": 2.3,
+      "max": 3.6,
       "over34": 0
     },
     "errors": [],
@@ -108,21 +113,26 @@
       ]
     },
     "slow": {
-      "partial": 657,
+      "partial": 1611,
       "cascade": true,
       "failures": [],
       "scrollStepTimes": {
-        "frames": 74,
-        "mean": 25.25,
-        "p50": 22.7,
-        "p95": 57.1,
-        "p99": 79.8,
-        "max": 79.8,
-        "over34": 6
+        "frames": 87,
+        "mean": 24.2,
+        "p50": 20.5,
+        "p95": 55,
+        "p99": 64.4,
+        "max": 64.4,
+        "over34": 9
       }
     },
     "idle": {
-      "partialWords": 9,
+      "partialWords": 41,
+      "mutations": 0
+    },
+    "partialReverse": {
+      "words": 41,
+      "settled": true,
       "mutations": 0
     },
     "input": {
@@ -171,11 +181,11 @@
       "unresolved": 0
     },
     "controllerMs": {
-      "frames": 276,
+      "frames": 442,
       "mean": 0.47,
       "p50": 0.4,
-      "p95": 1.4,
-      "p99": 2.4,
+      "p95": 1.1,
+      "p99": 1.8,
       "max": 2.8,
       "over34": 0
     },
@@ -199,21 +209,26 @@
       ]
     },
     "slow": {
-      "partial": 632,
+      "partial": 1474,
       "cascade": true,
       "failures": [],
       "scrollStepTimes": {
-        "frames": 74,
-        "mean": 22.27,
-        "p50": 19.9,
-        "p95": 52.7,
-        "p99": 68,
-        "max": 68,
-        "over34": 5
+        "frames": 87,
+        "mean": 22.32,
+        "p50": 19,
+        "p95": 46.5,
+        "p99": 74.4,
+        "max": 74.4,
+        "over34": 7
       }
     },
     "idle": {
-      "partialWords": 6,
+      "partialWords": 34,
+      "mutations": 0
+    },
+    "partialReverse": {
+      "words": 34,
+      "settled": true,
       "mutations": 0
     },
     "input": {
@@ -262,12 +277,12 @@
       "unresolved": 0
     },
     "controllerMs": {
-      "frames": 279,
-      "mean": 0.45,
+      "frames": 445,
+      "mean": 0.47,
       "p50": 0.4,
       "p95": 1.2,
-      "p99": 2.2,
-      "max": 3.4,
+      "p99": 1.8,
+      "max": 3.3,
       "over34": 0
     },
     "errors": [],

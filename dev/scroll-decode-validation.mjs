@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-process.env.PHASE2_OUT = 'artifacts/scroll-decode';
+import { ENCRYPTED_ENTRY_START, ENCRYPTED_ENTRY_END } from '../encryptedMotion.ts';
+process.env.PHASE2_OUT ||= 'artifacts/scroll-decode';
 const { server, browser, png, save, stats, stopServers } = await import('./phase2-lib.mjs');
 const { sleep } = await import('./fable-cdp.mjs');
 const report = [];
@@ -17,6 +18,8 @@ const instrument = `(() => {
   };
 })()`;
 const setup = `(() => {
+  window.revealEnd = ${ENCRYPTED_ENTRY_END};
+  window.revealLength = ${ENCRYPTED_ENTRY_START - ENCRYPTED_ENTRY_END};
   window.cvWords = () => [...document.querySelectorAll('[data-editorial-section] .ascii-word')]
     .filter(w => !w.closest('[data-ascii-preserve]') && w.getClientRects().length);
   window.isReadable = w => {
@@ -25,7 +28,7 @@ const setup = `(() => {
   };
   window.readingFailures = () => cvWords().filter(w => {
     const r = w.getBoundingClientRect();
-    return r.top >= 0 && r.top < innerHeight * .82 && !isReadable(w);
+    return r.top >= 0 && r.top < innerHeight * (revealEnd - .02) && !isReadable(w);
   }).map(w => w.querySelector('.ascii-source').textContent);
   window.frames = [];
   if(window.decodeTimes)decodeTimes.length=0;
@@ -67,7 +70,7 @@ try {
         await moveTo(target-innerHeight*.98);
         let partial=0,cascade=false,last=0;
         const durations=[];
-        for(let y=target-innerHeight*.98;y<=target-innerHeight*.65;y+=4){
+        for(let y=target-innerHeight*.98;y<=target-innerHeight*(revealEnd-.03);y+=4){
           await moveTo(y);
           const now=performance.now();if(last)durations.push(now-last);last=now;
           if(readingFailures().length) throw Error('unreadable reading zone');
@@ -100,6 +103,17 @@ try {
         return {partialWords:partial.length,mutations};
       })()`);
       assert.equal(row.idle.mutations,0,'paused decoding has no timer or glyph churn');
+      row.partialReverse = await c.evaluate(`(async()=>{
+        const partial=cvWords().filter(w=>w.querySelector('.ascii-cell'));
+        await moveTo(scrollY-6);
+        const settled=partial.every(isReadable);
+        partial.forEach(w=>watchWords.add(w));completedMutations=0;
+        await moveTo(scrollY-40);await moveTo(scrollY+55);
+        const mutations=completedMutations;watchWords.clear();
+        return {words:partial.length,settled,mutations};
+      })()`);
+      assert.ok(row.partialReverse.words>0 && row.partialReverse.settled,'reverse settles interrupted entrances');
+      assert.equal(row.partialReverse.mutations,0,'interrupted lines never replay');
       row.input = {};
       const before = await c.evaluate('scrollY');
       if(width<768) {
@@ -121,7 +135,7 @@ try {
           if(section.id==='home'||section.id==='introduction')continue;
           const word=section.querySelector('.ascii-word');if(!word)continue;
           const top=word.getBoundingClientRect().top+scrollY;
-          const start=top-innerHeight*.96,end=top-innerHeight*.80;
+          const start=top-innerHeight*.96,end=top-innerHeight*(revealEnd-.04);
           await moveTo(start);
           let partial=false;
           for(let y=start;y<end;y+=8){await moveTo(y);partial ||= !!word.querySelector('.ascii-cell');}
@@ -174,8 +188,8 @@ try {
         const positions=new Set();
         for(const w of all){
           const top=w.getBoundingClientRect().top+scrollY;
-          const end=Math.max(.84,(top-max)/innerHeight+.03);
-          for(const p of [.3,.65,1]) positions.add(Math.max(0,Math.min(max,Math.ceil(top-innerHeight*(end+.11*(1-p))))));
+          const end=Math.max(revealEnd,(top-max)/innerHeight+.03);
+          for(const p of [.3,.65,1]) positions.add(Math.max(0,Math.min(max,Math.ceil(top-innerHeight*(end+revealLength*(1-p))))));
         }
         for(const y of [...positions].sort((a,b)=>a-b)){
           await moveTo(y);

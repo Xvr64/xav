@@ -1,14 +1,21 @@
 /** One-way scroll decoding. Completed lines are an absorbing state for this visit. */
 export const ENCRYPTED_CHARSET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()_+-={}[];:,.<>/?';
+export const ENCRYPTED_ENTRY_START = 0.95;
+export const ENCRYPTED_ENTRY_END = 0.62;
 export type EncryptedLineState = {
   revealState: 'hidden' | 'revealing' | 'revealed';
   currentP: number;
 };
 
 /** The entrance band follows each rendered line, including lines at the page's bottom. */
-export function encryptedEntryProgress(top: number, viewport: number, entryEnd = 0.84): number {
+export function encryptedEntryProgress(top: number, viewport: number, entryEnd = ENCRYPTED_ENTRY_END): number {
   if (viewport <= 0) return 1;
-  return Math.max(0, Math.min(1, (entryEnd + 0.11 - top / viewport) / 0.11));
+  // Adjusted bottom-of-page bands can extend below the viewport. Do no character
+  // work there; a fast jump still resolves the line as soon as it passes into view.
+  if (top >= viewport) return 0;
+  if (top / viewport <= entryEnd) return 1;
+  const length = ENCRYPTED_ENTRY_START - ENCRYPTED_ENTRY_END;
+  return Math.max(0, Math.min(1, (entryEnd + length - top / viewport) / length));
 }
 
 export function advanceEncryptedLine(
@@ -30,9 +37,9 @@ export function advanceEncryptedLine(
 }
 
 /** -1 is a locked real character; the unresolved suffix changes only with scroll progress. */
-export function encryptedCharacterState(progress: number, index: number, count: number, seed: number): number {
+export function encryptedCharacterState(progress: number, index: number, count: number, seed: number, ticks = 32): number {
   if (index < Math.floor(progress * count + 1e-9) || progress >= 1) return -1;
-  const tick = Math.floor(progress * 32);
+  const tick = Math.floor(progress * ticks);
   const hash = Math.imul(seed + index + 1, 2654435761) >>> 0;
   return (hash + tick * 17) % ENCRYPTED_CHARSET.length;
 }

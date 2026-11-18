@@ -251,16 +251,18 @@ function rawPath(i: number, t: number, c: AmbientComposition): V3 {
     // its ends carry the whale toward and away from the camera; a deep dive now and then
     const a = (t * TAU) / 70 + 0.55;
     const dive = deepDiveAt(t);
-    x = cx + ax * Math.sin(a) + 0.04 * Math.sin(t * 0.021);
+    x = cx - ax * Math.sin(a) - 0.04 * Math.sin(t * 0.021);
     y = cy + 0.22 * cam.halfH * Math.sin(a * 0.61 + 0.4) - 0.5 * dive;
-    z = -0.05 + 0.4 * Math.cos(a) - 0.3 * dive;
+    // Every second circuit the broadside leg passes nearer the lens. The depth
+    // excursion belongs to the path, so steering leads the body into and out of it.
+    const approach = windowAt(mod(t, 140), 14, 31, 15);
+    z = -0.05 + 0.4 * Math.cos(a) - 0.3 * dive + 1.34 * approach;
   } else {
-    // B: quicker and more exploratory, its loop folded by secondary curves; near enough to share
-    // the foreground with A
-    const a = (t * TAU) / 50 + 3.1;
+    // B explores the farther plane, its entire silhouette framing the larger animal.
+    const a = (t * TAU) / 43 + 3.1;
     x = cx + 0.85 * ax * Math.sin(a) + 0.18 * Math.sin(a * 2.2 + 0.7);
-    y = cy + 0.34 * cam.halfH * Math.sin(a * 0.73 + 1.7) + 0.06 * Math.sin(a * 2.9);
-    z = -0.45 + 0.32 * Math.cos(a) + 0.12 * Math.sin(a * 1.6 + 0.3);
+    y = cy + 0.34 * cam.halfH * Math.sin(a * 0.73 - 0.9) + 0.06 * Math.sin(a * 2.9);
+    z = -1.12 + 0.32 * Math.cos(a) + 0.12 * Math.sin(a * 1.6 + 0.3);
   }
   // Stay beneath the composed surface (a smooth minimum: no hard stop)
   if (Number.isFinite(c.surfaceY)) {
@@ -579,7 +581,8 @@ export function stepTravel(st: TravelState, target: number, dt: number, seconds:
     // cropped. This is the camera panning, slowly, so it never swings the heading; the offset
     // drifts home to the composed path whenever the frame allows
     const home = -clamp(st.side[i] * 0.2, -0.035, 0.035);
-    const side = softFrame(vx + home + apart[0] * yieldTo, (x0 + x1) / 2, frameRange(x1 - x0, -1, 1, SIDE_CROP), unitX) - vx;
+    const cropX = i === 0 ? SIDE_CROP : 0.12;
+    const side = softFrame(vx + home + apart[0] * yieldTo, (x0 + x1) / 2, frameRange(x1 - x0, -1, 1, cropX), unitX) - vx;
     st.sideV[i] += (side - st.sideV[i]) * (1 - Math.exp(-dt / 0.3));
     st.side[i] += st.sideV[i] * dt;
     // Depth: the one behind slips further back to pass (neither is drawn toward the camera), and

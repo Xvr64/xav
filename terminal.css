@@ -252,6 +252,35 @@ body {
    --------------------------------------------------------------------------- */
 .hero-runway { position: relative; }
 .hero-stage { position: sticky; top: 0; height: 100svh; }
+.cover-imprint, .cover-foot {
+  position: absolute;
+  left: 0;
+  color: var(--ink-primary);
+}
+.cover-imprint { top: clamp(21px, 3.6vh, 40px); }
+.cover-signature {
+  margin: 0;
+  font: 400 clamp(24px, 2.2vw, 35px)/1 var(--font-display);
+  letter-spacing: -0.035em;
+}
+.cover-specialty, .cover-foot {
+  font: 400 var(--text-meta)/1.5 var(--font-mono);
+}
+.cover-specialty { margin: 10px 0 0; color: var(--ink-secondary); }
+.cover-foot {
+  top: calc(100svh - clamp(62px, 8vh, 84px));
+  right: 0;
+  border-top: 1px solid var(--rule-20);
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 24px;
+  padding-top: 10px;
+}
+.cover-foot p { margin: 0; }
+.cover-foot p span { padding: 0 0.6em; opacity: 0.55; }
+.cover-foot a { padding-block: 4px; white-space: nowrap; }
+.cover-foot a span { margin-left: 0.45em; }
 @media (prefers-reduced-motion: no-preference) {
   .hero-runway { height: 300svh; }
   /* The name resolved on the cover carries the page's heading visually */
@@ -270,7 +299,7 @@ body {
   inset: 0;
   align-content: start;
   /* Puts the first line's baseline a little above the middle: the surface sits at ~55% */
-  padding-top: calc(55svh - 0.86 * var(--text-cover));
+  padding-top: calc(53svh - 0.86 * var(--text-cover));
 }
 .hero-letter { display: inline; }
 .minimal-hero .cover-title {
@@ -287,7 +316,7 @@ body {
 .minimal-hero .cover-line:first-child { margin-left: -0.045em; }
 /* "horizons": italic, in the water's own ink, on the drift column */
 .minimal-hero .cover-line--drift {
-  grid-column: 5 / span 8;
+  grid-column: 3 / span 10;
   font-style: italic;
   font-weight: var(--display-weight, 300);
   margin-top: 0.1em;
@@ -684,13 +713,18 @@ body {
    --------------------------------------------------------------------------- */
 @media (max-width: 767px) {
   :root { --section-gap: 112px; }
+  .cover-specialty { font-size: 11px; }
+  .cover-foot { font-size: 12px; align-items: center; gap: 16px; }
+  .cover-foot p { max-width: 23ch; }
+  .cover-foot p span { display: none; }
+  .cover-foot p { text-wrap: balance; }
   .ed-grid { grid-template-columns: minmax(0, 1fr); }
   .ed-grid > *,
   .minimal-hero .cover-title > * { grid-column: 1 / -1 !important; grid-row: auto !important; }
   .minimal-hero .cover-title { grid-template-columns: minmax(0, 1fr); }
   :root { --text-name: 27vw; --text-statement: 25px; }
   .minimal-hero { padding-top: calc(50svh - 1.88 * var(--text-cover)); }
-  .minimal-hero .cover-line--drift { padding-left: 1.1em; }
+  .minimal-hero .cover-line--drift { padding-left: 0.68em; }
   .hero-name { padding-top: 17svh; }
   .hero-name, .intro-name { grid-template-columns: minmax(0, 1fr); }
   .hero-name > *, .intro-name > * { grid-column: 1 / -1 !important; }
@@ -745,6 +779,8 @@ body {
   text-align: center;
   white-space: pre;
 }
+.ascii-cell.unresolved { transform: translateY(var(--decode-lift, 0)); opacity: 0.76; }
+.meta .ascii-cell.unresolved { opacity: 0.48; }
 .ascii-pressure::after {
   content: '~';
   position: absolute;
@@ -772,6 +808,11 @@ body {
   gap: clamp(24px, 2.5vw, 36px);
   pointer-events: auto;
   text-shadow: 0 0 2px var(--abyss-halo), 0 0 9px var(--abyss-halo);
+}
+@media (max-width: 767px) {
+  .fixed-top-controls { gap: 14px; }
+  .fixed-top-controls .decode-sound-toggle { font-size: 0; gap: 0; width: 26px; justify-content: center; }
+  .fixed-top-controls .decode-sound-state { display: none; }
 }
 
 .decode-sound-toggle {
@@ -822,6 +863,7 @@ body {
 
 @media print {
   .fixed-top-controls { display: none !important; }
+  .cover-foot, .cover-imprint { display: none; }
 }
 
 /* ---------------------------------------------------------------------------

@@ -305,9 +305,11 @@ export const flukeQuat = (a: Articulation): Quat => qAxisAngle(X_AXIS, a.fluke);
 
 /** Per-whale skinning inputs packed for the GPU: 3 texture rows of SPINE_NODES RGBA texels. */
 export const SKIN_ROWS = 3;
+/** The long pectoral tip trails the lift of the shoulder. Its root stays attached. */
+const flipperFlex = (a: Articulation) => -0.038 * a.amplitude * Math.cos(a.stroke + 0.9);
 /**
  * Pack a pose into rows [positions, quaternions, extras] at `row`: the extras row holds the left
- * and right flipper quaternions, the fluke quaternion, then (flukeFlex, dissolve, 0, 0).
+ * and right flipper quaternions, the fluke quaternion, then (flukeFlex, dissolve, flipperFlex, 0).
  */
 export function packSkin(a: Articulation, data: Float32Array, row: number, dissolve = 0) {
   const w = SPINE_NODES * 4;
@@ -319,7 +321,7 @@ export function packSkin(a: Articulation, data: Float32Array, row: number, disso
   e.set(flipperQuat(a.flipperL, true), 0);
   e.set(flipperQuat(a.flipperR, false), 4);
   e.set(flukeQuat(a), 8);
-  e.set([a.flukeFlex, dissolve, 0, 0], 12);
+  e.set([a.flukeFlex, dissolve, flipperFlex(a), 0], 12);
 }
 
 // ---- CPU skinning (mirrors the shader; used for tests, bounds and sampling) -------------------
@@ -329,6 +331,7 @@ export interface SkinnedFrames {
   q: Float32Array;
   flipL: Quat;
   flipR: Quat;
+  flipperFlex: number;
   fluke: Quat;
   flukeFlex: number;
 }
@@ -337,7 +340,7 @@ export function skinFrames(a: Articulation): SkinnedFrames {
   const p = new Float32Array(SPINE_NODES * 4);
   const q = new Float32Array(SPINE_NODES * 4);
   spineFrames(a, p, q);
-  return { p, q, flipL: flipperQuat(a.flipperL, true), flipR: flipperQuat(a.flipperR, false), fluke: flukeQuat(a), flukeFlex: a.flukeFlex };
+  return { p, q, flipL: flipperQuat(a.flipperL, true), flipR: flipperQuat(a.flipperR, false), flipperFlex: flipperFlex(a), fluke: flukeQuat(a), flukeFlex: a.flukeFlex };
 }
 
 /** Whale-local position of one vertex under a pose (same maths as the vertex shader). */
@@ -357,6 +360,7 @@ export function skinVertex(f: SkinnedFrames, g: WhaleGeometry, v: number): V3 {
   const sz = g.spine[v] / (SPINE_NODES - 1) - 0.5;
   if (part === PART_FLIPPER_L || part === PART_FLIPPER_R) {
     const pv = part === PART_FLIPPER_L ? g.pivots.flipperL : g.pivots.flipperR;
+    off[1] += f.flipperFlex * (off[0] / 0.33) ** 2;
     off = vAdd([pv[0], pv[1], pv[2] - sz], qRotate(part === PART_FLIPPER_L ? f.flipL : f.flipR, off));
   } else if (part === PART_FLUKE) {
     const pv = g.pivots.fluke;

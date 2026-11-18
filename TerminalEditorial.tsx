@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { Volume2, VolumeX } from 'lucide-react';
 import { entryEndFor } from './terminalMotion';
-import { advanceEncryptedLine, encryptedEntryProgress, encryptedCharacterState, ENCRYPTED_CHARSET, type EncryptedLineState } from './encryptedMotion';
+import { advanceEncryptedLine, encryptedEntryProgress, encryptedCharacterState, ENCRYPTED_CHARSET, ENCRYPTED_ENTRY_END, type EncryptedLineState } from './encryptedMotion';
 import { creation, HERO_TEXT_AT } from './creationTimeline';
+import { oceanWake } from './oceanWake';
+import { textPressureAt } from './whaleTextPressure';
 import { EncryptedText } from './components/ui/encrypted-text';
 import {
   disableDecodeSound, disposeDecodeSound, enableDecodeSound, noteDecodeActivity,
@@ -24,6 +26,7 @@ type Word = {
   original: string;
   chars: string[];
   left: number;
+  centerX: number;
   offset: number;
   seed: number;
   progress: number;
@@ -35,6 +38,7 @@ type Line = EncryptedLineState & {
   block: HTMLElement;
   top: number;
   entryEnd: number;
+  voice: 'title' | 'meta' | 'body';
   count: number;
   words: Word[];
 };
@@ -95,19 +99,21 @@ export function useEditorialScroll() {
           let word = cache.get(el);
           if (!word || word.original !== original) {
             const chars = Array.from(original);
-            word = { el, source, visual, original, chars, left: rect.left, offset: 0,
+            word = { el, source, visual, original, chars, left: rect.left, centerX: 0, offset: 0,
               seed: words.length * 131, progress: word?.progress === 1 ? 1 : 0, renderedP: NaN,
               cells: null, states: new Int16Array(chars.length).fill(-2) };
             cache.set(el, word);
           }
           word.left = rect.left;
+          word.centerX = rect.left + rect.width / 2;
           // Existing cells remain drawn until a single read/write pass replaces their geometry.
           word.cells = null;
           words.push(word);
           const top = rect.top + y;
           let line = siblings.find(candidate => Math.abs(candidate.top - top) <= 6);
           if (!line) {
-            line = { block, top, entryEnd: entryEndFor(top - maxScroll, viewport), count: 0,
+            const voice = block.closest('.meta, dt, time') ? 'meta' : block.closest('h2, h3') ? 'title' : 'body';
+            line = { block, top, entryEnd: entryEndFor(top - maxScroll, viewport, ENCRYPTED_ENTRY_END), count: 0, voice,
               words: [], currentP: 0, revealState: 'hidden' };
             siblings.push(line);
             lines.push(line);
@@ -159,20 +165,25 @@ export function useEditorialScroll() {
       frame = 0;
       if (disposed || document.hidden) return;
       if (creation.active && creation.time < HERO_TEXT_AT) { schedule(); return; }
-      if (dirty) measure();
+      const measured = dirty;
+      if (measured) measure();
       const y = scrollY;
       const initial = !Number.isFinite(lastY);
       const delta = initial ? 0 : y - lastY;
       lastY = y;
-      const focused = document.activeElement;
+      const focused = document.activeElement?.closest('a,button');
       const updates: { word: Word; line: Line; p: number }[] = [];
       const remaining: Line[] = [];
       for (const line of pendingLines) {
         const zone = encryptedEntryProgress(line.top - y, viewport, line.entryEnd);
-        const forced = media.matches || line.words.some(word => word.el.closest('a,button')?.contains(focused));
+        const forced = media.matches || (focused && line.words.some(word => focused.contains(word.el)));
         const next = advanceEncryptedLine(line, zone, delta, forced || (initial && zone > 0));
+        const unchanged = next.currentP === line.currentP;
         Object.assign(line, next);
         if (line.currentP < 1) remaining.push(line);
+        // Future/offscreen and paused lines need no word traversal or DOM writes.
+        // A layout change still gets one pass to initialize/reposition their overlays.
+        if (unchanged && !measured) continue;
         for (const word of line.words) {
           const p = line.currentP;
           if (word.renderedP === 1 || (word.renderedP === p && (p === 0 || word.cells))) continue;
@@ -189,16 +200,22 @@ export function useEditorialScroll() {
         word.visual.style.visibility = p > 0 ? '' : 'hidden';
         if (p >= 1) {
           if (word.visual.textContent !== word.original || word.visual.children.length) word.visual.textContent = word.original;
-          word.visual.style.removeProperty('transform');
+          word.visual.style.removeProperty('--decode-lift');
           word.cells = null;
           continue;
         }
         if (!word.cells) continue;
         if (word.visual.firstChild !== word.cells[0]) word.visual.replaceChildren(...word.cells);
-        word.visual.style.transform = `translateY(${(2 * (1 - p)).toFixed(2)}px)`;
+        const lock = line.voice === 'title' ? 1 - (1 - p) ** 1.7 : p;
+        const pressure = textPressureAt(word.centerX, line.top - y, oceanWake);
+        const ripple = pressure * 3 * Math.sin(2 * Math.PI * (p - word.offset / line.count));
+        const lift = line.voice === 'title' ? 4 : line.voice === 'meta' ? 0 : 1;
+        word.visual.style.setProperty('--decode-lift', `${((lift + ripple) * (1 - p)).toFixed(1)}px`);
         for (let i = 0; i < word.chars.length; i++) {
-          const state = encryptedCharacterState(p, word.offset + i, line.count, word.seed);
+          const state = encryptedCharacterState(lock, word.offset + i, line.count, word.seed, line.voice === 'meta' ? 6 : 32);
           if (word.states[i] === state) continue;
+          // A locked prefix already occupies its final baseline, even mid-word.
+          if (state === -1 || word.states[i] === -2) word.cells[i].classList.toggle('unresolved', state !== -1);
           word.cells[i].textContent = state === -1 ? word.chars[i] : ENCRYPTED_CHARSET[state];
           word.states[i] = state;
           changes++;
@@ -245,7 +262,7 @@ export function useEditorialScroll() {
       media.removeEventListener('change', invalidate);
       for (const word of words) {
         word.visual.textContent = word.original;
-        word.visual.style.removeProperty('transform');
+        word.visual.style.removeProperty('--decode-lift');
         word.visual.style.removeProperty('visibility');
       }
     };

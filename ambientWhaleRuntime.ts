@@ -110,7 +110,9 @@ export function mountAmbientWhales(host: HTMLElement): () => void {
   let lastCreationTime = creation.time;
   let scrollVel = 0;
   const resize = (w: number, h: number) => {
-    const dpr = Math.min(devicePixelRatio || 1, w < 768 ? 1 : 1.25);
+    // Render the glyph atlas sharply on phones. The geometry buffer is sized
+    // independently in CSS pixels, so its sampling cost stays fixed.
+    const dpr = Math.min(devicePixelRatio || 1, w < 768 ? 1.5 : 1.25);
     const key = `${w}:${h}:${dpr}`;
     if (key === viewKey) return false;
     viewKey = key;
@@ -212,7 +214,10 @@ export function mountAmbientWhales(host: HTMLElement): () => void {
     const hiddenByJourney = !reduced() && whaleDirection.presence < 0.002;
     const running = !reduced() && !hiddenByJourney && debugTime === null;
     if (running) { seconds += dt; advanceTravel(dt); } else lastScroll = scrollY;
-    if ((dirty || running) && (dirty || now - lastDraw >= 1000 / 30)) {
+    // Scroll dirties the reading veil at display refresh rate. Sample it with the
+    // next swim frame; only a held scene needs an immediate one-off redraw.
+    const draw = running ? now - lastDraw >= 1000 / 30 - 0.8 : dirty;
+    if (draw) {
       const start = performance.now();
       if (hiddenByJourney) {
         ascii.clear(); ambientWhalesLive.presence = 0;
