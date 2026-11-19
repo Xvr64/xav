@@ -18,6 +18,7 @@ import './terminal.css';
  * only its aria-hidden visual duplicate changes. Completed lines leave the work queue forever. */
 const ELIGIBLE = '[data-editorial-section] [data-ascii-text]';
 const EXCLUDED = '[data-ascii-preserve]';
+const MAGNETIC_OCEAN_GLYPHS = '~/:·+#%=-|\\';
 export const AsciiText = EncryptedText;
 
 type Word = {
@@ -277,12 +278,17 @@ export function useEditorialScroll() {
         const ticks = magneticCV
           ? (line.voice === 'meta' ? 6 : line.voice === 'title' ? 42 : 28)
           : (line.voice === 'meta' ? 6 : 32);
+        const useOceanGlyphs = magneticCV && passage.destination === line.chapter;
         for (let i = 0; i < word.chars.length; i++) {
           const state = encryptedCharacterState(lock, word.offset + i, line.count, word.seed, ticks);
           if (word.states[i] === state) continue;
           // A locked prefix already occupies its final baseline, even mid-word.
           if (state === -1 || word.states[i] === -2) word.cells[i].classList.toggle('unresolved', state !== -1);
-          word.cells[i].textContent = state === -1 ? word.chars[i] : ENCRYPTED_CHARSET[state];
+          word.cells[i].textContent = state === -1
+            ? word.chars[i]
+            : useOceanGlyphs
+              ? MAGNETIC_OCEAN_GLYPHS[state % MAGNETIC_OCEAN_GLYPHS.length]
+              : ENCRYPTED_CHARSET[state];
           word.states[i] = state;
           changes++;
           if (state === -1) locks++;

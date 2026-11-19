@@ -1,0 +1,1056 @@
+[
+  {
+    "name": "01-shanghai-to-profile",
+    "capturedFrames": 98,
+    "durationMs": 1386,
+    "metrics": {
+      "began": 17542.9,
+      "ended": 18928.5,
+      "depthSilenceFrames": 9,
+      "dualReadableFrames": 0,
+      "veilActiveFrames": 75,
+      "activeFrames": 75
+    },
+    "pacing": {
+      "frames": 74,
+      "mean": 18.5,
+      "p50": 16.6,
+      "p95": 42.2,
+      "p99": 91.9,
+      "max": 91.9,
+      "over34": 4
+    },
+    "rest": {
+      "visible": [
+        "introduction"
+      ],
+      "globeVisible": false,
+      "city": "Shanghai",
+      "veilHidden": true,
+      "staged": false,
+      "unread": 0,
+      "y": 8100,
+      "snap": {
+        "gestureState": "idle",
+        "lockedDir": 0,
+        "animating": false,
+        "activeId": "introduction",
+        "scrollY": 8100,
+        "lastTransitionMs": 1371,
+        "lastDurationTargetMs": 1360,
+        "lastVeilFragments": 538,
+        "transitionCount": 1,
+        "chapters": [
+          {
+            "id": "journey",
+            "kind": "globe",
+            "top": 7200,
+            "end": 7200
+          },
+          {
+            "id": "introduction",
+            "kind": "cv",
+            "top": 8100,
+            "end": 8100
+          },
+          {
+            "id": "experience",
+            "kind": "cv",
+            "top": 9000,
+            "end": 9000
+          },
+          {
+            "id": "education",
+            "kind": "cv",
+            "top": 9900,
+            "end": 9900
+          },
+          {
+            "id": "skills",
+            "kind": "cv",
+            "top": 10800,
+            "end": 10800
+          },
+          {
+            "id": "languages",
+            "kind": "cv",
+            "top": 11700,
+            "end": 11700
+          },
+          {
+            "id": "interests",
+            "kind": "cv",
+            "top": 12600,
+            "end": 12600
+          },
+          {
+            "id": "contact",
+            "kind": "cv",
+            "top": 13500,
+            "end": 13500
+          }
+        ]
+      }
+    },
+    "isGlobe": true,
+    "triggerWallMs": 1836
+  },
+  {
+    "name": "02-profile-to-experience",
+    "capturedFrames": 86,
+    "durationMs": 1319,
+    "metrics": {
+      "began": 19554.3,
+      "ended": 20872.9,
+      "depthSilenceFrames": 16,
+      "dualReadableFrames": 0,
+      "veilActiveFrames": 94,
+      "activeFrames": 94
+    },
+    "pacing": {
+      "frames": 93,
+      "mean": 14,
+      "p50": 8.4,
+      "p95": 33.4,
+      "p99": 75.1,
+      "max": 75.1,
+      "over34": 4
+    },
+    "rest": {
+      "visible": [
+        "experience"
+      ],
+      "globeVisible": false,
+      "city": "Shanghai",
+      "veilHidden": true,
+      "staged": false,
+      "unread": 0,
+      "y": 9000,
+      "snap": {
+        "gestureState": "idle",
+        "lockedDir": 0,
+        "animating": false,
+        "activeId": "experience",
+        "scrollY": 9000,
+        "lastTransitionMs": 1305,
+        "lastDurationTargetMs": 1300,
+        "lastVeilFragments": 467,
+        "transitionCount": 2,
+        "chapters": [
+          {
+            "id": "journey",
+            "kind": "globe",
+            "top": 7200,
+            "end": 7200
+          },
+          {
+            "id": "introduction",
+            "kind": "cv",
+            "top": 8100,
+            "end": 8100
+          },
+          {
+            "id": "experience",
+            "kind": "cv",
+            "top": 9000,
+            "end": 9000
+          },
+          {
+            "id": "education",
+            "kind": "cv",
+            "top": 9900,
+            "end": 9900
+          },
+          {
+            "id": "skills",
+            "kind": "cv",
+            "top": 10800,
+            "end": 10800
+          },
+          {
+            "id": "languages",
+            "kind": "cv",
+            "top": 11700,
+            "end": 11700
+          },
+          {
+            "id": "interests",
+            "kind": "cv",
+            "top": 12600,
+            "end": 12600
+          },
+          {
+            "id": "contact",
+            "kind": "cv",
+            "top": 13500,
+            "end": 13500
+          }
+        ]
+      }
+    },
+    "isGlobe": false,
+    "triggerWallMs": 1781
+  },
+  {
+    "name": "03-experience-to-education",
+    "capturedFrames": 101,
+    "durationMs": 1302,
+    "metrics": {
+      "began": 21490.6,
+      "ended": 22792.5,
+      "depthSilenceFrames": 15,
+      "dualReadableFrames": 0,
+      "veilActiveFrames": 99,
+      "activeFrames": 99
+    },
+    "pacing": {
+      "frames": 98,
+      "mean": 13.11,
+      "p50": 8.4,
+      "p95": 50.1,
+      "p99": 66.7,
+      "max": 66.7,
+      "over34": 5
+    },
+    "rest": {
+      "visible": [
+        "education"
+      ],
+      "globeVisible": false,
+      "city": "Shanghai",
+      "veilHidden": true,
+      "staged": false,
+      "unread": 0,
+      "y": 9900,
+      "snap": {
+        "gestureState": "idle",
+        "lockedDir": 0,
+        "animating": false,
+        "activeId": "education",
+        "scrollY": 9900,
+        "lastTransitionMs": 1287,
+        "lastDurationTargetMs": 1280,
+        "lastVeilFragments": 359,
+        "transitionCount": 3,
+        "chapters": [
+          {
+            "id": "journey",
+            "kind": "globe",
+            "top": 7200,
+            "end": 7200
+          },
+          {
+            "id": "introduction",
+            "kind": "cv",
+            "top": 8100,
+            "end": 8100
+          },
+          {
+            "id": "experience",
+            "kind": "cv",
+            "top": 9000,
+            "end": 9000
+          },
+          {
+            "id": "education",
+            "kind": "cv",
+            "top": 9900,
+            "end": 9900
+          },
+          {
+            "id": "skills",
+            "kind": "cv",
+            "top": 10800,
+            "end": 10800
+          },
+          {
+            "id": "languages",
+            "kind": "cv",
+            "top": 11700,
+            "end": 11700
+          },
+          {
+            "id": "interests",
+            "kind": "cv",
+            "top": 12600,
+            "end": 12600
+          },
+          {
+            "id": "contact",
+            "kind": "cv",
+            "top": 13500,
+            "end": 13500
+          }
+        ]
+      }
+    },
+    "isGlobe": false,
+    "triggerWallMs": 1767
+  },
+  {
+    "name": "04-education-to-skills",
+    "capturedFrames": 100,
+    "durationMs": 1285,
+    "metrics": {
+      "began": 23426.8,
+      "ended": 24712,
+      "depthSilenceFrames": 16,
+      "dualReadableFrames": 0,
+      "veilActiveFrames": 102,
+      "activeFrames": 102
+    },
+    "pacing": {
+      "frames": 101,
+      "mean": 12.56,
+      "p50": 8.4,
+      "p95": 33.4,
+      "p99": 58.6,
+      "max": 66.7,
+      "over34": 5
+    },
+    "rest": {
+      "visible": [
+        "skills"
+      ],
+      "globeVisible": false,
+      "city": "Shanghai",
+      "veilHidden": true,
+      "staged": false,
+      "unread": 0,
+      "y": 10800,
+      "snap": {
+        "gestureState": "idle",
+        "lockedDir": 0,
+        "animating": false,
+        "activeId": "skills",
+        "scrollY": 10800,
+        "lastTransitionMs": 1270,
+        "lastDurationTargetMs": 1260,
+        "lastVeilFragments": 283,
+        "transitionCount": 4,
+        "chapters": [
+          {
+            "id": "journey",
+            "kind": "globe",
+            "top": 7200,
+            "end": 7200
+          },
+          {
+            "id": "introduction",
+            "kind": "cv",
+            "top": 8100,
+            "end": 8100
+          },
+          {
+            "id": "experience",
+            "kind": "cv",
+            "top": 9000,
+            "end": 9000
+          },
+          {
+            "id": "education",
+            "kind": "cv",
+            "top": 9900,
+            "end": 9900
+          },
+          {
+            "id": "skills",
+            "kind": "cv",
+            "top": 10800,
+            "end": 10800
+          },
+          {
+            "id": "languages",
+            "kind": "cv",
+            "top": 11700,
+            "end": 11700
+          },
+          {
+            "id": "interests",
+            "kind": "cv",
+            "top": 12600,
+            "end": 12600
+          },
+          {
+            "id": "contact",
+            "kind": "cv",
+            "top": 13500,
+            "end": 13500
+          }
+        ]
+      }
+    },
+    "isGlobe": false,
+    "triggerWallMs": 1795
+  },
+  {
+    "name": "05-skills-to-languages",
+    "capturedFrames": 95,
+    "durationMs": 1302,
+    "metrics": {
+      "began": 25388,
+      "ended": 26690,
+      "depthSilenceFrames": 15,
+      "dualReadableFrames": 0,
+      "veilActiveFrames": 105,
+      "activeFrames": 105
+    },
+    "pacing": {
+      "frames": 104,
+      "mean": 12.36,
+      "p50": 8.4,
+      "p95": 25,
+      "p99": 58.4,
+      "max": 66.8,
+      "over34": 5
+    },
+    "rest": {
+      "visible": [
+        "languages"
+      ],
+      "globeVisible": false,
+      "city": "Shanghai",
+      "veilHidden": true,
+      "staged": false,
+      "unread": 0,
+      "y": 11700,
+      "snap": {
+        "gestureState": "idle",
+        "lockedDir": 0,
+        "animating": false,
+        "activeId": "languages",
+        "scrollY": 11700,
+        "lastTransitionMs": 1290,
+        "lastDurationTargetMs": 1280,
+        "lastVeilFragments": 211,
+        "transitionCount": 5,
+        "chapters": [
+          {
+            "id": "journey",
+            "kind": "globe",
+            "top": 7200,
+            "end": 7200
+          },
+          {
+            "id": "introduction",
+            "kind": "cv",
+            "top": 8100,
+            "end": 8100
+          },
+          {
+            "id": "experience",
+            "kind": "cv",
+            "top": 9000,
+            "end": 9000
+          },
+          {
+            "id": "education",
+            "kind": "cv",
+            "top": 9900,
+            "end": 9900
+          },
+          {
+            "id": "skills",
+            "kind": "cv",
+            "top": 10800,
+            "end": 10800
+          },
+          {
+            "id": "languages",
+            "kind": "cv",
+            "top": 11700,
+            "end": 11700
+          },
+          {
+            "id": "interests",
+            "kind": "cv",
+            "top": 12600,
+            "end": 12600
+          },
+          {
+            "id": "contact",
+            "kind": "cv",
+            "top": 13500,
+            "end": 13500
+          }
+        ]
+      }
+    },
+    "isGlobe": false,
+    "triggerWallMs": 1794
+  },
+  {
+    "name": "06-languages-to-interests",
+    "capturedFrames": 90,
+    "durationMs": 1278,
+    "metrics": {
+      "began": 27332.5,
+      "ended": 28610,
+      "depthSilenceFrames": 14,
+      "dualReadableFrames": 0,
+      "veilActiveFrames": 104,
+      "activeFrames": 104
+    },
+    "pacing": {
+      "frames": 103,
+      "mean": 12.32,
+      "p50": 8.4,
+      "p95": 25.5,
+      "p99": 50.1,
+      "max": 66.8,
+      "over34": 5
+    },
+    "rest": {
+      "visible": [
+        "interests"
+      ],
+      "globeVisible": false,
+      "city": "Shanghai",
+      "veilHidden": true,
+      "staged": false,
+      "unread": 0,
+      "y": 12600,
+      "snap": {
+        "gestureState": "idle",
+        "lockedDir": 0,
+        "animating": false,
+        "activeId": "interests",
+        "scrollY": 12600,
+        "lastTransitionMs": 1270,
+        "lastDurationTargetMs": 1260,
+        "lastVeilFragments": 330,
+        "transitionCount": 6,
+        "chapters": [
+          {
+            "id": "journey",
+            "kind": "globe",
+            "top": 7200,
+            "end": 7200
+          },
+          {
+            "id": "introduction",
+            "kind": "cv",
+            "top": 8100,
+            "end": 8100
+          },
+          {
+            "id": "experience",
+            "kind": "cv",
+            "top": 9000,
+            "end": 9000
+          },
+          {
+            "id": "education",
+            "kind": "cv",
+            "top": 9900,
+            "end": 9900
+          },
+          {
+            "id": "skills",
+            "kind": "cv",
+            "top": 10800,
+            "end": 10800
+          },
+          {
+            "id": "languages",
+            "kind": "cv",
+            "top": 11700,
+            "end": 11700
+          },
+          {
+            "id": "interests",
+            "kind": "cv",
+            "top": 12600,
+            "end": 12600
+          },
+          {
+            "id": "contact",
+            "kind": "cv",
+            "top": 13500,
+            "end": 13500
+          }
+        ]
+      }
+    },
+    "isGlobe": false,
+    "triggerWallMs": 1766
+  },
+  {
+    "name": "07-interests-to-contact",
+    "capturedFrames": 83,
+    "durationMs": 1268,
+    "metrics": {
+      "began": 29268.8,
+      "ended": 30537.2,
+      "depthSilenceFrames": 20,
+      "dualReadableFrames": 0,
+      "veilActiveFrames": 103,
+      "activeFrames": 103
+    },
+    "pacing": {
+      "frames": 102,
+      "mean": 12.19,
+      "p50": 8.4,
+      "p95": 25,
+      "p99": 50.1,
+      "max": 66.3,
+      "over34": 3
+    },
+    "rest": {
+      "visible": [
+        "contact"
+      ],
+      "globeVisible": false,
+      "city": "Shanghai",
+      "veilHidden": true,
+      "staged": false,
+      "unread": 0,
+      "y": 13500,
+      "snap": {
+        "gestureState": "idle",
+        "lockedDir": 0,
+        "animating": false,
+        "activeId": "contact",
+        "scrollY": 13500,
+        "lastTransitionMs": 1253,
+        "lastDurationTargetMs": 1240,
+        "lastVeilFragments": 199,
+        "transitionCount": 7,
+        "chapters": [
+          {
+            "id": "journey",
+            "kind": "globe",
+            "top": 7200,
+            "end": 7200
+          },
+          {
+            "id": "introduction",
+            "kind": "cv",
+            "top": 8100,
+            "end": 8100
+          },
+          {
+            "id": "experience",
+            "kind": "cv",
+            "top": 9000,
+            "end": 9000
+          },
+          {
+            "id": "education",
+            "kind": "cv",
+            "top": 9900,
+            "end": 9900
+          },
+          {
+            "id": "skills",
+            "kind": "cv",
+            "top": 10800,
+            "end": 10800
+          },
+          {
+            "id": "languages",
+            "kind": "cv",
+            "top": 11700,
+            "end": 11700
+          },
+          {
+            "id": "interests",
+            "kind": "cv",
+            "top": 12600,
+            "end": 12600
+          },
+          {
+            "id": "contact",
+            "kind": "cv",
+            "top": 13500,
+            "end": 13500
+          }
+        ]
+      }
+    },
+    "isGlobe": false,
+    "triggerWallMs": 1764
+  },
+  {
+    "name": "08-contact-to-interests",
+    "capturedFrames": 83,
+    "durationMs": 1260,
+    "metrics": {
+      "began": 31196.7,
+      "ended": 32456.8,
+      "depthSilenceFrames": 14,
+      "dualReadableFrames": 0,
+      "veilActiveFrames": 108,
+      "activeFrames": 108
+    },
+    "pacing": {
+      "frames": 107,
+      "mean": 11.62,
+      "p50": 8.4,
+      "p95": 25,
+      "p99": 50,
+      "max": 50.1,
+      "over34": 3
+    },
+    "rest": {
+      "visible": [
+        "interests"
+      ],
+      "globeVisible": false,
+      "city": "Shanghai",
+      "veilHidden": true,
+      "staged": false,
+      "unread": 0,
+      "y": 12600,
+      "snap": {
+        "gestureState": "idle",
+        "lockedDir": 0,
+        "animating": false,
+        "activeId": "interests",
+        "scrollY": 12600,
+        "lastTransitionMs": 1247,
+        "lastDurationTargetMs": 1240,
+        "lastVeilFragments": 248,
+        "transitionCount": 8,
+        "chapters": [
+          {
+            "id": "journey",
+            "kind": "globe",
+            "top": 7200,
+            "end": 7200
+          },
+          {
+            "id": "introduction",
+            "kind": "cv",
+            "top": 8100,
+            "end": 8100
+          },
+          {
+            "id": "experience",
+            "kind": "cv",
+            "top": 9000,
+            "end": 9000
+          },
+          {
+            "id": "education",
+            "kind": "cv",
+            "top": 9900,
+            "end": 9900
+          },
+          {
+            "id": "skills",
+            "kind": "cv",
+            "top": 10800,
+            "end": 10800
+          },
+          {
+            "id": "languages",
+            "kind": "cv",
+            "top": 11700,
+            "end": 11700
+          },
+          {
+            "id": "interests",
+            "kind": "cv",
+            "top": 12600,
+            "end": 12600
+          },
+          {
+            "id": "contact",
+            "kind": "cv",
+            "top": 13500,
+            "end": 13500
+          }
+        ]
+      }
+    },
+    "isGlobe": false,
+    "triggerWallMs": 1737
+  },
+  {
+    "name": "09-profile-to-shanghai",
+    "capturedFrames": 77,
+    "durationMs": 1377,
+    "metrics": {
+      "began": 34126.1,
+      "ended": 35503,
+      "depthSilenceFrames": 7,
+      "dualReadableFrames": 0,
+      "veilActiveFrames": 63,
+      "activeFrames": 63
+    },
+    "pacing": {
+      "frames": 62,
+      "mean": 22.07,
+      "p50": 16.7,
+      "p95": 50.2,
+      "p99": 91.8,
+      "max": 91.8,
+      "over34": 7
+    },
+    "rest": {
+      "visible": [],
+      "globeVisible": true,
+      "city": "Shanghai",
+      "veilHidden": true,
+      "staged": false,
+      "unread": 0,
+      "y": 7200,
+      "snap": {
+        "gestureState": "idle",
+        "lockedDir": 0,
+        "animating": false,
+        "activeId": "journey",
+        "scrollY": 7200,
+        "lastTransitionMs": 1370,
+        "lastDurationTargetMs": 1360,
+        "lastVeilFragments": 397,
+        "transitionCount": 9,
+        "chapters": [
+          {
+            "id": "journey",
+            "kind": "globe",
+            "top": 7200,
+            "end": 7200
+          },
+          {
+            "id": "introduction",
+            "kind": "cv",
+            "top": 8100,
+            "end": 8100
+          },
+          {
+            "id": "experience",
+            "kind": "cv",
+            "top": 9000,
+            "end": 9000
+          },
+          {
+            "id": "education",
+            "kind": "cv",
+            "top": 9900,
+            "end": 9900
+          },
+          {
+            "id": "skills",
+            "kind": "cv",
+            "top": 10800,
+            "end": 10800
+          },
+          {
+            "id": "languages",
+            "kind": "cv",
+            "top": 11700,
+            "end": 11700
+          },
+          {
+            "id": "interests",
+            "kind": "cv",
+            "top": 12600,
+            "end": 12600
+          },
+          {
+            "id": "contact",
+            "kind": "cv",
+            "top": 13500,
+            "end": 13500
+          }
+        ]
+      }
+    },
+    "isGlobe": true,
+    "triggerWallMs": 1848
+  },
+  {
+    "name": "10-mobile-shanghai-to-profile",
+    "capturedFrames": 170,
+    "durationMs": 1385,
+    "metrics": {
+      "began": 7066.8,
+      "ended": 8452.1,
+      "depthSilenceFrames": 11,
+      "dualReadableFrames": 0,
+      "veilActiveFrames": 86,
+      "activeFrames": 86
+    },
+    "pacing": {
+      "frames": 85,
+      "mean": 16.1,
+      "p50": 16.6,
+      "p95": 41.6,
+      "p99": 58.4,
+      "max": 58.4,
+      "over34": 5
+    },
+    "rest": {
+      "visible": [
+        "introduction"
+      ],
+      "globeVisible": false,
+      "city": "Shanghai",
+      "veilHidden": true,
+      "staged": false,
+      "unread": 0,
+      "y": 7596,
+      "snap": {
+        "gestureState": "idle",
+        "lockedDir": 0,
+        "animating": false,
+        "activeId": "introduction",
+        "scrollY": 7596,
+        "lastTransitionMs": 1370,
+        "lastDurationTargetMs": 1360,
+        "lastVeilFragments": 377,
+        "transitionCount": 2,
+        "chapters": [
+          {
+            "id": "journey",
+            "kind": "globe",
+            "top": 6752,
+            "end": 6752
+          },
+          {
+            "id": "introduction",
+            "kind": "cv",
+            "top": 7596,
+            "end": 7596
+          },
+          {
+            "id": "experience",
+            "kind": "cv",
+            "top": 8461,
+            "end": 8461
+          },
+          {
+            "id": "education",
+            "kind": "cv",
+            "top": 9305,
+            "end": 9305
+          },
+          {
+            "id": "skills",
+            "kind": "cv",
+            "top": 10201,
+            "end": 10201
+          },
+          {
+            "id": "languages",
+            "kind": "cv",
+            "top": 11045,
+            "end": 11045
+          },
+          {
+            "id": "interests",
+            "kind": "cv",
+            "top": 11889,
+            "end": 11889
+          },
+          {
+            "id": "contact",
+            "kind": "cv",
+            "top": 12733,
+            "end": 12733
+          }
+        ]
+      }
+    },
+    "isGlobe": true,
+    "triggerWallMs": 2264
+  },
+  {
+    "name": "11-mobile-profile-to-experience",
+    "capturedFrames": 194,
+    "durationMs": 1344,
+    "metrics": {
+      "began": 9804.1,
+      "ended": 11147.7,
+      "depthSilenceFrames": 17,
+      "dualReadableFrames": 0,
+      "veilActiveFrames": 109,
+      "activeFrames": 109
+    },
+    "pacing": {
+      "frames": 108,
+      "mean": 12.06,
+      "p50": 8.4,
+      "p95": 33.5,
+      "p99": 58.5,
+      "max": 66.9,
+      "over34": 5
+    },
+    "rest": {
+      "visible": [
+        "experience"
+      ],
+      "globeVisible": false,
+      "city": "Shanghai",
+      "veilHidden": true,
+      "staged": false,
+      "unread": 0,
+      "y": 8461,
+      "snap": {
+        "gestureState": "idle",
+        "lockedDir": 0,
+        "animating": false,
+        "activeId": "experience",
+        "scrollY": 8461,
+        "lastTransitionMs": 1334,
+        "lastDurationTargetMs": 1300,
+        "lastVeilFragments": 365,
+        "transitionCount": 3,
+        "chapters": [
+          {
+            "id": "journey",
+            "kind": "globe",
+            "top": 6752,
+            "end": 6752
+          },
+          {
+            "id": "introduction",
+            "kind": "cv",
+            "top": 7596,
+            "end": 7596
+          },
+          {
+            "id": "experience",
+            "kind": "cv",
+            "top": 8461,
+            "end": 8461
+          },
+          {
+            "id": "education",
+            "kind": "cv",
+            "top": 9305,
+            "end": 9305
+          },
+          {
+            "id": "skills",
+            "kind": "cv",
+            "top": 10201,
+            "end": 10201
+          },
+          {
+            "id": "languages",
+            "kind": "cv",
+            "top": 11045,
+            "end": 11045
+          },
+          {
+            "id": "interests",
+            "kind": "cv",
+            "top": 11889,
+            "end": 11889
+          },
+          {
+            "id": "contact",
+            "kind": "cv",
+            "top": 12733,
+            "end": 12733
+          }
+        ]
+      }
+    },
+    "isGlobe": false,
+    "triggerWallMs": 2244
+  }
+]

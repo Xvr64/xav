@@ -13,6 +13,8 @@ import {
   titleArrivePhase,
   copyArrivePhase,
   oceanWaveY,
+  buildStaircaseClip,
+  transitionPresetFor,
   readingEnd,
   READING_BREATH,
   TRANSITION_DURATION_MS,
@@ -34,10 +36,30 @@ test('the magnetic CV is enabled by default in both development and production, 
   assert.equal(magneticCV, false);
 });
 
-test('transition durations sit cleanly inside the 900–1200ms cinematic window', () => {
-  assert.ok(TRANSITION_DURATION_MS >= 900 && TRANSITION_DURATION_MS <= 1200);
-  assert.ok(GLOBE_TRANSITION_DURATION_MS >= 900 && GLOBE_TRANSITION_DURATION_MS <= 1200);
+test('transition durations sit cleanly inside the 1200–1400ms Abyssal Cipher cinematic window', () => {
+  assert.ok(TRANSITION_DURATION_MS >= 1200 && TRANSITION_DURATION_MS <= 1400);
+  assert.ok(GLOBE_TRANSITION_DURATION_MS >= 1200 && GLOBE_TRANSITION_DURATION_MS <= 1400);
   assert.ok(GLOBE_TRANSITION_DURATION_MS >= TRANSITION_DURATION_MS, 'Shanghai <-> Profile gets equal or slightly grander breath');
+
+  const pairs = [
+    ['journey', 'introduction'],
+    ['introduction', 'experience'],
+    ['experience', 'education'],
+    ['education', 'skills'],
+    ['skills', 'languages'],
+    ['languages', 'interests'],
+    ['interests', 'contact']
+  ];
+  for (const [fromId, toId] of pairs) {
+    const fwd = transitionPresetFor(fromId, toId, 1);
+    const rev = transitionPresetFor(toId, fromId, -1);
+    assert.ok(fwd.duration >= 1200 && fwd.duration <= 1400, `${fromId}->${toId} duration ${fwd.duration}`);
+    assert.equal(fwd.id, rev.id, `${fromId}<->${toId} shares coherent family`);
+    assert.equal(fwd.ribbonArc, -rev.ribbonArc, `${fromId}<->${toId} reverses ribbon arc spatially`);
+  }
+  const contactPreset = transitionPresetFor('interests', 'contact', 1);
+  const expPreset = transitionPresetFor('introduction', 'experience', 1);
+  assert.ok(contactPreset.currentDensity < expPreset.currentDensity, 'Interests -> Contact is the cleanest arrival with least residual noise');
 });
 
 test('passage phases ease in and out and clamp outside their window', () => {
@@ -71,29 +93,49 @@ test('depthGlideEase is strictly monotonic with zero overshoot, poised launch, a
   assert.ok(depthGlideEase(0.85) > 0.92, 'aristocratic deceleration before settle');
 });
 
-test('overlapping cinematic choreography guarantees push-in, non-colliding clip handoff, depth surge, and heading-first arrival', () => {
-  // Stage A: Camera push-in locks focal subject while outgoing clip starts smoothly.
+test('overlapping 5-phase Abyssal Cipher choreography guarantees push-in, disintegration, open ocean passage, and heading-first reconstruction', () => {
+  // Phase 1: Scene loses form (subtle camera push-in establishes while curved mask starts).
   assert.equal(focusLockPhase(0), 0);
-  assert.ok(focusLockPhase(0.20) > 0.85, 'focus lock establishes clearly in Stage A');
+  assert.ok(focusLockPhase(0.20) > 0.85, 'Phase 1 focus push establishes clearly');
   assert.equal(focusLockPhase(0.24), 1);
-  assert.equal(outSweepPhase(0.10), 0, 'outgoing clip lets push-in establish first');
+  assert.equal(outSweepPhase(0.06), 0, 'outgoing mask lets initial camera push begin cleanly');
 
-  // Stage B -> D handoff: outgoing reaches 100% at t=0.48 right as incoming opens (zero dual-text collision, zero dead gap).
-  assert.equal(outSweepPhase(0.48), 1, 'outgoing section is 100% cleared by t=0.48');
-  assert.equal(inSweepPhase(0.48), 0, 'incoming section has not opened while outgoing clears');
-  assert.ok(inSweepPhase(0.54) > 0.10, 'incoming curved unveil opens fluidly without a dead blank pause');
+  // Phase 2 -> Phase 3 open ocean passage (~180–195ms where neither section's DOM typography is readable).
+  assert.equal(outSweepPhase(0.43), 1, 'outgoing section is 100% cleared by t=0.43');
+  assert.equal(inSweepPhase(0.43), 0, 'incoming section stays hidden as Phase 3 opens');
+  assert.equal(inSweepPhase(0.57), 0, 'Phase 3 maintains a clear ~180–195ms open-ocean passage');
+  const openOceanMs = (0.57 - 0.43) * TRANSITION_DURATION_MS;
+  assert.ok(openOceanMs >= 150 && openOceanMs <= 250, `open ocean passage (${openOceanMs}ms) sits inside 150–250ms target`);
+  assert.ok(inSweepPhase(0.62) > 0.25, 'Phase 4 curved unveil opens smoothly right after the ocean passage');
 
-  // Stage C: Ocean depth bridge peaks cleanly across the handoff.
-  assert.equal(depthPassagePhase(0.15), 0);
-  assert.ok(depthPassagePhase(0.49) > 0.95, 'depth passage peaks across the central ocean bridge');
-  assert.equal(depthPassagePhase(0.85), 0);
+  // Phase 3: Continuous ocean depth current peaks right across the open-ocean passage.
+  assert.equal(depthPassagePhase(0.20), 0);
+  assert.ok(depthPassagePhase(0.50) > 0.95, 'depth passage peaks across the central ocean passage');
+  assert.equal(depthPassagePhase(0.82), 0);
 
-  // Stage D: Hero heading reconstructs ahead of supporting copy cascade, settling crisply before end.
-  assert.ok(titleArrivePhase(0.60) > copyArrivePhase(0.60), 'title begins reconstructing ahead of body copy');
-  assert.ok(titleArrivePhase(0.72) > copyArrivePhase(0.72), 'title maintains clear lead during arrival');
-  assert.equal(titleArrivePhase(0.86), 1, 'title settles crisply before transition end');
-  assert.equal(inSweepPhase(0.90), 1, 'incoming unveil completes cleanly before final settle');
-  assert.equal(copyArrivePhase(0.95), 1, 'supporting lines complete cleanly before final settle');
+  // Phase 4 -> Phase 5: Heading reconstructs ahead of supporting cascade, settling crisply before end.
+  assert.ok(titleArrivePhase(0.64) > copyArrivePhase(0.64), 'title begins reconstructing ahead of body copy');
+  assert.ok(titleArrivePhase(0.74) > copyArrivePhase(0.74), 'title maintains clear lead during arrival');
+  assert.equal(titleArrivePhase(0.83), 1, 'title settles crisply before Phase 5 landing');
+  assert.equal(inSweepPhase(0.87), 1, 'incoming unveil completes cleanly before landing');
+  assert.equal(copyArrivePhase(0.91), 1, 'supporting lines complete cleanly before landing');
+});
+
+test('buildStaircaseClip produces clean multi-line left-to-right directional clip polygons and snaps to character boundaries', () => {
+  const lines = [
+    { top: 0, bottom: 44, left: 0, right: 520, charLefts: [0, 50, 100, 150, 200] },
+    { top: 50, bottom: 94, left: 0, right: 480 },
+    { top: 100, bottom: 144, left: 0, right: 320 }
+  ];
+  assert.equal(buildStaircaseClip(520, 144, lines, [0, 0, 0]), 'inset(50%)');
+  assert.equal(buildStaircaseClip(520, 144, lines, [1, 1, 1]), '');
+  const mid = buildStaircaseClip(520, 144, lines, [0.45, 0.4, 0]);
+  assert.ok(mid.startsWith('polygon(') && mid.endsWith(')'), 'returns valid polygon');
+  assert.equal(mid.split(',').length, 8, '3 lines -> 2*3 + 2 = 8 staircase vertices');
+  // 0.45 * 5 = floor(2.25) = 2 -> snaps cleanly to charLefts[2] - 1.5 = 98.5px (never slicing letter 2!)
+  assert.ok(mid.includes('98.5px'), 'snaps cleanly to whole-character boundary');
+  const rev = buildStaircaseClip(520, 144, lines, [0.15, 0.55, 0.92]);
+  assert.ok(rev.startsWith('polygon(') && rev.split(',').length === 8, 'handles bottom-up stagger cleanly');
 });
 
 test('oceanWaveY produces a smooth, sculpted curved oceanic profile', () => {
@@ -506,7 +548,8 @@ test('widening-gap dying momentum tail and quantized +1px tail jitter still trig
   snaps++;
   m.beginTransition(1, t);
   // Momentum decays to 1-2px across transition
-  for (let i = 0; i < 72; i++) {
+  const frames = Math.ceil(TRANSITION_DURATION_MS / 16) + 4;
+  for (let i = 0; i < frames; i++) {
     t += 16;
     if (m.state === 'transitioning' && t >= 1000 + TRANSITION_DURATION_MS) m.endTransition(t, false);
     const a = m.feedWheel(Math.max(1, Math.round(24 * Math.exp(-i / 16))), t, atBoundary);

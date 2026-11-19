@@ -6,7 +6,6 @@ import {
   createMagneticGestureMachine,
   depthGlideEase,
   depthPassagePhase,
-  GLOBE_TRANSITION_DURATION_MS,
   inSweepPhase,
   MAGNETIC_CHAPTERS,
   MAGNETIC_DRAIN_IDLE_MS,
@@ -16,9 +15,10 @@ import {
   passage,
   titleArrivePhase,
   TRANSITION_DURATION_MS,
+  transitionPresetFor,
   type GestureDirection
 } from './magneticCVState';
-import { createMagneticCVVeil } from './magneticCVVeil';
+import { createAbyssalCipher } from './abyssalCipher';
 
 const TOLERANCE = 2;
 /** Native touch momentum can continue briefly after finger lift inside a long chapter (ms). */
@@ -54,133 +54,17 @@ function clipChapter(
 ) {
   const offset = anchor - chapter.top;
   const outer = offset + (above ? -260 : innerHeight + 260);
-  let pts = `0 ${outer}px,100% ${outer}px`;
+  // Generous -12%..112% horizontal bounds ensure Phase 1 scaled-up headings never clip at the left/right margin.
+  let pts = `-12% ${outer}px,112% ${outer}px`;
   const steps = 12;
   for (let i = steps; i >= 0; i--) {
     const u = i / steps;
+    const xPct = -12 + u * 124;
     const wy = (oceanWaveY(u, edge, tilt, amp, phase) + offset).toFixed(1);
-    pts += `,${(u * 100).toFixed(1)}% ${wy}px`;
+    pts += `,${xPct.toFixed(1)}% ${wy}px`;
   }
   chapter.el.style.translate = `0 ${y - anchor}px`;
   chapter.el.style.clipPath = `polygon(${pts})`;
-}
-
-/** Collect semantic editorial planes inside a CV section for multi-plane depth choreography. */
-function collectSectionPlanes(section: HTMLElement) {
-  if (section.id === 'introduction') {
-    const hero = section.querySelector<HTMLElement>('.lead');
-    const meta = section.querySelector<HTMLElement>('.intro-kicker');
-    const support = section.querySelector<HTMLElement>('.intro-support');
-    const facts = [...section.querySelectorAll<HTMLElement>('.intro-facts > div')];
-    return {
-      hero: hero ? [hero] : [],
-      meta: meta ? [meta] : [],
-      items: [...(support ? [support] : []), ...facts]
-    };
-  }
-  const children = [...section.children].filter((el): el is HTMLElement => el instanceof HTMLElement);
-  const hero = children[0] ? [children[0]] : [];
-  const list = section.querySelector<HTMLElement>(
-    ':scope > .station-list, :scope > .edu-list, :scope > .skill-index, :scope > .lang-list, :scope > .interest-list'
-  );
-  const items = list
-    ? [...list.children].filter((el): el is HTMLElement => el instanceof HTMLElement)
-    : children.slice(1);
-  return { hero, meta: [] as HTMLElement[], items };
-}
-
-/** Tag outgoing CV planes once at transition start (zero per-frame DOM reads). */
-function tagDepartingPlanes(section: HTMLElement, tagged: HTMLElement[]) {
-  const { hero, meta, items } = collectSectionPlanes(section);
-  for (const el of hero) {
-    el.dataset.cvRole = 'hero';
-    tagged.push(el);
-  }
-  for (const el of meta) {
-    el.dataset.cvRole = 'meta';
-    tagged.push(el);
-  }
-  let visibleIdx = 0;
-  for (const el of items) {
-    const r = el.getBoundingClientRect();
-    if (r.bottom < -40 || r.top > innerHeight + 40) continue;
-    el.dataset.cvRole = 'item';
-    el.style.setProperty('--cv-depart-delay', `${Math.min(54, visibleIdx * 16)}ms`);
-    tagged.push(el);
-    visibleIdx++;
-  }
-}
-
-/**
- * Tag incoming CV planes with sculpted, viewport-aware stagger timing so the heading always
- * commands the stage first with depth zoom and ASCII decryption, and every visible row
- * settles cleanly into magnetic rest before 96%.
- */
-function tagArrivingPlanes(
-  section: HTMLElement,
-  duration: number,
-  landingOffset: number,
-  landingAtBottom: boolean,
-  tagged: HTMLElement[]
-) {
-  const { hero, meta, items } = collectSectionPlanes(section);
-  const sectionRect = section.getBoundingClientRect();
-
-  const heroDelay = Math.round(duration * 0.44);
-  const heroDur = Math.round(duration * 0.42);
-  for (const el of hero) {
-    el.dataset.cvRole = 'hero';
-    el.style.setProperty('--cv-delay', `${heroDelay}ms`);
-    el.style.setProperty('--cv-item-dur', `${heroDur}ms`);
-    tagged.push(el);
-  }
-
-  const metaDelay = Math.round(duration * 0.52);
-  const metaDur = Math.round(duration * 0.30);
-  for (const el of meta) {
-    el.dataset.cvRole = 'meta';
-    el.style.setProperty('--cv-delay', `${metaDelay}ms`);
-    el.style.setProperty('--cv-item-dur', `${metaDur}ms`);
-    tagged.push(el);
-  }
-
-  // Only stagger rows visible on the landing screen so tall-section offscreen rows read immediately.
-  const visibleItems = items.filter(el => {
-    const r = el.getBoundingClientRect();
-    const relTop = r.top - sectionRect.top - landingOffset;
-    const relBottom = relTop + r.height;
-    return relBottom > -32 && relTop < innerHeight + 32;
-  });
-
-  const baseStart = duration * (landingAtBottom ? 0.48 : 0.54);
-  const maxEnd = duration * 0.96;
-  const itemDur = Math.round(duration * 0.33);
-  const spread = Math.max(0, maxEnd - itemDur - baseStart);
-  const step = visibleItems.length > 1
-    ? Math.min(Math.round(duration * 0.058), Math.floor(spread / (visibleItems.length - 1)))
-    : 0;
-
-  visibleItems.forEach((el, idx) => {
-    const order = landingAtBottom ? visibleItems.length - 1 - idx : idx;
-    const delay = Math.round(baseStart + order * step);
-    el.dataset.cvRole = 'item';
-    el.style.setProperty('--cv-delay', `${delay}ms`);
-    el.style.setProperty('--cv-item-dur', `${itemDur}ms`);
-    el.style.setProperty('--cv-datum-delay', `${delay + 40}ms`);
-    el.style.setProperty('--cv-datum-dur', `${Math.max(240, itemDur - 20)}ms`);
-    tagged.push(el);
-  });
-}
-
-function clearTaggedPlanes(tagged: HTMLElement[]) {
-  for (const el of tagged) {
-    delete el.dataset.cvRole;
-    el.style.removeProperty('--cv-delay');
-    el.style.removeProperty('--cv-item-dur');
-    el.style.removeProperty('--cv-depart-delay');
-    el.style.removeProperty('--cv-datum-delay');
-    el.style.removeProperty('--cv-datum-dur');
-  }
 }
 
 export function mountMagneticCV() {
@@ -194,7 +78,7 @@ export function mountMagneticCV() {
   const reduce = matchMedia('(prefers-reduced-motion: reduce)');
   const lifetime = new AbortController();
   const options = { signal: lifetime.signal };
-  const veil = createMagneticCVVeil();
+  const cipher = createAbyssalCipher();
 
   const gesture = createMagneticGestureMachine();
   let chapters: Chapter[] = [];
@@ -208,7 +92,6 @@ export function mountMagneticCV() {
     duration: number;
     isGlobeHandoff: boolean;
     landingAtBottom: boolean;
-    tagged: HTMLElement[];
     began: number;
     startY: number;
     endY: number;
@@ -351,10 +234,9 @@ export function mountMagneticCV() {
   function clearAnimation(landing?: Chapter) {
     cancelAnimationFrame(frame);
     frame = 0;
-    veil.end();
+    cipher.end();
     if (!animation) return;
-    const { from, to, tagged } = animation;
-    clearTaggedPlanes(tagged);
+    const { from, to } = animation;
 
     if (from.kind === 'globe') delete from.el.dataset.globeDepart;
     else delete from.el.dataset.cvDepart;
@@ -432,7 +314,8 @@ export function mountMagneticCV() {
     const startY = scrollY;
     const endY = dir > 0 ? to.top : to.end;
     const isGlobeHandoff = from.kind === 'globe' || to.kind === 'globe';
-    const duration = isGlobeHandoff ? GLOBE_TRANSITION_DURATION_MS : TRANSITION_DURATION_MS;
+    const preset = transitionPresetFor(from.id, to.id, dir);
+    const duration = preset.duration;
     const landingOffset = Math.max(0, endY - to.top);
     const landingAtBottom = dir < 0 && landingOffset > 40;
 
@@ -442,7 +325,6 @@ export function mountMagneticCV() {
     gesture.beginTransition(dir, now);
 
     const focus = keyboard || (from.kind === 'cv' && from.el.contains(document.activeElement));
-    const tagged: HTMLElement[] = [];
 
     lastDurationTargetMs = duration;
     animation = {
@@ -454,7 +336,6 @@ export function mountMagneticCV() {
       duration,
       isGlobeHandoff,
       landingAtBottom,
-      tagged,
       began: now,
       startY,
       endY
@@ -469,19 +350,18 @@ export function mountMagneticCV() {
       return;
     }
 
-    // Sample typography & Globe rim ONCE while departing chapter sits cleanly at rest.
-    lastVeilFragments = veil.begin({
+    // Sample typography, lines & Globe geometry ONCE while departing chapter sits cleanly at rest.
+    lastVeilFragments = cipher.begin({
       fromEl: from.el,
       fromKind: from.kind,
       toEl: to.el,
       toKind: to.kind,
       dir,
+      duration,
       toLandingOffset: landingOffset,
-      landingAtBottom
+      landingAtBottom,
+      preset
     });
-
-    if (from.kind === 'cv') tagDepartingPlanes(from.el, tagged);
-    if (to.kind === 'cv') tagArrivingPlanes(to.el, duration, landingOffset, landingAtBottom, tagged);
 
     passage.destination = to.kind === 'cv' ? to.el : null;
     passage.direction = dir;
@@ -495,12 +375,12 @@ export function mountMagneticCV() {
 
     const height = innerHeight;
     const width = innerWidth;
-    const tilt = -dir * Math.min(height * 0.135, width * 0.14);
-    const waveAmp = Math.min(height * 0.052, 52);
+    const tilt = -dir * Math.min(height * 0.125, width * 0.135) * preset.waveTiltScale;
+    const waveAmp = Math.min(height * 0.050, 50) * preset.waveAmpScale;
     const phaseBase = dir > 0 ? 0.35 : 2.15;
-    // Unveil heading-first top-to-bottom whenever the heading is on the landing screen;
-    // unveil bottom-to-top only when landing at the bottom edge of a tall chapter.
-    const revealTopDown = !landingAtBottom;
+    // Unveil heading-first top-to-bottom for CV top landings; unveil bottom-to-top when
+    // landing at the lower edge of a tall CV section OR when returning upward to Shanghai Globe.
+    const revealTopDown = to.kind === 'globe' ? dir > 0 : !landingAtBottom;
 
     for (const ch of [from, to]) {
       ch.el.style.setProperty('--cv-duration', `${duration}ms`);
@@ -537,7 +417,7 @@ export function mountMagneticCV() {
       const t = Math.max(0, Math.min(1, (frameNow - now) / duration));
       const phase = phaseBase + t * 2.8;
 
-      // Smooth luxury ocean glide: weighted during push-in, surging through the depth bridge, velvet settle.
+      // Smooth ocean depth glide carrying scroll cleanly from departure to exact magnetic landing.
       const glideP = Math.max(0, Math.min(1, (t - 0.04) / 0.92));
       expected = Math.round(startY + (endY - startY) * depthGlideEase(glideP));
       if (scrollY !== expected) jump(expected);
@@ -546,42 +426,40 @@ export function mountMagneticCV() {
       passage.depthSurge = dir * depthPassagePhase(t);
       (window as { __magneticDepthSurge?: number }).__magneticDepthSurge = passage.depthSurge;
 
-      // Stage A -> B: Outgoing curved oceanic sweep (t = 0.10 -> 0.48).
-      // 100% cleared by t = 0.48, right before incoming opens, so departing & arriving text never overlap.
-      // Circular Shanghai Globe descends whole into depth without slicing its sphere.
+      // Phase 1 -> 2: Outgoing curved directional oceanic sweep (t = 0.06 -> 0.43).
+      // Engages visibly around 180–220ms and clears 100% by t = 0.43, opening into Phase 3.
       const outS = outSweepPhase(t);
-      const outFrac = -0.18 + 1.44 * outS;
+      const outFrac = -0.05 + 1.24 * outS;
       const outEdge = height * (dir > 0 ? outFrac : 1 - outFrac);
       if (outS >= 1) {
         from.el.style.translate = `0 ${expected - startY}px`;
         from.el.style.clipPath = 'inset(50%)';
-      } else if (outS <= 0 || from.kind === 'globe') {
+      } else if (outS <= 0) {
         from.el.style.translate = `0 ${expected - startY}px`;
         from.el.style.removeProperty('clip-path');
       } else {
         clipChapter(from, startY, expected, outEdge, tilt, waveAmp, phase, dir < 0);
       }
 
-      // Stage D: Incoming curved oceanic unveil (t = 0.48 -> 0.88).
-      // Circular Shanghai Globe rises whole out of depth without a flat equator cut.
+      // Phase 4: Incoming curved oceanic unveil (t = 0.57 -> 0.87), after the ~200ms open ocean passage.
       const inS = inSweepPhase(t);
-      const inFrac = -0.18 + 1.48 * inS;
+      const inFrac = -0.14 + 1.42 * inS;
       const inEdge = height * (revealTopDown ? inFrac : 1 - inFrac);
       if (inS <= 0) {
         to.el.style.translate = `0 ${expected - endY}px`;
         to.el.style.clipPath = 'inset(50%)';
         passage.edge = revealTopDown ? -height * 0.25 : height * 1.25;
-      } else if (inS >= 1 || to.kind === 'globe') {
+      } else if (inS >= 1) {
         to.el.style.translate = `0 ${expected - endY}px`;
         to.el.style.removeProperty('clip-path');
         passage.edge = revealTopDown ? height * 1.35 : -height * 0.35;
       } else {
-        clipChapter(to, endY, expected, inEdge, tilt * 0.84, waveAmp * 0.86, phase + 0.85, revealTopDown);
+        clipChapter(to, endY, expected, inEdge, tilt * 0.86, waveAmp * 0.86, phase + 0.85, revealTopDown);
         passage.edge = inEdge;
       }
 
-      // Render ephemeral typography-locked ASCII fragmentation, curved meniscus glow & depth bridge.
-      veil.render({
+      // Render Abyssal Cipher: synchronized plane depth, ASCII disintegration, current ribbon & directional decode.
+      cipher.render({
         t,
         dir,
         outS,
@@ -591,18 +469,16 @@ export function mountMagneticCV() {
         tilt,
         amp: waveAmp,
         phase,
-        isGlobeHandoff,
         fromIsGlobe: from.kind === 'globe',
-        toIsGlobe: to.kind === 'globe',
-        revealTopDown
+        toIsGlobe: to.kind === 'globe'
       });
 
-      // Drive hierarchical heading-first ASCII decryption on incoming CV chapters.
+      // Drive permanent first-visit ASCII decryption on incoming CV chapters (completed lines untouched).
       if (to.kind === 'cv') {
         passage.progress = t;
         passage.titleProgress = titleArrivePhase(t);
         passage.bodyProgress = copyArrivePhase(t);
-        if (t >= 0.94) passage.settleAll = true;
+        if (t >= 0.93) passage.settleAll = true;
         passage.requestDecode?.();
       }
 
@@ -1145,7 +1021,7 @@ export function mountMagneticCV() {
     releaseBounds();
     size.disconnect();
     clearAnimation();
-    veil.destroy();
+    cipher.destroy();
     cvElements.forEach(el => delete el.dataset.cvMuted);
     if (globeStage) delete globeStage.dataset.globeMuted;
     focusable.forEach(el => el.removeAttribute('tabindex'));

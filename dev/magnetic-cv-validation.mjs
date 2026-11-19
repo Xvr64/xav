@@ -8,8 +8,8 @@ const { sleep } = await import('./fable-cdp.mjs');
 const quick = process.argv.includes('--quick');
 const FLAG = '/';
 const FALLBACK_OFF = '/?magneticCV=0';
-const SETTLE = 1360; // 1080ms CV passage + headless Chrome frame scheduling margin
-const GLOBE_SETTLE = 1480; // 1180ms Shanghai <-> Profile passage + scheduling margin
+const SETTLE = 1580; // 1240–1300ms Abyssal Cipher CV passage + headless Chrome frame scheduling margin
+const GLOBE_SETTLE = 1660; // 1360ms Shanghai <-> Profile passage + scheduling margin
 const report = { viewports: [], stationaryMouse: null, shanghaiHandoff: [], globe: [], failures: [] };
 
 const setup = `(() => {
@@ -276,19 +276,20 @@ async function viewport({ width, height, touch, dsf }) {
     const first = await state(c);
     assert.deepEqual(first.visible, ['introduction']);
     await c.evaluate(`jumpTo(${geo[0].end})`);
-    await c.evaluate('(window.frameLog = recordFrames(1600), 0)');
+    await c.evaluate('(window.frameLog = recordFrames(1800), 0)');
     await gesture(c, 1, touch, width, height);
     const { frames, ...motion } = await c.evaluate('frameLog');
     row.motion = motion;
     row.passageFrames = stats(frames);
     row.duration = await c.evaluate('durations.at(-1)');
-    assert.ok(row.duration >= 900 && row.duration <= 1450, `CV passage duration ${row.duration}ms`);
-    assert.ok(motion.maxHeroOutScale > 1.05, `Stage A hero camera push-in (${motion.maxHeroOutScale})`);
-    assert.ok(motion.minBodyOutScale < 0.97, `Stage A body depth separation (${motion.minBodyOutScale})`);
-    assert.ok(motion.curvedClipSeen, 'Stage B curved oceanic clip polygon played');
-    assert.ok(motion.veilActiveFrames >= 3, 'ephemeral typography-locked ASCII veil active during transition');
-    assert.equal(motion.dualReadableFrames, 0, 'Stage B->D handoff guarantees outgoing and incoming CV text never overlap');
-    assert.ok(motion.minHeroInScale < 0.96, `Stage D incoming hero depth zoom arrival (${motion.minHeroInScale})`);
+    assert.ok(row.duration >= 1180 && row.duration <= 1650, `CV passage duration ${row.duration}ms`);
+    assert.ok(motion.maxHeroOutScale > 1.05, `Phase 1 hero camera push-in (${motion.maxHeroOutScale})`);
+    assert.ok(motion.minBodyOutScale < 0.97, `Phase 1 body depth separation (${motion.minBodyOutScale})`);
+    assert.ok(motion.curvedClipSeen, 'Phase 2 curved oceanic clip polygon played');
+    assert.ok(motion.veilActiveFrames >= 3, 'Abyssal Cipher ASCII presentation canvas active during transition');
+    assert.ok(motion.depthSilenceFrames >= 3, `Phase 3 open-ocean Abyssal Current passage observed (${motion.depthSilenceFrames} frames)`);
+    assert.equal(motion.dualReadableFrames, 0, 'Phase 2->4 handoff guarantees outgoing and incoming CV text never overlap');
+    assert.ok(motion.minHeroInScale < 0.96, `Phase 4 incoming hero depth arrival (${motion.minHeroInScale})`);
     assert.ok(motion.decoding > 0, 'Phase 4 incoming ASCII decryption played');
     assert.deepEqual((await state(c)).visible, ['experience'], 'first passage lands on Experience');
     await c.evaluate('noteReadable()');
@@ -300,7 +301,7 @@ async function viewport({ width, height, touch, dsf }) {
     await walk(c, geo, -1, touch, width, height, 'up', row);
     row.walkDurations = await c.evaluate('durations.slice()');
     assert.equal(row.walkDurations.length, 12, 'six forward and six reverse CV passages');
-    assert.ok(row.walkDurations.every(ms => ms >= 900 && ms <= 1500), `walk timing: ${row.walkDurations}`);
+    assert.ok(row.walkDurations.every(ms => ms >= 1180 && ms <= 1650), `walk timing: ${row.walkDurations}`);
     row.upwardMutations = await c.evaluate('mutations');
     assert.equal(row.upwardMutations, 0, 'completed reveals strictly untouched on upward return');
     row.readCoverage = await c.evaluate(`({ total: allWords().length, read: allWords().filter(w => seenReadable.has(w)).length,
@@ -593,7 +594,7 @@ async function stationaryMouseTest() {
     assert.deepEqual(landedSkills.visible, ['skills'], 'flat-start gentle trackpad stroke must advance cleanly to skills');
 
     // 5. Long trackpad momentum tail outlasting transition down to 1px + short 60ms pause (still in draining!) + fresh trackpad ramp
-    for (let i = 0; i < 74; i++) {
+    for (let i = 0; i < 88; i++) {
       const dy = i < 4 ? Math.round(28 * ((i + 1) / 4)) : Math.max(1, Math.round(28 * 0.92 ** (i - 3)));
       await c.wheel(dy, cx, cy);
       await sleep(16);

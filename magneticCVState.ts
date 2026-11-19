@@ -9,11 +9,207 @@ export const magneticCV = typeof location !== 'undefined' && parseMagneticCV(loc
 /** The CV chapters isolated in reading order (Shanghai precedes them as chapter 0). */
 export const MAGNETIC_CHAPTERS = '#introduction, .cv-arch > section';
 
-/** Canonical cinematic editorial transition duration for CV <-> CV scenes (ms, 900–1200ms target). */
-export const TRANSITION_DURATION_MS = 1080;
+/** Canonical cinematic editorial transition duration for CV <-> CV scenes (ms, 1.2–1.4s Abyssal Cipher target). */
+export const TRANSITION_DURATION_MS = 1280;
 
-/** Special cinematic handoff duration for Shanghai (Globe) <-> Profile (ms, 900–1200ms target). */
-export const GLOBE_TRANSITION_DURATION_MS = 1180;
+/** Special cinematic handoff duration for Shanghai (Globe) <-> Profile (ms, grander ocean passage). */
+export const GLOBE_TRANSITION_DURATION_MS = 1360;
+
+export type TransitionPresetId =
+  | 'globe-handoff'
+  | 'editorial-command'
+  | 'hierarchy-shift'
+  | 'rhythmic-index'
+  | 'delicate-swell'
+  | 'natural-glide'
+  | 'refined-coda';
+
+export interface TransitionPreset {
+  id: TransitionPresetId;
+  duration: number;
+  /** Signed horizontal curvature bias of the Abyssal Current ribbon (-1..1). */
+  ribbonArc: number;
+  /** Tightness of the Phase 3 ASCII current ribbon (0.65..1.1). */
+  ribbonWidth: number;
+  /** Curved directional mask amplitude multiplier. */
+  waveAmpScale: number;
+  /** Curved directional mask diagonal tilt multiplier. */
+  waveTiltScale: number;
+  /** Phase 1 camera push intensity multiplier. */
+  depthPush: number;
+  /** Heading reconstruction presence & wave emphasis. */
+  heroLead: number;
+  /** Supporting row stagger cadence multiplier. */
+  rowStagger: number;
+  /** Restrained fragment density multiplier (cleanest on Interests -> Contact). */
+  currentDensity: number;
+}
+
+const PRESETS: Record<TransitionPresetId, TransitionPreset> = {
+  'globe-handoff': {
+    id: 'globe-handoff',
+    duration: GLOBE_TRANSITION_DURATION_MS,
+    ribbonArc: -0.78,
+    ribbonWidth: 1.0,
+    waveAmpScale: 1.08,
+    waveTiltScale: 1.06,
+    depthPush: 1.0,
+    heroLead: 1.12,
+    rowStagger: 1.05,
+    currentDensity: 1.06
+  },
+  'editorial-command': {
+    id: 'editorial-command',
+    duration: 1300,
+    ribbonArc: 0.62,
+    ribbonWidth: 0.96,
+    waveAmpScale: 1.04,
+    waveTiltScale: 1.04,
+    depthPush: 1.08,
+    heroLead: 1.14,
+    rowStagger: 1.0,
+    currentDensity: 1.0
+  },
+  'hierarchy-shift': {
+    id: 'hierarchy-shift',
+    duration: 1280,
+    ribbonArc: -0.46,
+    ribbonWidth: 0.9,
+    waveAmpScale: 0.96,
+    waveTiltScale: 0.98,
+    depthPush: 0.98,
+    heroLead: 1.06,
+    rowStagger: 0.96,
+    currentDensity: 0.94
+  },
+  'rhythmic-index': {
+    id: 'rhythmic-index',
+    duration: 1260,
+    ribbonArc: 0.34,
+    ribbonWidth: 0.84,
+    waveAmpScale: 0.88,
+    waveTiltScale: 0.92,
+    depthPush: 0.92,
+    heroLead: 1.0,
+    rowStagger: 0.78,
+    currentDensity: 0.92
+  },
+  'delicate-swell': {
+    id: 'delicate-swell',
+    duration: 1280,
+    ribbonArc: -0.58,
+    ribbonWidth: 0.88,
+    waveAmpScale: 1.02,
+    waveTiltScale: 0.94,
+    depthPush: 0.95,
+    heroLead: 1.04,
+    rowStagger: 1.16,
+    currentDensity: 0.9
+  },
+  'natural-glide': {
+    id: 'natural-glide',
+    duration: 1260,
+    ribbonArc: 0.44,
+    ribbonWidth: 0.86,
+    waveAmpScale: 0.92,
+    waveTiltScale: 0.88,
+    depthPush: 0.9,
+    heroLead: 1.0,
+    rowStagger: 0.98,
+    currentDensity: 0.86
+  },
+  'refined-coda': {
+    id: 'refined-coda',
+    duration: 1240,
+    ribbonArc: -0.28,
+    ribbonWidth: 0.68,
+    waveAmpScale: 0.78,
+    waveTiltScale: 0.8,
+    depthPush: 0.86,
+    heroLead: 1.05,
+    rowStagger: 0.88,
+    currentDensity: 0.68
+  }
+};
+
+/** Select a coherent, section-aware variation within the single Abyssal Cipher design system. */
+export function transitionPresetFor(fromId: string, toId: string, dir: GestureDirection): TransitionPreset {
+  if (fromId === 'journey' || toId === 'journey') {
+    const base = PRESETS['globe-handoff'];
+    return dir < 0 ? { ...base, ribbonArc: -base.ribbonArc } : base;
+  }
+  const pair = `${fromId}->${toId}`;
+  const reverse = `${toId}->${fromId}`;
+  const map: Record<string, TransitionPresetId> = {
+    'introduction->experience': 'editorial-command',
+    'experience->education': 'hierarchy-shift',
+    'education->skills': 'rhythmic-index',
+    'skills->languages': 'delicate-swell',
+    'languages->interests': 'natural-glide',
+    'interests->contact': 'refined-coda'
+  };
+  const key = map[pair] ?? map[reverse] ?? 'hierarchy-shift';
+  const base = PRESETS[key];
+  return dir < 0 ? { ...base, ribbonArc: -base.ribbonArc } : base;
+}
+
+export interface StaircaseLineBox {
+  top: number;
+  bottom: number;
+  left: number;
+  right: number;
+  /** Optional exact local pixel left-edges of characters along this line so the clip snaps cleanly between letters. */
+  charLefts?: number[];
+}
+
+/**
+ * Build a pure-GPU staircase clip-path polygon that reveals each rendered visual line of a
+ * typographic block left-to-right in exact lockstep with the Abyssal Cipher decoding wave.
+ * When `charLefts` is provided, the cut snaps cleanly to whole-character boundaries so letters
+ * never appear half-sliced mid-glyph.
+ */
+export function buildStaircaseClip(
+  width: number,
+  height: number,
+  lines: readonly StaircaseLineBox[],
+  reveals: readonly number[]
+): string {
+  if (!lines.length) return '';
+  let allZero = true;
+  let allDone = true;
+  for (let i = 0; i < lines.length; i++) {
+    const f = reveals[i] ?? 0;
+    if (f > 0.001) allZero = false;
+    if (f < 0.999) allDone = false;
+  }
+  if (allZero) return 'inset(50%)';
+  if (allDone) return '';
+
+  const pad = 18;
+  const pts: string[] = [`${-pad}px ${-pad}px`];
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const f = clamp01(reveals[i] ?? 0);
+    const yTop = i === 0 ? -pad : (lines[i - 1].bottom + line.top) * 0.5;
+    const yBot = i === lines.length - 1 ? height + pad : (line.bottom + lines[i + 1].top) * 0.5;
+    const span = Math.max(1, line.right - line.left);
+    let xEdge: number;
+    if (f <= 0.001) {
+      xEdge = -pad;
+    } else if (f >= 0.999) {
+      xEdge = width + pad;
+    } else if (line.charLefts && line.charLefts.length > 0) {
+      const idx = Math.floor(f * line.charLefts.length);
+      xEdge = idx <= 0 ? -pad : idx >= line.charLefts.length ? width + pad : Math.max(-pad, line.charLefts[idx] - 1.5);
+    } else {
+      xEdge = line.left + span * f;
+    }
+    pts.push(`${xEdge.toFixed(1)}px ${yTop.toFixed(1)}px`);
+    pts.push(`${xEdge.toFixed(1)}px ${yBot.toFixed(1)}px`);
+  }
+  pts.push(`${-pad}px ${(height + pad).toFixed(1)}px`);
+  return `polygon(${pts.join(',')})`;
+}
 
 /** Shared transition bridge read by the editorial ASCII decoder (TerminalEditorial.tsx) and ocean (asciiOcean.ts). */
 export const passage = {
@@ -83,38 +279,40 @@ export function depthGlideEase(t: number): number {
   return cubicBezier(t, 0.38, 0.02, 0.14, 1.00);
 }
 
-/** Stage A — Camera Push-In / Optical Focus Lock (0% -> 24%): draws focal title toward lens while body recedes. */
+/** Phase 1 — The Scene Loses Its Form (0% -> 24%, ~0–310 ms): subtle camera push-in & depth separation. */
 export function focusLockPhase(t: number): number {
-  return cubicBezier(clamp01(t / 0.24), 0.18, 0.96, 0.28, 1.0);
+  return cubicBezier(clamp01(t / 0.24), 0.18, 0.94, 0.28, 1.0);
 }
 
-/** Stage B — Outgoing Curved Clip & Local Edge ASCII Dissolution (10% -> 48%).
- * Guaranteed 100% cleared at t = 0.48, right as the incoming curved unveil opens cleanly. */
+/** Phase 2 — Outgoing Curved Mask & ASCII Disintegration (6% -> 43%, ~77–550 ms).
+ * Smooth cubic sweep engages visibly by ~200ms and clears 100% by t = 0.43, opening into Phase 3. */
 export function outSweepPhase(t: number): number {
-  return cinematicPhase(t, 0.10, 0.48);
+  return cubicBezier(clamp01((t - 0.06) / 0.37), 0.36, 0.08, 0.24, 1.0);
 }
 
-/** Stage C — Continuous Ocean Depth Movement (22% -> 76%, peaking at t = 0.49 across the bridge). */
+/** Phase 3 — The Abyssal Current & Ocean Depth Passage (24% -> 78%, peaking at t = 0.50).
+ * Between t = 0.43 and t = 0.57 (~180–195 ms), neither section's typography is readable while
+ * the living ocean, whales, and sculpted ASCII current ribbon carry the scene through depth. */
 export function depthPassagePhase(t: number): number {
-  if (t <= 0.22 || t >= 0.76) return 0;
-  if (t <= 0.49) return easedPhase(t, 0.22, 0.49);
-  return 1 - easedPhase(t, 0.49, 0.76);
+  if (t <= 0.24 || t >= 0.78) return 0;
+  if (t <= 0.50) return easedPhase(t, 0.24, 0.50);
+  return 1 - easedPhase(t, 0.50, 0.78);
 }
 
-/** Stage D — Incoming Curved Clip Reveal (48% -> 88%).
- * Begins at t = 0.48 right as outgoing clears (0.48 >= 0.48): overlapping rhythm with zero dual-text collision. */
+/** Phase 4 — Incoming Curved Oceanic Reveal (57% -> 86%, ~730–1100 ms).
+ * Opens cleanly after the Phase 3 open-ocean passage with zero dual-text collision. */
 export function inSweepPhase(t: number): number {
-  return cubicBezier(clamp01((t - 0.48) / 0.40), 0.16, 0.88, 0.22, 1.00);
+  return cubicBezier(clamp01((t - 0.57) / 0.29), 0.16, 0.86, 0.24, 1.00);
 }
 
-/** Stage D1 — Dramatic Heading Reconstruction (47% -> 84%): large heading emerges first with depth zoom & ASCII decode. */
+/** Phase 4A — Heading Directional ASCII Reconstruction (54% -> 82%, ~690–1050 ms): title resolves first. */
 export function titleArrivePhase(t: number): number {
-  return cubicBezier(clamp01((t - 0.47) / 0.37), 0.20, 0.14, 0.30, 1.00);
+  return cubicBezier(clamp01((t - 0.54) / 0.28), 0.18, 0.16, 0.28, 1.00);
 }
 
-/** Stage D2 — Refined Staggered Supporting Cascade (55% -> 94%): follows heading in crisp reading order. */
+/** Phase 4B — Supporting Typography Cascade (60% -> 90%, ~768–1152 ms): companies, labels & paragraphs follow. */
 export function copyArrivePhase(t: number): number {
-  return cubicBezier(clamp01((t - 0.55) / 0.39), 0.22, 0.12, 0.34, 1.00);
+  return cubicBezier(clamp01((t - 0.60) / 0.30), 0.20, 0.14, 0.32, 1.00);
 }
 
 /**

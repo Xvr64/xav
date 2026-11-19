@@ -49,25 +49,25 @@
       ],
       "longChapters": [],
       "motion": {
-        "decoding": 207,
-        "maxHeroOutScale": 1.135,
-        "minBodyOutScale": 0.9,
-        "minHeroInScale": 0.821,
-        "veilActiveFrames": 65,
+        "decoding": 215,
+        "maxHeroOutScale": 1.099,
+        "minBodyOutScale": 0.938,
+        "minHeroInScale": 0.929,
+        "veilActiveFrames": 120,
         "curvedClipSeen": true,
-        "depthSilenceFrames": 0,
+        "depthSilenceFrames": 19,
         "dualReadableFrames": 0
       },
       "passageFrames": {
-        "frames": 64,
-        "mean": 16.95,
+        "frames": 119,
+        "mean": 10.94,
         "p50": 8.4,
-        "p95": 50,
-        "p99": 116.8,
-        "max": 116.8,
-        "over34": 6
+        "p95": 25,
+        "p99": 33.4,
+        "max": 50.1,
+        "over34": 1
       },
-      "duration": 1077,
+      "duration": 1305,
       "down": [
         {
           "y": 9900,
@@ -169,18 +169,18 @@
         }
       ],
       "walkDurations": [
-        1077,
-        1073,
-        1079,
-        1081,
-        1085,
-        1082,
-        1085,
-        1074,
-        1121,
-        1092,
-        1109,
-        1109
+        1305,
+        1278,
+        1263,
+        1283,
+        1266,
+        1241,
+        1228,
+        1265,
+        1282,
+        1264,
+        1282,
+        1300
       ],
       "upwardMutations": 0,
       "readCoverage": {
@@ -189,8 +189,8 @@
         "missed": []
       },
       "shanghaiRoundtripDuration": [
-        1182,
-        1187
+        1367,
+        1368
       ],
       "stressGestures": "passed",
       "longDesktopReading": true,
@@ -289,24 +289,24 @@
       "longChapters": [],
       "motion": {
         "decoding": 215,
-        "maxHeroOutScale": 1.135,
-        "minBodyOutScale": 0.9,
-        "minHeroInScale": 0.902,
-        "veilActiveFrames": 42,
+        "maxHeroOutScale": 1.099,
+        "minBodyOutScale": 0.938,
+        "minHeroInScale": 0.93,
+        "veilActiveFrames": 105,
         "curvedClipSeen": true,
-        "depthSilenceFrames": 0,
+        "depthSilenceFrames": 16,
         "dualReadableFrames": 0
       },
       "passageFrames": {
-        "frames": 41,
-        "mean": 26.46,
-        "p50": 8.5,
-        "p95": 75.2,
-        "p99": 200.3,
-        "max": 200.3,
-        "over34": 7
+        "frames": 104,
+        "mean": 12.52,
+        "p50": 8.4,
+        "p95": 41.6,
+        "p99": 50.1,
+        "max": 58.4,
+        "over34": 6
       },
-      "duration": 1079,
+      "duration": 1305,
       "down": [
         {
           "y": 8800,
@@ -408,18 +408,18 @@
         }
       ],
       "walkDurations": [
-        1079,
-        1082,
-        1080,
-        1080,
-        1082,
-        1082,
-        1078,
-        1083,
-        1083,
-        1079,
-        1092,
-        1096
+        1305,
+        1280,
+        1261,
+        1284,
+        1268,
+        1239,
+        1238,
+        1265,
+        1275,
+        1266,
+        1275,
+        1301
       ],
       "upwardMutations": 0,
       "readCoverage": {
@@ -428,8 +428,8 @@
         "missed": []
       },
       "shanghaiRoundtripDuration": [
-        1186,
-        1195
+        1366,
+        1369
       ],
       "stressGestures": "passed",
       "navigation": {
@@ -526,25 +526,25 @@
       ],
       "longChapters": [],
       "motion": {
-        "decoding": 204,
-        "maxHeroOutScale": 1.135,
-        "minBodyOutScale": 0.9,
-        "minHeroInScale": 0.84,
-        "veilActiveFrames": 35,
+        "decoding": 215,
+        "maxHeroOutScale": 1.099,
+        "minBodyOutScale": 0.938,
+        "minHeroInScale": 0.93,
+        "veilActiveFrames": 121,
         "curvedClipSeen": true,
-        "depthSilenceFrames": 0,
+        "depthSilenceFrames": 19,
         "dualReadableFrames": 0
       },
       "passageFrames": {
-        "frames": 34,
-        "mean": 33.87,
-        "p50": 16.7,
-        "p95": 133.5,
-        "p99": 166.9,
-        "max": 166.9,
-        "over34": 9
+        "frames": 120,
+        "mean": 10.85,
+        "p50": 8.4,
+        "p95": 25.2,
+        "p99": 33.4,
+        "max": 41.7,
+        "over34": 1
       },
-      "duration": 1158,
+      "duration": 1311,
       "down": [
         {
           "y": 9900,
@@ -646,18 +646,18 @@
         }
       ],
       "walkDurations": [
-        1158,
-        1060,
-        1071,
-        1084,
-        1079,
-        1085,
-        1084,
-        1086,
-        1083,
-        1084,
-        1110,
-        1095
+        1311,
+        1276,
+        1264,
+        1283,
+        1266,
+        1242,
+        1236,
+        1261,
+        1282,
+        1259,
+        1281,
+        1301
       ],
       "upwardMutations": 0,
       "readCoverage": {
@@ -666,8 +666,8 @@
         "missed": []
       },
       "shanghaiRoundtripDuration": [
-        1181,
-        1185
+        1369,
+        1367
       ],
       "stressGestures": "passed",
       "navigation": {
@@ -765,25 +765,25 @@
       ],
       "longChapters": [],
       "motion": {
-        "decoding": 215,
-        "maxHeroOutScale": 1.135,
-        "minBodyOutScale": 0.9,
-        "minHeroInScale": 0.822,
-        "veilActiveFrames": 89,
+        "decoding": 207,
+        "maxHeroOutScale": 1.099,
+        "minBodyOutScale": 0.938,
+        "minHeroInScale": 0.927,
+        "veilActiveFrames": 127,
         "curvedClipSeen": true,
-        "depthSilenceFrames": 0,
+        "depthSilenceFrames": 20,
         "dualReadableFrames": 0
       },
       "passageFrames": {
-        "frames": 88,
-        "mean": 12.33,
+        "frames": 126,
+        "mean": 10.4,
         "p50": 8.4,
-        "p95": 33.3,
-        "p99": 83.5,
-        "max": 83.5,
+        "p95": 24.9,
+        "p99": 41.7,
+        "max": 41.7,
         "over34": 2
       },
-      "duration": 1077,
+      "duration": 1293,
       "down": [
         {
           "y": 9305,
@@ -885,18 +885,18 @@
         }
       ],
       "walkDurations": [
-        1077,
-        1077,
-        1101,
-        1079,
-        1076,
-        1078,
-        1077,
-        1077,
-        1079,
-        1109,
-        1082,
-        1081
+        1293,
+        1278,
+        1258,
+        1279,
+        1264,
+        1237,
+        1242,
+        1262,
+        1279,
+        1261,
+        1275,
+        1306
       ],
       "upwardMutations": 0,
       "readCoverage": {
@@ -905,8 +905,8 @@
         "missed": []
       },
       "shanghaiRoundtripDuration": [
-        1180,
-        1182
+        1364,
+        1367
       ],
       "stressGestures": "passed",
       "navigation": {
@@ -1010,25 +1010,25 @@
         "contact"
       ],
       "motion": {
-        "decoding": 54,
-        "maxHeroOutScale": 1.135,
-        "minBodyOutScale": 0.9,
-        "minHeroInScale": 0.84,
-        "veilActiveFrames": 62,
+        "decoding": 124,
+        "maxHeroOutScale": 1.099,
+        "minBodyOutScale": 0.938,
+        "minHeroInScale": 0.925,
+        "veilActiveFrames": 90,
         "curvedClipSeen": true,
-        "depthSilenceFrames": 0,
+        "depthSilenceFrames": 22,
         "dualReadableFrames": 0
       },
       "passageFrames": {
-        "frames": 61,
-        "mean": 17.79,
+        "frames": 89,
+        "mean": 14.72,
         "p50": 8.4,
-        "p95": 75,
-        "p99": 125.3,
-        "max": 125.3,
-        "over34": 7
+        "p95": 66.7,
+        "p99": 83.5,
+        "max": 83.5,
+        "over34": 8
       },
-      "duration": 1083,
+      "duration": 1264,
       "down": [
         {
           "y": 6163,
@@ -1055,7 +1055,7 @@
           "stuck": false
         },
         {
-          "y": 7039,
+          "y": 7041,
           "visible": [
             "education"
           ],
@@ -1177,7 +1177,7 @@
           "stuck": false
         },
         {
-          "y": 6861,
+          "y": 6951,
           "visible": [
             "education"
           ],
@@ -1217,7 +1217,7 @@
           "stuck": false
         },
         {
-          "y": 5155,
+          "y": 5245,
           "visible": [
             "introduction"
           ],
@@ -1234,18 +1234,18 @@
         }
       ],
       "walkDurations": [
-        1083,
-        1076,
-        1077,
-        1074,
-        1075,
-        1076,
-        1088,
-        1078,
-        1077,
-        1078,
-        1079,
-        1079
+        1264,
+        1275,
+        1254,
+        1282,
+        1270,
+        1245,
+        1244,
+        1261,
+        1278,
+        1260,
+        1280,
+        1308
       ],
       "upwardMutations": 0,
       "readCoverage": {
@@ -1254,8 +1254,8 @@
         "missed": []
       },
       "shanghaiRoundtripDuration": [
-        1183,
-        1181
+        1365,
+        1367
       ],
       "stressGestures": "passed",
       "navigation": {
@@ -1386,17 +1386,14 @@
         "want": "experience",
         "got": "experience",
         "st": "idle"
-      },
-      {
-        "want": "education",
-        "got": "education",
-        "st": "idle"
       }
     ],
     "trackpadAfterTail": [
       {
-        "afterTail": "skills",
-        "nextGentle": "languages"
+        "coalesced": "education",
+        "flatStart": "skills",
+        "afterTail": "languages",
+        "freshRampOnTail": "interests"
       }
     ],
     "pass": true
@@ -1450,7 +1447,7 @@
         "activeCity": "Shanghai",
         "visible": []
       },
-      "globeReverseY": 6291,
+      "globeReverseY": 6287,
       "pass": true
     }
   ],
@@ -1461,8 +1458,8 @@
         "ys": [
           2640,
           2700,
-          4201,
-          5465
+          4203,
+          5470
         ],
         "errors": [],
         "order": [
@@ -1472,14 +1469,15 @@
           "languages",
           "interests",
           "contact"
-        ]
+        ],
+        "hasMagneticClass": false
       },
       "on": {
         "ys": [
           2640,
           2700,
           4203,
-          5475
+          5465
         ],
         "errors": []
       },
@@ -1493,7 +1491,7 @@
           2532,
           3944,
           5292,
-          6653
+          6650
         ],
         "errors": [],
         "order": [
@@ -1503,14 +1501,15 @@
           "languages",
           "interests",
           "contact"
-        ]
+        ],
+        "hasMagneticClass": false
       },
       "on": {
         "ys": [
           2532,
-          3941,
-          5290,
-          6648
+          3944,
+          5292,
+          6661
         ],
         "errors": []
       },

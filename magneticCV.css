@@ -37,305 +37,35 @@
     pointer-events: none;
   }
 
-  /* Active transition layers — pure GPU compositing.
+  /* Active Abyssal Cipher transition layers — pure GPU compositing.
      Note: intentionally preserve pointer-events on transitioning sections so a stationary
      cursor never suffers stale hit-test cache / wheel-target lockup in Chromium or WebKit. */
   .magnetic-cv :is([data-cv-depart], [data-cv-arrive], [data-globe-depart], [data-globe-arrive]) {
     will-change: translate, clip-path;
   }
 
-  /* ==========================================================================
-     OUTGOING CV SECTION — STAGE A CAMERA PUSH-IN -> STAGE B CURVED DISSOLUTION
-     Hero title enlarges toward the lens with controlled perspective while
-     metadata and supporting typography separate onto deeper receding planes.
-     ========================================================================== */
-  .magnetic-cv [data-cv-depart] [data-cv-role] {
-    transform-origin: 14% 46%;
-    animation-duration: var(--cv-duration, 1080ms);
-    animation-fill-mode: both;
+  .magnetic-cv :is([data-cv-depart], [data-cv-arrive]) [data-cv-role] {
     will-change: transform, opacity;
   }
 
-  .magnetic-cv [data-cv-depart] [data-cv-role="hero"] {
-    animation-name: cv-v3-hero-depart;
-    animation-timing-function: cubic-bezier(0.32, 0.04, 0.22, 1);
-  }
-  .magnetic-cv [data-cv-depart]#introduction [data-cv-role="hero"] {
-    transform-origin: 24% 44%;
-    animation-name: cv-v3-lead-depart;
-  }
-  .magnetic-cv [data-cv-depart] .section-head--indented[data-cv-role="hero"],
-  .magnetic-cv [data-cv-depart] [data-cv-role="hero"] .section-head--indented {
-    transform-origin: 26% 46%;
-  }
-
-  .magnetic-cv [data-cv-depart] [data-cv-role="meta"] {
-    animation-name: cv-v3-meta-depart;
-    animation-timing-function: cubic-bezier(0.30, 0.06, 0.24, 1);
-  }
-
-  .magnetic-cv [data-cv-depart] [data-cv-role="item"] {
-    animation-name: cv-v3-item-depart;
-    animation-delay: var(--cv-depart-delay, 0ms);
-    animation-timing-function: cubic-bezier(0.34, 0.04, 0.26, 1);
-  }
-
-  /* ==========================================================================
-     INCOMING CV SECTION — STAGE D DRAMATIC RECONSTRUCTION -> STAGE E SETTLE
-     Large heading emerges FIRST out of deep Z-space with clear presence & ASCII
-     decryption; supporting lines & datum hairlines arrive in a sculpted cascade.
-     ========================================================================== */
-  .magnetic-cv [data-cv-arrive] [data-cv-role] {
-    transform-origin: 14% 48%;
-    animation-fill-mode: both;
-    animation-timing-function: cubic-bezier(0.16, 1, 0.28, 1);
+  .magnetic-cv :is([data-globe-depart], [data-globe-arrive]) > div > canvas,
+  .magnetic-cv :is([data-globe-depart], [data-globe-arrive]) .globe-caption > div[aria-hidden="false"] {
     will-change: transform, opacity;
-  }
-  .magnetic-cv [data-cv-arrive]#introduction [data-cv-role="hero"] {
-    transform-origin: 24% 46%;
-  }
-
-  .magnetic-cv [data-cv-arrive] [data-cv-role="hero"] {
-    animation-name: cv-v3-hero-arrive;
-    animation-delay: var(--cv-delay, 475ms);
-    animation-duration: var(--cv-item-dur, 450ms);
-    animation-timing-function: cubic-bezier(0.16, 0.90, 0.24, 1);
-  }
-
-  .magnetic-cv [data-cv-arrive] [data-cv-role="meta"] {
-    animation-name: cv-v3-meta-arrive;
-    animation-delay: var(--cv-delay, 560ms);
-    animation-duration: var(--cv-item-dur, 320ms);
-  }
-
-  .magnetic-cv [data-cv-arrive] [data-cv-role="item"] {
-    animation-name: cv-v3-item-arrive;
-    animation-delay: var(--cv-delay, 585ms);
-    animation-duration: var(--cv-item-dur, 355ms);
   }
 
   /* Synchronized left-to-right architectural hairline unfurl inside arriving rows */
   .terminal-portfolio.magnetic-cv [data-cv-arrive] :is(.exp-entry, .skill-row, .edu-entry--school, .contact-foot)::before {
     transform-origin: left center;
-    animation: cv-v3-datum-draw var(--cv-datum-dur, 340ms) cubic-bezier(0.16, 1, 0.28, 1) var(--cv-datum-delay, 620ms) both;
+    animation: cv-cipher-datum-draw var(--cv-datum-dur, 310ms) cubic-bezier(0.16, 1, 0.28, 1) var(--cv-datum-delay, 780ms) both;
   }
 
-  /* ==========================================================================
-     SHANGHAI GLOBE STAGE — SPECIAL WORLD <-> IDENTITY CINEMATIC HANDOFF
-     Pure GPU transform + opacity (zero blur rasterization stalls); never mutates
-     .globe-caption's Tailwind translateY(-50%).
-     ========================================================================== */
-  .magnetic-cv [data-globe-depart] > div > canvas,
-  .magnetic-cv [data-globe-arrive] > div > canvas {
-    transform-origin: 60% 47%;
-    animation-duration: var(--cv-duration, 1180ms);
-    animation-fill-mode: both;
-    will-change: transform, opacity;
-  }
-  .magnetic-cv [data-globe-depart] > div > canvas {
-    animation-name: cv-v3-globe-depart;
-    animation-timing-function: cubic-bezier(0.32, 0.04, 0.22, 1);
-  }
-  .magnetic-cv [data-globe-arrive] > div > canvas {
-    animation-name: cv-v3-globe-arrive;
-    animation-timing-function: cubic-bezier(0.16, 1, 0.28, 1);
-  }
-
-  .magnetic-cv [data-globe-depart] .globe-caption > div[aria-hidden="false"],
-  .magnetic-cv [data-globe-arrive] .globe-caption > div[aria-hidden="false"] {
-    transform-origin: 12% 50%;
-    animation-duration: var(--cv-duration, 1180ms);
-    animation-fill-mode: both;
-    will-change: transform, opacity;
-  }
-  .magnetic-cv [data-globe-depart] .globe-caption > div[aria-hidden="false"] {
-    animation-name: cv-v3-globe-caption-depart;
-    animation-timing-function: cubic-bezier(0.32, 0.04, 0.22, 1);
-  }
-  .magnetic-cv [data-globe-arrive] .globe-caption > div[aria-hidden="false"] {
-    animation-name: cv-v3-globe-caption-arrive;
-    animation-timing-function: cubic-bezier(0.16, 1, 0.28, 1);
-  }
-
-  /* ==========================================================================
-     KEYFRAMES — CINEMATIC 3D PERSPECTIVE DEPTH, ZERO BOUNCE, CRISP LANDING
-     ========================================================================== */
-
-  /* Section heading outgoing: commanding camera push-in toward lens before clipping wave slices through */
-  @keyframes cv-v3-hero-depart {
-    0% {
-      transform: perspective(1100px) translate3d(0, 0, 0) scale(1) rotateX(0deg);
-      opacity: 1;
-    }
-    22% {
-      transform: perspective(1100px) translate3d(0, calc(var(--cv-dir, 1) * -12px), 0) scale(1.12) rotateX(calc(var(--cv-dir, 1) * -1.2deg));
-      opacity: 1;
-    }
-    48%, 100% {
-      transform: perspective(1100px) translate3d(0, calc(var(--cv-dir, 1) * -50px), 0) scale(1.21) rotateX(calc(var(--cv-dir, 1) * -2.8deg));
-      opacity: 0.04;
-    }
-  }
-
-  /* Profile multi-line statement outgoing: stately push-in framed safely inside the measure */
-  @keyframes cv-v3-lead-depart {
-    0% {
-      transform: perspective(1100px) translate3d(0, 0, 0) scale(1) rotateX(0deg);
-      opacity: 1;
-    }
-    22% {
-      transform: perspective(1100px) translate3d(0, calc(var(--cv-dir, 1) * -10px), 0) scale(1.075) rotateX(calc(var(--cv-dir, 1) * -1deg));
-      opacity: 1;
-    }
-    48%, 100% {
-      transform: perspective(1100px) translate3d(0, calc(var(--cv-dir, 1) * -42px), 0) scale(1.135) rotateX(calc(var(--cv-dir, 1) * -2.2deg));
-      opacity: 0.04;
-    }
-  }
-
-  /* Metadata outgoing: steps cleanly back into the deepest receding depth plane */
-  @keyframes cv-v3-meta-depart {
-    0% {
-      transform: perspective(1100px) translate3d(0, 0, 0) scale(1);
-      opacity: 1;
-    }
-    18% {
-      transform: perspective(1100px) translate3d(0, calc(var(--cv-dir, 1) * -8px), 0) scale(0.945);
-      opacity: 0.62;
-    }
-    40%, 100% {
-      transform: perspective(1100px) translate3d(0, calc(var(--cv-dir, 1) * -32px), 0) scale(0.87);
-      opacity: 0.03;
-    }
-  }
-
-  /* Supporting rows outgoing: separates backward into midground depth as hero advances forward */
-  @keyframes cv-v3-item-depart {
-    0% {
-      transform: perspective(1100px) translate3d(0, 0, 0) scale(1) rotateX(0deg);
-      opacity: 1;
-    }
-    20% {
-      transform: perspective(1100px) translate3d(0, calc(var(--cv-dir, 1) * -16px), 0) scale(0.955) rotateX(calc(var(--cv-dir, 1) * 1.2deg));
-      opacity: 0.70;
-    }
-    44%, 100% {
-      transform: perspective(1100px) translate3d(0, calc(var(--cv-dir, 1) * -50px), 0) scale(0.90) rotateX(calc(var(--cv-dir, 1) * 2.6deg));
-      opacity: 0.04;
-    }
-  }
-
-  /* Hero incoming: rises with sculptural depth zoom & early clarity so ASCII decryption reads vividly */
-  @keyframes cv-v3-hero-arrive {
-    0% {
-      transform: perspective(1100px) translate3d(0, calc(var(--cv-dir, 1) * 54px), 0) scale(0.82) rotateX(calc(var(--cv-dir, 1) * 4.5deg));
-      opacity: 0;
-    }
-    24% {
-      opacity: 0.94;
-    }
-    100% {
-      transform: perspective(1100px) translate3d(0, 0, 0) scale(1) rotateX(0deg);
-      opacity: 1;
-    }
-  }
-
-  /* Metadata incoming: calm, poised depth emergence */
-  @keyframes cv-v3-meta-arrive {
-    0% {
-      transform: perspective(1100px) translate3d(0, calc(var(--cv-dir, 1) * 22px), 0) scale(0.94);
-      opacity: 0;
-    }
-    100% {
-      transform: perspective(1100px) translate3d(0, 0, 0) scale(1);
-      opacity: 1;
-    }
-  }
-
-  /* Supporting rows incoming: sculpted depth rise settling crisply into the editorial grid */
-  @keyframes cv-v3-item-arrive {
-    0% {
-      transform: perspective(1100px) translate3d(0, calc(var(--cv-dir, 1) * 32px), 0) scale(0.945) rotateX(calc(var(--cv-dir, 1) * 2deg));
-      opacity: 0;
-    }
-    34% {
-      opacity: 0.92;
-    }
-    100% {
-      transform: perspective(1100px) translate3d(0, 0, 0) scale(1) rotateX(0deg);
-      opacity: 1;
-    }
-  }
-
-  @keyframes cv-v3-datum-draw {
+  @keyframes cv-cipher-datum-draw {
     0% {
       transform: scaleX(0);
       opacity: 0.2;
     }
     100% {
       transform: scaleX(1);
-      opacity: 1;
-    }
-  }
-
-  /* Shanghai Globe departing into depth: commanding push breath, then whole-sphere majestic descent */
-  @keyframes cv-v3-globe-depart {
-    0% {
-      transform: translate3d(0, 0, 0) scale(1);
-      opacity: 1;
-    }
-    19% {
-      transform: translate3d(0, -6px, 0) scale(1.055);
-      opacity: 1;
-    }
-    46%, 100% {
-      transform: translate3d(0, -44px, 0) scale(0.76);
-      opacity: 0;
-    }
-  }
-
-  /* Shanghai caption departing: advances toward lens ahead of the sphere, dissolves smoothly */
-  @keyframes cv-v3-globe-caption-depart {
-    0% {
-      transform: perspective(1100px) translate3d(0, 0, 0) scale(1);
-      opacity: 1;
-    }
-    19% {
-      transform: perspective(1100px) translate3d(0, -10px, 0) scale(1.09);
-      opacity: 1;
-    }
-    44%, 100% {
-      transform: perspective(1100px) translate3d(0, -44px, 0) scale(1.16);
-      opacity: 0;
-    }
-  }
-
-  /* Shanghai Globe returning upward from Profile: rises WHOLE out of abyssal depth into focal poise */
-  @keyframes cv-v3-globe-arrive {
-    0%, 46% {
-      transform: translate3d(0, -40px, 0) scale(0.77);
-      opacity: 0;
-    }
-    70% {
-      opacity: 0.96;
-    }
-    96%, 100% {
-      transform: translate3d(0, 0, 0) scale(1);
-      opacity: 1;
-    }
-  }
-
-  /* Shanghai caption returning: arrives with depth presence just behind the Globe sphere */
-  @keyframes cv-v3-globe-caption-arrive {
-    0%, 52% {
-      transform: perspective(1100px) translate3d(0, -28px, 0) scale(0.86);
-      opacity: 0;
-    }
-    76% {
-      opacity: 0.96;
-    }
-    97%, 100% {
-      transform: perspective(1100px) translate3d(0, 0, 0) scale(1);
       opacity: 1;
     }
   }
@@ -347,5 +77,7 @@
   .magnetic-cv :is([data-globe-depart], [data-globe-arrive]) > div > canvas,
   .magnetic-cv :is([data-globe-depart], [data-globe-arrive]) .globe-caption > div {
     animation: none !important;
+    transform: none !important;
+    clip-path: none !important;
   }
 }

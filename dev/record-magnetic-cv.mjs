@@ -70,7 +70,7 @@ async function record(width, height, touch) {
       for (let i = 1; i < order.length; i++) {
         if (touch) await c.swipe(dir * 240, { x: width / 2, y0: height * .52, steps: 4, ms: 40 });
         else await c.wheel(dir * 120);
-        await sleep(1360);
+        await sleep(1580);
         assert.equal(await c.evaluate('location.hash'), '#' + order[i]);
       }
     }
