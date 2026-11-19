@@ -2,12 +2,12 @@
 //   node dev/magnetic-cv-validation.mjs            all checks
 //   node dev/magnetic-cv-validation.mjs --quick    one desktop + one mobile viewport, no Globe comparison
 import assert from 'node:assert/strict';
-process.env.PHASE2_OUT ||= 'artifacts/magnetic-cv';
+process.env.PHASE2_OUT ||= 'artifacts/magnetic-cv-v2';
 const { server, browser, png, save, stats, stopServers } = await import('./phase2-lib.mjs');
 const { sleep } = await import('./fable-cdp.mjs');
 const quick = process.argv.includes('--quick');
 const FLAG = '/?magneticCV=1';
-const SETTLE = 1350; // one passage (960ms) plus decoding and a frame of margin
+const SETTLE = 780; // Passage plus headless input/frame scheduling margin
 const report = { viewports: [], globe: [], failures: [] };
 
 const setup = `(() => {
@@ -33,13 +33,14 @@ const setup = `(() => {
     });
     return { y: Math.round(scrollY), hash: location.hash, visible: visible.map(el => el.id), overlap,
       inView: words.length, unreadable: mustRead.filter(w => !isReadable(w)).map(w => w.querySelector('.ascii-source').textContent),
-      passage: !!document.querySelector('[data-cv-depart],[data-cv-arrive]') };
+      passage: !!document.querySelector('[data-cv-depart],[data-cv-arrive]'),
+      staged: els.some(el => el.style.translate || el.style.clipPath || el.querySelector('[data-drift]')) };
   };
   window.geometry = () => chapterEls().map(el => {
     const r = el.getBoundingClientRect(), top = Math.round(r.top + scrollY), bottom = r.bottom + scrollY;
     const pad = parseFloat(getComputedStyle(el).paddingBottom) || 0;
     const rawEnd = Math.round(Math.min(bottom, bottom - pad + 16) - innerHeight);
-    return { id: el.id, top, end: rawEnd - top < 24 ? top : rawEnd, h: Math.round(r.height) };
+    return { id: el.id, top, end: bottom - pad <= top + innerHeight ? top : rawEnd, h: Math.round(r.height) };
   });
   window.seenReadable = new Set();
   window.noteReadable = () => { const v = chapterEls().find(el => !el.hasAttribute('data-cv-muted')); if (v) wordsOf(v).filter(inView).filter(isReadable).forEach(w => seenReadable.add(w)); };
@@ -47,16 +48,37 @@ const setup = `(() => {
   window.watched = new Set(); window.mutations = 0;
   new MutationObserver(rs => { for (const r of rs) { const el = r.target instanceof Element ? r.target : r.target.parentElement; if (el?.closest('.ascii-visual') && watched.has(el?.closest('.ascii-word'))) mutations++; } })
     .observe(document.querySelector('main'), { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ['style', 'class'] });
-  window.passages = 0;
-  new MutationObserver(rs => { for (const r of rs) if (r.attributeName === 'data-cv-depart' && r.target.hasAttribute('data-cv-depart')) passages++; })
-    .observe(document.querySelector('main'), { subtree: true, attributes: true, attributeFilter: ['data-cv-depart'] });
+  window.passages = 0; window.durations = []; let began = 0;
+  new MutationObserver(rs => { for (const r of rs) {
+    if (r.target.hasAttribute('data-cv-depart')) { passages++; began = performance.now(); }
+    else if (began) { durations.push(performance.now() - began); began = 0; }
+  } }).observe(document.querySelector('main'), { subtree: true, attributes: true, attributeFilter: ['data-cv-depart'] });
   window.frameLog = null;
-  window.recordFrames = ms => new Promise(resolve => { const d = []; let last = 0, drift = 0, decoding = 0, depart = false, arrive = false; const t0 = performance.now();
+  window.recordFrames = ms => new Promise(resolve => {
+    const d = []; let last = 0, drift = 0, decoding = 0, maxScale = 1, minScale = 1, sharedCut = 0, maxSeamError = 0;
+    const t0 = performance.now();
     const f = t => {
-      if (last) d.push(t - last); last = t;
-      if (document.querySelector('[data-cv-depart]')) { depart = true; drift = Math.max(drift, document.querySelectorAll('[data-cv-depart] [data-drift]').length); }
-      if (document.querySelector('[data-cv-arrive]')) { arrive = true; decoding = Math.max(decoding, document.querySelectorAll('[data-cv-arrive] .ascii-cell').length); }
-      if (t - t0 > ms) resolve({ frames: d, midDepart: { depart, drift }, midArrive: { arrive, decoding } });
+      const from = document.querySelector('[data-cv-depart]'), to = document.querySelector('[data-cv-arrive]');
+      if (from && to) {
+        if (last) d.push(t - last); last = t;
+        drift = Math.max(drift, from.querySelectorAll('[data-drift]').length);
+        decoding = Math.max(decoding, to.querySelectorAll('.ascii-cell').length);
+        const edges = [from, to].map(el => {
+          const poly = getComputedStyle(el).clipPath;
+          if (!poly.startsWith('polygon(')) return null;
+          const points = poly.slice(8, -1).split(',').map(p => parseFloat(p.trim().split(/ +/)[1]) + el.getBoundingClientRect().top);
+          return points.slice(2);
+        });
+        if (edges.every(Boolean)) {
+          sharedCut++;
+          maxSeamError = Math.max(maxSeamError, ...edges[0].map((y, i) => Math.abs(y - edges[1][i])));
+        }
+        maxScale = Math.max(maxScale, new DOMMatrixReadOnly(getComputedStyle(from.firstElementChild).transform).a);
+        if (+getComputedStyle(to.firstElementChild).opacity > 0) {
+          minScale = Math.min(minScale, new DOMMatrixReadOnly(getComputedStyle(to.firstElementChild).transform).a);
+        }
+      }
+      if (t - t0 > ms) resolve({ frames: d, drift, decoding, maxScale, minScale, sharedCut, maxSeamError });
       else requestAnimationFrame(f);
     }; requestAnimationFrame(f); });
   window.jumpTo = y => new Promise(r => { scrollTo({ top: y, behavior: 'instant' }); requestAnimationFrame(() => requestAnimationFrame(r)); });
@@ -73,11 +95,82 @@ async function gesture(c, dir, touch, width, height = 844) {
 /** A trackpad flick: one hand stroke followed by a long decaying momentum tail (~1.3s). */
 async function trackpad(c, dir, events = 80, start = 46) {
   for (let i = 0; i < events; i++) {
-    await c.wheel(dir * Math.max(1, Math.round(start * 0.94 ** i)));
+    await c.wheel(dir * Math.max(1, Math.round(start * 0.94 ** i)), 150, 190);
     await sleep(14);
   }
 }
 const index = (geo, id) => geo.findIndex(g => g.id === id);
+
+// Each case starts at a measured reading edge. Count every passage, including a snap
+// that could return to the expected section after a spurious reversal.
+async function stressGestures(c, geo, { width, height, touch }, row) {
+  const startAt = async id => {
+    const g = geo.find(g => g.id === id);
+    await c.evaluate(`jumpTo(${g.end})`);
+    await sleep(400);
+  };
+  const exact = async (id, dir, input) => {
+    const before = await c.evaluate('passages');
+    await input();
+    await sleep(SETTLE);
+    const dest = geo[index(geo, id) + dir];
+    const landed = await state(c);
+    assert.deepEqual(landed.visible, [dest.id], `one gesture from ${id} must land on ${dest.id}`);
+    assert.equal(await c.evaluate('passages') - before, 1, 'exactly one passage, including all momentum');
+    assert.ok(Math.abs(landed.y - (dir > 0 ? dest.top : dest.end)) <= 2, 'momentum cannot move the landing');
+  };
+  await startAt('skills');
+  if (touch) {
+    await exact('skills', 1, async () => {
+      const fling = () => c.swipe(height * .65, { x: width / 2, y0: height * .82, steps: 3, ms: 18 });
+      await fling();
+      // A second finger stroke beginning during the cut must never be queued.
+      await fling();
+    });
+    await exact('languages', -1, () => c.swipe(-height * .65, { x: width / 2, y0: height * .16, steps: 3, ms: 18 }));
+  } else {
+    await exact('skills', 1, () => c.wheel(100000));
+    await exact('languages', 1, async () => {
+      // A flywheel coasts past the animation, slows down, then produces two coalesced spikes.
+      // No quiet interval or new stroke occurs between these events.
+      await trackpad(c, 1, 46, 180);
+      await c.wheel(480);
+      await trackpad(c, 1, 30, 40);
+      await c.wheel(-80);
+    });
+    await exact('interests', -1, () => c.wheel(-100000));
+    await exact('languages', -1, () => trackpad(c, -1));
+  }
+  row.stressGestures = 'passed';
+}
+
+async function desktopReading(c, width, height) {
+  await c.desktop(width, 400);
+  try {
+    await sleep(400);
+    const geo = await c.evaluate('geometry()');
+    const chapter = geo.find(g => g.id === 'experience');
+    assert.ok(chapter.end > chapter.top + 60, 'short desktop window has an actual reading span');
+    await c.evaluate(`jumpTo(${chapter.top})`);
+    await c.wheel(40, 150, 190);
+    await sleep(450);
+    const middle = await state(c);
+    assert.ok(middle.y > chapter.top && middle.y < chapter.end, 'native wheel reads within the chapter');
+    const before = await c.evaluate('passages');
+    await c.wheel(100000, 150, 190);
+    await trackpad(c, 1, 36);
+    assert.deepEqual((await state(c)).visible, [chapter.id]);
+    assert.equal((await state(c)).y, chapter.end);
+    assert.equal(await c.evaluate('passages'), before, 'a reading gesture stops at the final line');
+    await sleep(350);
+    await c.wheel(120, 150, 190);
+    await sleep(SETTLE);
+    assert.deepEqual((await state(c)).visible, ['education'], 'a new gesture at that edge snaps');
+  } finally {
+    await c.desktop(width, height);
+    await sleep(400);
+  }
+}
 
 async function walk(c, geo, dir, touch, width, height, label, row) {
   const steps = [];
@@ -97,7 +190,14 @@ async function walk(c, geo, dir, touch, width, height, label, row) {
     assert.deepEqual(s.overlap, [], `${label}: no other chapter's text on screen`);
     assert.deepEqual(s.unreadable, [], `${label}: every line on screen readable after the passage (${s.visible[0]})`);
     assert.ok(Math.abs(moved) <= 1 && moved * dir >= 0, `${label}: one gesture moves at most one chapter, in its direction`);
-    assert.equal(s.passage, false, `${label}: passage cleaned up`);
+    const origin = geo[index(geo, before.visible[0])];
+    const canSnap = dir > 0 ? before.y >= origin.end - 2 : before.y <= origin.top + 2;
+    if (geo[index(geo, origin.id) + dir]) assert.equal(moved, canSnap ? dir : 0, 'only a gesture at a reading edge advances');
+    if (moved) {
+      const dest = geo[index(geo, s.visible[0])];
+      assert.ok(Math.abs(s.y - (dir > 0 ? dest.top : dest.end)) <= 2, 'precise landing');
+    }
+    assert.equal(s.passage || s.staged, false, 'all mask, translation and glyph effects cleaned up at rest');
   }
   assert.equal(s.visible[0], goal, `${label}: reached ${goal}`);
   // Every chapter from the walk's start to the goal was visited in order.
@@ -109,7 +209,7 @@ async function walk(c, geo, dir, touch, width, height, label, row) {
 }
 
 async function viewport({ width, height, touch, dsf }) {
-  const c = await browser({ width, height, touch, dsf, path: FLAG });
+  const c = await browser({ width, height, touch, dsf, path: FLAG + '#introduction' });
   const row = { width, height, touch };
   try {
     const geo = await c.evaluate(setup);
@@ -117,73 +217,52 @@ async function viewport({ width, height, touch, dsf }) {
     row.longChapters = geo.filter(g => g.end > g.top).map(g => g.id);
     assert.equal(await c.evaluate(`!!document.querySelector('.terminal-portfolio.magnetic-cv')`), true, 'flag on');
 
+    assert.ok(Math.abs((await state(c)).y - geo[0].top) <= 2, 'cold fragment lands on Profile after fonts load');
+
+    if (process.argv.includes('--gestures-only')) {
+      await stressGestures(c, geo, { width, height, touch }, row);
+      row.pass = true;
+      return;
+    }
     // 1. Downward through every chapter, one gesture at a time, capturing the first passage mid-flight.
     await c.evaluate(`jumpTo(${geo[0].top})`);
     await sleep(500);
     await c.evaluate('noteReadable()');
     const first = await state(c);
     assert.deepEqual(first.visible, ['introduction']);
-    const isLongIntro = row.longChapters.includes('introduction');
-    if (!isLongIntro) {
-      await c.evaluate('(window.frameLog = recordFrames(1150), 0)');
-      const t0 = Date.now();
-      await gesture(c, 1, touch, width, height);
-      await sleep(Math.max(20, 220 - (Date.now() - t0)));
-      await png(c, `${width}-passage-depart`);
-      await sleep(Math.max(20, 680 - (Date.now() - t0)));
-      await png(c, `${width}-passage-arrive`);
-      await sleep(Math.max(100, SETTLE - (Date.now() - t0)));
-      const rec = await c.evaluate('frameLog');
-      row.midDepart = rec.midDepart;
-      row.midArrive = rec.midArrive;
-      row.passageFrames = stats(rec.frames);
-      const s = await state(c);
-      assert.deepEqual(s.visible, ['experience'], 'first passage lands on Experience');
-      assert.ok(row.midDepart.depart && row.midDepart.drift > 0, 'the departing chapter lifts into the current');
-      assert.ok(row.midArrive.arrive && row.midArrive.decoding > 0, 'the arriving chapter decodes during the passage');
-      await c.evaluate('noteReadable()');
-    }
+    await c.evaluate(`jumpTo(${geo[0].end})`);
+    await c.evaluate('(window.frameLog = recordFrames(1000), 0)');
+    await gesture(c, 1, touch, width, height);
+    const { frames, ...motion } = await c.evaluate('frameLog');
+    row.motion = motion;
+    row.passageFrames = stats(frames);
+    row.duration = await c.evaluate('durations.at(-1)');
+    assert.ok(row.duration >= 550 && row.duration <= 700, `passage duration ${row.duration}ms`);
+    assert.ok(motion.sharedCut >= 3 && motion.maxSeamError <= 2, 'both viewport masks meet on the same edge');
+    assert.ok(motion.maxScale > 1 && motion.minScale < 1, 'both depth transforms played');
+    assert.ok(motion.drift > 0 && motion.decoding > 0, 'local dissolution and incoming decryption played');
+    assert.deepEqual((await state(c)).visible, ['experience'], 'first passage lands on Experience');
+    await c.evaluate('noteReadable()');
     await walk(c, geo, 1, touch, width, height, 'down', row);
     await png(c, `${width}-contact`);
 
     // 2. Back up: completed ASCII reveals are never replayed or re-scrambled.
     await c.evaluate(`allWords().filter(isReadable).forEach(w => watched.add(w)); mutations = 0`);
     await walk(c, geo, -1, touch, width, height, 'up', row);
+    row.walkDurations = await c.evaluate('durations.slice()');
+    assert.equal(row.walkDurations.length, 12, 'six forward and six reverse passages');
+    assert.ok(row.walkDurations.every(ms => ms >= 550 && ms <= 700), `walk timing: ${row.walkDurations}`);
     row.upwardMutations = await c.evaluate('mutations');
     assert.equal(row.upwardMutations, 0, 'completed reveals untouched on the way up');
     row.readCoverage = await c.evaluate(`({ total: allWords().length, read: allWords().filter(w => seenReadable.has(w)).length,
       missed: allWords().filter(w => !seenReadable.has(w)).map(w => w.querySelector('.ascii-source').textContent).slice(0, 12) })`);
     assert.equal(row.readCoverage.read, row.readCoverage.total, 'every CV word was on screen and readable at a resting point');
 
-    // 3. Trackpad inertia: one flick and its momentum tail make exactly one passage.
-    if (!touch) {
-      const exp = geo[index(geo, 'experience')];
-      await c.evaluate(`jumpTo(${exp.top})`); await sleep(400);
-      const flicks = [];
-      for (const dir of [1, 1, -1, -1]) {
-        const before = await state(c);
-        const p0 = await c.evaluate('passages');
-        await trackpad(c, dir);
-        await sleep(SETTLE);
-        const after = await state(c);
-        const moved = index(geo, after.visible[0]) - index(geo, before.visible[0]);
-        flicks.push({ dir, from: before.visible[0], to: after.visible[0], y: after.y, passages: await c.evaluate('passages') - p0 });
-        assert.ok(flicks.at(-1).passages <= 1 && Math.abs(moved) <= 1, `trackpad flick ${JSON.stringify(flicks.at(-1))}`);
-        assert.deepEqual(after.overlap, []);
-      }
-      row.trackpad = flicks;
-      assert.ok(flicks.some(f => f.passages === 1), 'a trackpad flick can start a passage');
-    } else {
-      // A fast flick (the platform may add fling momentum): still at most one chapter.
-      const exp = geo[index(geo, 'experience')];
-      await c.evaluate(`jumpTo(${exp.top})`); await sleep(400);
-      const before = await state(c);
-      const span = Math.min(420, Math.round(height * .62));
-      await c.swipe(span, { x: width / 2, y0: Math.round(height * .82), steps: 4, ms: 50 });
-      await sleep(SETTLE + 400);
-      const after = await state(c);
-      row.fling = { from: before.visible[0], to: after.visible[0], y: after.y };
-      assert.ok(index(geo, after.visible[0]) - index(geo, before.visible[0]) <= 1, 'a fling moves at most one chapter');
+    await stressGestures(c, geo, { width, height, touch }, row);
+
+    if (width === 1440 && !touch) {
+      await desktopReading(c, width, height);
+      row.longDesktopReading = true;
     }
 
     // 4. Momentum carried in from the Globe's runway settles on the Profile.
@@ -195,8 +274,8 @@ async function viewport({ width, height, touch, dsf }) {
     else await trackpad(c, 1, 70, 60);
     await sleep(SETTLE + 600);
     row.carriedIn = await state(c);
-    assert.notEqual(row.carriedIn.visible[0], 'education', 'carried-in momentum never skips chapters');
-    assert.ok(['introduction'].includes(row.carriedIn.visible[0]) || row.carriedIn.y < geo[0].top, `carried-in momentum settles on the Profile ${JSON.stringify(row.carriedIn)}`);
+    assert.deepEqual(row.carriedIn.visible, ['introduction'], 'carried-in momentum settles on the Profile');
+    assert.ok(Math.abs(row.carriedIn.y - geo[0].top) <= 2, 'the Profile handoff lands at its heading');
     assert.deepEqual(row.carriedIn.overlap, []);
 
     // 5. Direct navigation: hash, history, gauge, header link, focus.
@@ -225,10 +304,23 @@ async function viewport({ width, height, touch, dsf }) {
     const fromNav = await state(c);
     assert.equal(fromNav.visible[0], geo[index(geo, 'contact') - 1].id, 'gesture after navigation');
 
+    // A real keypress moves focus and scroll together; a held key cannot chain snaps.
+    const key = (type, autoRepeat = false) => c.send('Input.dispatchKeyEvent', {
+      type, key: 'PageDown', code: 'PageDown', windowsVirtualKeyCode: 34, autoRepeat
+    });
+    await c.evaluate(`jumpTo(${geo[0].end})`);
+    await key('keyDown');
+    await sleep(SETTLE);
+    await key('keyDown', true);
+    await key('keyUp');
+    await sleep(SETTLE);
+    assert.deepEqual((await state(c)).visible, ['experience'], 'one keypress moves one chapter');
+    assert.equal(await c.evaluate('document.activeElement.id'), 'experience', 'keyboard focus follows the snap');
+
     // 6. Reduced motion: the same one-gesture steps, landing instantly with no passage.
     await c.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] });
     await sleep(500);
-    const reduced = await c.evaluate('setup = 1; geometry()');
+    const reduced = await c.evaluate('geometry()');
     const exp = reduced[index(reduced, 'experience')];
     await c.evaluate(`jumpTo(${exp.end})`); await sleep(400);
     const p0 = await c.evaluate('passages');
@@ -254,7 +346,7 @@ async function viewport({ width, height, touch, dsf }) {
     await png(c, `${width}-failure`).catch(() => {});
   } finally {
     report.viewports.push(row); save('validation', report);
-    console.log(JSON.stringify({ width, height, pass: row.pass, error: row.error, longChapters: row.longChapters, coverage: row.readCoverage, trackpad: row.trackpad, fling: row.fling, carriedIn: row.carriedIn && { visible: row.carriedIn.visible, y: row.carriedIn.y } }));
+    console.log(JSON.stringify({ width, height, pass: row.pass, error: row.error, longChapters: row.longChapters, coverage: row.readCoverage, stressGestures: row.stressGestures, carriedIn: row.carriedIn && { visible: row.carriedIn.visible, y: row.carriedIn.y } }));
     await c.close();
   }
 }
@@ -299,7 +391,7 @@ try {
   await server('after');
   const sizes = quick
     ? [{ width: 1440, height: 900 }, { width: 390, height: 844, touch: true, dsf: 2 }]
-    : [{ width: 1440, height: 900 }, { width: 1280, height: 600 }, { width: 390, height: 844, touch: true, dsf: 2 }, { width: 320, height: 568, touch: true, dsf: 2 }];
+    : [{ width: 1440, height: 900 }, { width: 768, height: 900 }, { width: 390, height: 844, touch: true, dsf: 2 }, { width: 320, height: 568, touch: true, dsf: 2 }];
   for (const size of sizes) await viewport(size);
   if (!quick) for (const size of [{ width: 1440, height: 900 }, { width: 390, height: 844, touch: true, dsf: 2 }]) await globe(size);
   save('validation', report);

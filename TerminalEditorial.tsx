@@ -41,6 +41,7 @@ type Line = EncryptedLineState & {
   top: number;
   entryEnd: number;
   voice: 'title' | 'meta' | 'body';
+  heading: boolean;
   count: number;
   words: Word[];
 };
@@ -122,7 +123,7 @@ export function useEditorialScroll() {
             const voice = block.closest('.meta, dt, time') ? 'meta' : block.closest('h2, h3') ? 'title' : 'body';
             const span = chapter ? chapterSpans.get(chapter) : undefined;
             const restY = span ? (top < span.top + viewport ? span.top : span.end) : maxScroll;
-            line = { block, chapter, top, entryEnd: entryEndFor(top - restY, viewport, ENCRYPTED_ENTRY_END), count: 0, voice,
+            line = { block, chapter, top, entryEnd: entryEndFor(top - restY, viewport, ENCRYPTED_ENTRY_END), count: 0, voice, heading: !!block.closest('h2'),
               words: [], currentP: 0, revealState: 'hidden' };
             siblings.push(line);
             lines.push(line);
@@ -163,8 +164,14 @@ export function useEditorialScroll() {
         const rect = range.getBoundingClientRect();
         const cell = document.createElement('span');
         cell.className = 'ascii-cell';
-        cell.style.left = `${rect.left - box.left}px`;
-        cell.style.width = `${rect.width}px`;
+        // Fractions stay registered to the source while its heading scales into place.
+        if (magneticCV && box.width) {
+          cell.style.left = `${100 * (rect.left - box.left) / box.width}%`;
+          cell.style.width = `${100 * rect.width / box.width}%`;
+        } else {
+          cell.style.left = `${rect.left - box.left}px`;
+          cell.style.width = `${rect.width}px`;
+        }
         return cell;
       });
       word.states.fill(-2);
@@ -174,7 +181,7 @@ export function useEditorialScroll() {
       frame = 0;
       if (disposed || document.hidden) return;
       if (creation.active && creation.time < HERO_TEXT_AT) { schedule(); return; }
-      const measured = dirty;
+      const measured = dirty && !passage.destination;
       if (measured) measure();
       const y = scrollY;
       const initial = !Number.isFinite(lastY);
@@ -188,9 +195,16 @@ export function useEditorialScroll() {
         const forced = media.matches || (focused && line.words.some(word => focused.contains(word.el)));
         let movement = delta;
         if (magneticCV && passage.destination === line.chapter && line.chapter) {
-          const title = !!line.block.closest('h2');
-          zone = Math.min(zone, easedPhase(passage.progress, title ? .48 : .61, title ? .81 : .98));
-          movement = passage.direction;
+          // Choreograph the lines that will be visible at rest, including the bottom
+          // screen when entering a tall chapter from below. Deeper lines keep their scroll band.
+          const position = line.top - passage.landing;
+          const distance = passage.direction * (passage.edge - position) / viewport;
+          const span = line.heading ? .34 : line.voice === 'meta' ? .15 : .23;
+          zone = position < viewport ? easedPhase(distance, -.06, span) : 0;
+          movement = 1; // First visits decode in either direction. Completed lines are out of the queue.
+        } else if (!forced && line.chapter?.hasAttribute('data-cv-muted')) {
+          zone = 0;
+          movement = 0;
         }
         const next = advanceEncryptedLine(line, zone, movement, forced || (initial && zone > 0));
         const unchanged = next.currentP === line.currentP;
@@ -241,7 +255,7 @@ export function useEditorialScroll() {
       // No time-driven RAF, whale-wake subscription, or work on completed lines.
     };
     const schedule = () => {
-      if (!frame && !disposed && !document.hidden) frame = requestAnimationFrame(render);
+      if (!frame && !disposed && !document.hidden && !passage.destination) frame = requestAnimationFrame(render);
     };
     const invalidate = () => { dirty = true; schedule(); };
     const resize = new ResizeObserver(invalidate);
@@ -263,7 +277,11 @@ export function useEditorialScroll() {
     document.addEventListener('visibilitychange', onVisibility);
     media.addEventListener('change', invalidate);
     document.fonts.ready.then(() => { if (!disposed) invalidate(); });
-    if (magneticCV) passage.requestDecode = schedule;
+    if (magneticCV) passage.requestDecode = () => {
+      // The snap already owns a frame. Paint its glyphs before that frame is presented.
+      cancelAnimationFrame(frame);
+      render();
+    };
     render();
     return () => {
       if (magneticCV) passage.requestDecode = null;

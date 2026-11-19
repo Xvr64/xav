@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parseMagneticCV, magneticCV, easedPhase, readingEnd, READING_BREATH, READING_SLACK } from './magneticCVState.ts';
+import { parseMagneticCV, magneticCV, easedPhase, readingEnd, READING_BREATH } from './magneticCVState.ts';
 
 test('the magnetic CV is a development preview behind ?magneticCV=1 only', () => {
   assert.equal(parseMagneticCV('?magneticCV=1', true), true);
@@ -35,8 +35,11 @@ test('a chapter that fits the screen ends where it starts', () => {
 test('overflow that is only bottom padding never costs a gesture', () => {
   // Mobile: 880px chapter on an 844px screen, 59px of padding below the last line.
   assert.equal(readingEnd(9288, 9288 + 880, 59, 844), 9288);
-  // A few pixels of content past the foot is still one screen.
-  assert.equal(readingEnd(0, 900 + 60 + READING_SLACK - READING_BREATH - 1, 60, 900), 0);
+  assert.equal(readingEnd(0, 960, 60, 900), 0);
+});
+
+test('even a partially clipped last line has a reachable reading edge', () => {
+  assert.equal(readingEnd(0, 967, 60, 900), 7 + READING_BREATH);
 });
 
 test('a long chapter ends once its last line, with breathing room, meets the viewport foot', () => {

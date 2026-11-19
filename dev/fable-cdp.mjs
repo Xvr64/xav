@@ -32,6 +32,11 @@ export async function launch({ port = 9333, width = 1440, height = 900, profile 
   let id = 0;
   const pending = new Map();
   const handlers = new Map();
+  // Browser.close can close the socket before acknowledging its own command.
+  ws.onclose = () => {
+    for (const { rej } of pending.values()) rej(new Error('Chrome debugging connection closed'));
+    pending.clear();
+  };
   ws.onmessage = (ev) => {
     const msg = JSON.parse(ev.data);
     if (msg.id && pending.has(msg.id)) {

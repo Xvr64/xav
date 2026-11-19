@@ -1,4 +1,5 @@
 @media screen {
+  html[data-cv-boundary] { overflow-y: hidden; }
   .terminal-portfolio.magnetic-cv .cv-arch > section + section { margin-top: 0 !important; }
   .terminal-portfolio.magnetic-cv .cv-arch { margin-top: 0 !important; }
   .terminal-portfolio.magnetic-cv :is(#introduction, .cv-arch > section) {
@@ -6,6 +7,8 @@
     min-height: 100dvh;
     padding-block: clamp(48px, 7vh, 84px);
     scroll-margin-top: -4.5rem;
+    /* Late font swaps must not move a resting chapter away from its anchor. */
+    overflow-anchor: none;
   }
   .magnetic-cv #introduction { align-content: center; }
   .magnetic-cv .cv-arch > section {
@@ -13,21 +16,54 @@
     flex-direction: column;
     justify-content: center;
   }
-  .magnetic-cv [data-cv-muted] { opacity: 0; pointer-events: none; }
-  .magnetic-cv [data-cv-depart] .ascii-visual { opacity: var(--cv-type); }
+  /* Clip each chapter in its own coordinate system. Document flow stays intact
+     for selection, anchor navigation, and reading beyond the first screen. */
+  .magnetic-cv [data-cv-muted] { opacity: 0; pointer-events: none; clip-path: inset(50%); }
+  .magnetic-cv :is([data-cv-depart], [data-cv-arrive]) {
+    pointer-events: none;
+    will-change: translate, clip-path;
+  }
+  .magnetic-cv :is([data-cv-depart], [data-cv-arrive]) > * {
+    transform-origin: 18% 45%;
+    animation-duration: var(--cv-duration);
+    animation-fill-mode: both;
+  }
+  .magnetic-cv [data-cv-depart] > * { animation-name: cv-copy-away; }
+  .magnetic-cv [data-cv-depart] > :first-child { animation-name: cv-title-away; }
+  .magnetic-cv [data-cv-arrive] > * { animation-name: cv-copy-land; }
+  .magnetic-cv [data-cv-arrive] > :first-child { animation-name: cv-title-land; }
+
+  .magnetic-cv [data-cv-depart] [data-drift] .ascii-visual {
+    clip-path: inset(0 44% 0 0);
+  }
   .magnetic-cv [data-cv-depart] .ascii-word[data-drift]::after {
     content: attr(data-drift) / "";
     position: absolute;
-    left: 0;
-    top: 50%;
+    inset: 0 0 0 54%;
+    display: flex;
+    align-items: center;
+    overflow: clip;
     pointer-events: none;
     user-select: none;
     color: currentColor;
-    font: 400 clamp(10px, .8em, 22px)/1 var(--font-mono, monospace);
-    letter-spacing: .16em;
-    opacity: var(--cv-foam);
-    transform: translate(calc(var(--cv-dx) * var(--cv-slip)), var(--cv-dy));
+    font: 500 .68em/1 var(--font-mono, monospace);
+    letter-spacing: .02em;
   }
-  .magnetic-cv [data-cv-arrive] { opacity: var(--cv-title); }
-  .magnetic-cv [data-cv-arrive] > :not(:first-child) { opacity: var(--cv-body); }
+
+  @keyframes cv-title-away {
+    0% { transform: none; }
+    28%, 100% { transform: translateY(calc(-.55 * var(--cv-shift))) scale(1.065); }
+  }
+  @keyframes cv-copy-away {
+    0% { transform: none; }
+    48%, 100% { transform: translateY(calc(-1 * var(--cv-shift))) scale(1.041); }
+  }
+  @keyframes cv-title-land {
+    0%, 17% { transform: translateY(var(--cv-shift)) scale(.932); }
+    89%, 100% { transform: none; }
+  }
+  @keyframes cv-copy-land {
+    0%, 26% { transform: translateY(var(--cv-shift)) scale(.978); }
+    100% { transform: none; }
+  }
 }

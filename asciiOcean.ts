@@ -1,4 +1,3 @@
-import { magneticCV, passage } from './magneticCVState';
 import { buildAtlas, link, type Atlas } from './GradientASCII';
 import { globeScrollGeometry } from './abyssPalette';
 import { OCEAN_HANDOFF_AT, creation, advanceCreation, creationLookahead, finishCreation } from './creationTimeline';
@@ -455,32 +454,6 @@ void main() {
   outCell = vec4(index / 255.0, alpha, field, lift);
 }`;
 
-/** The chapter current uses the existing atlas and low-resolution cell pass. Its narrow
- * filaments follow a broad swell, then disappear with the passage. The ordinary shader
- * (including every production build) is compiled verbatim. */
-function chapterWater(source: string) {
-  if (!magneticCV) return source;
-  return source.replace('uniform float uTime;', 'uniform float uTime;\nuniform vec2 uChapter;')
-    .replace('  outCell = vec4(index / 255.0', `
-  if (uChapter.x > 0.0) {
-    float p = uChapter.x;
-    float x = centre.x / uViewH;
-    float y = (centre.y - uScrollPx) / uViewH;
-    float phase = x * 4.1 - p * uChapter.y * 4.3;
-    float band = y - mix(.72, .31, uChapter.y > 0.0 ? p : 1.0-p)
-                   - .095*sin(phase) - .055*sin(phase*1.7 + 2.0);
-    float envelope = (1.0-smoothstep(.02,.23,abs(band))) * sin(3.14159*p);
-    float filament = pow(.5 + .5*cos(band*163.0 + 2.4*field), 2.4);
-    float broken = smoothstep(.38,.85, .5+.5*sin(phase*3.0 + band*61.0));
-    float strand = envelope * filament * (.3+.7*broken);
-    if (strand > .075 && pick < .18 + strand*.66) {
-      index = fract(phase*.4 + level*.3) < .48 ? 4.0 : 5.0;
-      alpha = max(alpha, min(1.0, strand*1.45));
-    }
-  }
-  outCell = vec4(index / 255.0`);
-}
-
 /** The screen pass of the living ocean: the one above, with a line's ink lifted off the water by the cell's own measure. */
 const LIVING_SCREEN = SCREEN.replace(
   'vec3 color = mix(water, ink, cell.g * coverage);',
@@ -690,7 +663,7 @@ export function createAsciiOcean(canvas: HTMLCanvasElement): AsciiOcean {
     if (cells) gl.deleteProgram(cells.program);
     if (wakeStep) gl.deleteProgram(wakeStep.program);
     if (screen) gl.deleteProgram(screen.program);
-    cells = link(gl, chapterWater(living() ? livingCells(fx) : CELLS));
+    cells = link(gl, living() ? livingCells(fx) : CELLS);
     wakeStep = fx.wake && cells ? link(gl, WAKE_STEP) : null;
     const surface = fx.flow ? LIVING_SCREEN : SCREEN;
     screen = link(gl, fx.wake ? wakeScreen(surface) : surface);
@@ -700,7 +673,7 @@ export function createAsciiOcean(canvas: HTMLCanvasElement): AsciiOcean {
       if (screen) gl.deleteProgram(screen.program);
       fx.flow = fx.wake = fx.sea = false;
       wakeStep = null;
-      cells = link(gl, chapterWater(CELLS));
+      cells = link(gl, CELLS);
       screen = link(gl, SCREEN);
     }
     stats.compileMs = performance.now() - started;
@@ -944,7 +917,6 @@ export function createAsciiOcean(canvas: HTMLCanvasElement): AsciiOcean {
     gl.uniform1f(cu.uViewH, canvas.height);
     gl.uniform1f(cu.uUnit, WORLD_UNIT * view.ratio);
     gl.uniform1f(cu.uTime, time);
-    if (magneticCV) gl.uniform2f(cu.uChapter, passage.progress, passage.direction);
     // The ramp's own length: the living ocean's atlas also holds the strokes
     gl.uniform1f(cu.uCount, [...CHARACTERS].length);
     if (living()) gl.uniform1f(cu.uLead, (lattice - scroll) * view.ratio);

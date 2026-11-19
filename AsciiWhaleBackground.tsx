@@ -1,6 +1,5 @@
 import React, { useEffect, useRef } from 'react';
 import { AmbientWhaleLayer } from './AmbientWhaleLayer';
-import { createAsciiJellyfishField } from './asciiOceanLife';
 import { playSonarPing, setSoundDepth } from './decodeAudio';
 import { createGlyphBatchGL } from './glyphBatchGL';
 import { MAX_PINGS, arrivalTime, echoStrength, isOpenWaterClick, pingRadius, pingStrength } from './sonarPing';
@@ -51,7 +50,7 @@ export interface AsciiWhaleBackgroundProps {
 
 export const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ mode }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  // The whale tiles' WebGL layer and the 2D layer drawn above it (sonar echoes, foreground jellyfish)
+  // The whale tiles' WebGL layer and the 2D layer drawn above it (sonar echoes)
   const glCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const overCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const mouseRef = useRef<{ x: number; y: number; active: boolean }>({ x: 0.5, y: 0.5, active: false });
@@ -523,34 +522,9 @@ export const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.m
     /** The sonar's ink this frame (set when a ping is drawn, reused by its echoes). */
     let sonarInk = 'rgb(47, 72, 88)';
 
-    // Anatomical ASCII jellyfish (3 species, 3 parallax depth planes).
-    // Rendered by this component's single RAF loop through pre-baked glyph atlases
-    // (see asciiOceanLife.ts) — no extra loop, no per-glyph fillText, no shadowBlur.
-    const jellyfishField = createAsciiJellyfishField(atlasScale);
-    // A jellyfish drifting behind reading text or the Globe fades with the share of it covered
-    jellyfishField.setOcclusion((left, top, width, height) => {
-      const pad = 16;
-      let covered = 0;
-      for (const r of readingZones.read()) {
-        const ix = Math.min(left + width, r.left + r.width + pad) - Math.max(left, r.left - pad);
-        const iy = Math.min(top + height, r.top + r.height + pad) - Math.max(top, r.top - pad);
-        if (ix > 0 && iy > 0) covered += ix * iy;
-      }
-      const share = covered / Math.max(1, width * height);
-      return share < 0.02 ? 1 : Math.max(0.06, 1 - share * 4);
-    });
-    let oceanLifeDisposed = false;
-    // Re-bake glyph atlases once the web font is ready (first bake may use the fallback face)
-    if (typeof document !== 'undefined' && document.fonts && document.fonts.ready) {
-      document.fonts.ready.then(() => {
-        if (oceanLifeDisposed) return;
-        jellyfishField.rebake();
-      });
-    }
     // Smoothed cost (ms) of a whole frame and of the migration scene's field (diagnostics)
     const migrationStats = { frameMs: 0, sceneMs: 0 };
     (window as unknown as Record<string, unknown>).__oceanLife = {
-      jellyfish: jellyfishField.stats,
       migration: migrationStats
     };
 
@@ -1620,38 +1594,6 @@ export const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.m
       flushSceneGlyphs();
     };
 
-    // ------------------------------------------------------------------------
-    // ASCII BIOLUMINESCENT JELLYFISH (anatomical, multi-species — see asciiOceanLife.ts)
-    // ------------------------------------------------------------------------
-    // Each creature is evaluated per character cell as a translucent bell with radial canals,
-    // gonads / segmented stomach, luminous scalloped margin, oral arms and trailing tentacles.
-    // Far & mid planes draw behind the whales, the foreground plane in front of them.
-    const renderJellyfishPlanes = (
-      w: number,
-      h: number,
-      rawDepth: number,
-      abyss: number,
-      surfaceBaseY: number,
-      minTier: number,
-      maxTier: number,
-      target: CanvasRenderingContext2D = ctx
-    ) => {
-      if (isFocus) return;
-      jellyfishField.render(
-        target,
-        w,
-        h,
-        time,
-        scrollMotionRef.current.smoothScrollY,
-        rawDepth,
-        abyss,
-        surfaceBaseY,
-        prefersReducedMotion,
-        minTier,
-        maxTier
-      );
-    };
-
     // Dirty bounding box of occupied cells from previous frame
     let prevMinC = 0;
     let prevMaxC = 0;
@@ -2627,9 +2569,6 @@ export const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.m
         }
       }
 
-      // 2D. DEEP-OCEAN BIOLUMINESCENT JELLYFISH — Far & Mid depth planes (behind the whales)
-      if (!migActive) renderJellyfishPlanes(w, h, rawDepth, abyss, surfaceBaseY, 0, 1);
-
       // 5. Render Wake Vortices & Bubble Trails
       for (let i = migActive ? -1 : wakeParticles.length - 1; i >= 0; i--) {
         const pt = wakeParticles[i];
@@ -3082,17 +3021,13 @@ export const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.m
       }
       batch?.flush();
 
-      // 6B. SONAR ECHOES — each whale and visible jellyfish the ring reaches answers with a brief
+      // 6B. SONAR ECHOES — each whale the ring reaches answers with a brief
       // bracket of glyphs around it, the moment the ring arrives
       if (pings.length && ambientWhalesLive.presence > 0.1) {
         const echoTargets: number[] = [];
         for (const wh of whales) {
           const mid = SPINE_NODES >> 1;
           echoTargets.push(wh.spineX[mid], wh.spineY[mid], mainBodyLen * wh.scale * 0.42);
-        }
-        const jp = jellyfishField.stats.pos;
-        for (let j = 0; j < jp.length; j += 4) {
-          if (jp[j + 3] > 0.08) echoTargets.push(jp[j], jp[j + 1], jp[j + 2] * 1.5);
         }
         topCtx.font = '500 12px "JetBrains Mono", monospace';
         topCtx.textAlign = 'center';
@@ -3120,9 +3055,6 @@ export const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.m
         topCtx.globalAlpha = 1;
       }
 
-      // 7. DEEP-OCEAN BIOLUMINESCENT JELLYFISH — Foreground-margin plane
-      if (!migActive) renderJellyfishPlanes(w, h, rawDepth, abyss, surfaceBaseY, 2, 2, topCtx);
-
       migrationStats.frameMs += (performance.now() - frameStart - migrationStats.frameMs) * 0.1;
       if (!prefersReducedMotion) animId = requestAnimationFrame(render);
     };
@@ -3148,7 +3080,6 @@ export const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.m
       window.removeEventListener('scroll', handleScrollChange);
       window.removeEventListener('wheel', handleWheelDir);
       window.removeEventListener('click', handleSonarClick);
-      oceanLifeDisposed = true;
       cancelAnimationFrame(animId);
       document.removeEventListener('visibilitychange', onVisibility);
       window.removeEventListener('scroll', scheduleOcean);

@@ -52,7 +52,6 @@ function ocean(t, width = 390, height = 844, dpr = 3, reduced = false, effects =
   const doc = { ...events, hidden: false, body: {}, documentElement: { scrollHeight: 12000 },
     querySelectorAll: () => [{ id: 'experience', getBoundingClientRect: () => ({ top: 3000 - win.scrollY }) }] };
   const deps = {
-    './magneticCVState': { magneticCV: false },
     './GradientASCII': { link: (_gl, source) => { linked.push(source); return { program: {}, uniforms: { uScrollPx: 'uScrollPx' } }; },
       buildAtlas: () => ({ texture: {}, count: 10, grid: [10, 1] }) },
     './abyssPalette': { globeScrollGeometry: { start: 2500, travel: 4000 } },
