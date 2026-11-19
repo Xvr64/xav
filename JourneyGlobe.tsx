@@ -668,13 +668,20 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
       hintEl.classList.toggle('globe-scroll-hint--visible', isAtDohaWaiting);
     };
     const cinematic = mountCinematicScroll(cinematicStops, (y, playing = false) => {
+      const wasPlaying = globeScrollGeometry.playing;
       globeScrollGeometry.controlledY = y;
+      globeScrollGeometry.playing = playing;
+      if (wasPlaying && !playing && y !== null && y >= globeScrollGeometry.start + globeScrollGeometry.travel - 4) {
+        globeScrollGeometry.shanghaiReachedAt = performance.now();
+      }
       cinematicPlayingRef.current = playing;
       syncScrollHint();
       // Stage/controller ownership drives rendering too: an asynchronous/stale IntersectionObserver result
       // must never suspend the Globe while ready, playing, draining, or near the runway.
       if (playing || isStageActive()) requestRender();
     }, diagnostics ? sample => diagnostics.controller(sample, globeScrollProgress()) : undefined);
+    globeScrollGeometry.release = () => cinematic.skip();
+    globeScrollGeometry.requestRender = requestRender;
     // Travel to a city = glide to that city's checkpoint
     goToCityRef.current = (id: string) => {
       const idx = locations.findIndex((l) => l.id === id);
@@ -721,6 +728,10 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
       diagnostics?.destroy();
       stopSurface();
       globeScrollGeometry.controlledY = null;
+      globeScrollGeometry.playing = false;
+      globeScrollGeometry.shanghaiReachedAt = -Infinity;
+      globeScrollGeometry.release = null;
+      globeScrollGeometry.requestRender = null;
       cinematicPlayingRef.current = false;
       motionQuery.removeEventListener('change', onMotionChange);
       if (globeIo) globeIo.disconnect();

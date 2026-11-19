@@ -1,402 +1,790 @@
 import { globeScrollGeometry } from './abyssPalette';
-import { GESTURE_PX } from './cinematicScroll';
-import { chapterBounds, easedPhase, MAGNETIC_CHAPTERS, passage } from './magneticCVState';
+import { SETTLE_MS } from './cinematicScroll';
+import {
+  chapterBounds,
+  createMagneticGestureMachine,
+  depthGlideEase,
+  inSweepPhase,
+  MAGNETIC_CHAPTERS,
+  outSweepPhase,
+  passage,
+  TRANSITION_DURATION_MS,
+  type GestureDirection
+} from './magneticCVState';
 
-const duration = 580;
-const tolerance = 2;
-/** Touch momentum keeps scrolling for about this long after the finger lifts (ms). */
-const TOUCH_MOMENTUM_MS = 1600;
-/** Without `scrollend` (Safari), native scrolling is over once it has been quiet this long (ms). */
-const SCROLL_QUIET_MS = 220;
-type Direction = -1 | 1;
-type Chapter = { el: HTMLElement; top: number; end: number };
-const jump = (top: number) => window.scrollTo({ top, behavior: 'instant' });
+const TOLERANCE = 2;
+/** Native touch momentum can continue briefly after finger lift inside a long chapter (ms). */
+const TOUCH_MOMENTUM_MS = 1400;
+/** Quiet delay before releasing temporary boundary clamping after native reading momentum (ms). */
+const SCROLL_QUIET_MS = 200;
 
-// Sample source baselines once, while the chapter is at its reading position.
-// Only words within a narrow strip ahead of the moving cut shed their ink.
-function edgeWords(section: HTMLElement) {
+type ChapterKind = 'globe' | 'cv';
+type Chapter = {
+  id: string;
+  kind: ChapterKind;
+  el: HTMLElement;
+  top: number;
+  end: number;
+};
+
+type InkWord = {
+  el: HTMLElement;
+  y: number;
+  x: number;
+  glyphs: readonly [string, string, string];
+  stage: '' | '1' | '2' | '3';
+};
+
+const DISSOLVE_GLYPHS: readonly (readonly [string, string, string])[] = [
+  ['/:.', '~/:=.', '.:~/ '],
+  ['::/', '/:+~:', '~.:/ '],
+  ['.~:', '+=:/~', ':.~- '],
+  ['/:~', '~::/+', '.-:~ ']
+];
+
+const jump = (top: number) => window.scrollTo({ top, behavior: 'instant' as ScrollBehavior });
+
+/**
+ * Sample visible word baselines once while the departing chapter sits at rest.
+ * Keeps ASCII dissolution strictly bound to actual typography boxes (zero background clutter).
+ */
+function sampleDissolveWords(section: HTMLElement): InkWord[] {
   const box = section.getBoundingClientRect();
-  const words = [...section.querySelectorAll<HTMLElement>('.ascii-word')].flatMap(el => {
+  if (!box.width) return [];
+  const visible = [...section.querySelectorAll<HTMLElement>('.ascii-word')].flatMap(el => {
     const r = el.getBoundingClientRect();
-    return r.width && r.bottom > 0 && r.top < innerHeight
-      ? [{ el, y: r.top + r.height / 2, x: (r.left + r.width / 2 - box.left) / box.width }] : [];
+    return r.width > 0 && r.bottom > -8 && r.top < innerHeight + 8
+      ? [{ el, y: r.top + r.height / 2, x: Math.max(0, Math.min(1, (r.left + r.width / 2 - box.left) / box.width)) }]
+      : [];
   });
-  const glyphs = ['~/:.', '::/~', '.+~:', '/:~.'];
-  const stride = Math.max(1, Math.ceil(words.length / 36));
-  return words.filter((word, i) => i % stride === 0 || word.el.closest('h2'))
-    .map((word, i) => ({ ...word, glyphs: glyphs[i % glyphs.length] }));
+  const stride = Math.max(1, Math.ceil(visible.length / 96));
+  return visible
+    .filter((w, i) => i % stride === 0 || !!w.el.closest('h2, h3, .lead, .entry-title'))
+    .map((w, i) => ({
+      ...w,
+      glyphs: DISSOLVE_GLYPHS[i % DISSOLVE_GLYPHS.length],
+      stage: '' as const
+    }));
 }
 
-// Register the semantic section to its own reading screen as the ocean travels
-// underneath. The two polygons share exactly the same sloping viewport edge.
+/**
+ * Register a chapter to its reading viewport while the ocean scrolls underneath,
+ * applying an angled directional clipping polygon with generous outer margins so scaled
+ * headings and text-shadow halos never crop at the viewport edge.
+ */
 function clipChapter(chapter: Chapter, anchor: number, y: number, edge: number, tilt: number, above: boolean) {
   const offset = anchor - chapter.top;
-  const left = edge + offset, right = left + tilt;
-  const outer = offset + (above ? 0 : innerHeight);
+  const left = edge + offset;
+  const right = left + tilt;
+  const outer = offset + (above ? -140 : innerHeight + 140);
   chapter.el.style.translate = `0 ${y - anchor}px`;
   chapter.el.style.clipPath = `polygon(0 ${outer}px,100% ${outer}px,100% ${right}px,0 ${left}px)`;
 }
 
 export function mountMagneticCV() {
-  const elements = [...document.querySelectorAll<HTMLElement>(MAGNETIC_CHAPTERS)];
-  if (!elements.length) return;
+  const cvElements = [...document.querySelectorAll<HTMLElement>(MAGNETIC_CHAPTERS)];
+  if (!cvElements.length) return;
+
+  const runway = document.querySelector<HTMLElement>('[data-journey-runway]');
+  const globeStage = (runway?.firstElementChild as HTMLElement | null) ?? null;
+
   const root = document.documentElement;
   const reduce = matchMedia('(prefers-reduced-motion: reduce)');
   const lifetime = new AbortController();
   const options = { signal: lifetime.signal };
-  let inputs: AbortController | null = null;
+
+  const gesture = createMagneticGestureMachine();
   let chapters: Chapter[] = [];
-  let visible: HTMLElement | null = null;
-  let animation: { from: Chapter; to: Chapter; dir: Direction; focus: boolean; offset: number; ink: ReturnType<typeof edgeWords> } | null = null;
+  let visibleChapter: Chapter | null = null;
+  let animation: {
+    from: Chapter;
+    to: Chapter;
+    dir: GestureDirection;
+    focus: boolean;
+    offset: number;
+    ink: InkWord[];
+    began: number;
+    startY: number;
+    endY: number;
+  } | null = null;
+
   let frame = 0;
   let navigationFrame = 0;
   let expected = scrollY;
-  // Browsers expose wheel deltas, not physical gesture IDs. Every event renews
-  // ownership; neither a sign change nor a stronger delta releases a stream.
-  let wheelMode: 'armed' | 'reading' | 'consumed' = 'armed';
-  let wheelTravel = 0;
-  let lastWheel = -Infinity;
-  let touch: { chapter: Chapter; x: number; y: number; start: number; taken: boolean } | null = null;
+
+  let touch: {
+    chapter: Chapter;
+    x: number;
+    y: number;
+    startY: number;
+    taken: boolean;
+    reading: boolean;
+  } | null = null;
   let readingBounds: Chapter | null = null;
   let boundsTimer = 0;
-  let readingDirection: Direction = 1;
-  let atProfileEntry = false;
-  // Input seen while the controller does not own the page (the Globe's runway, the cover):
-  // a stream or a fling that began there is never a new deliberate gesture inside the CV.
+  let readingDirection: GestureDirection = 1;
   let fingers = 0;
   let lastTouchEnd = -Infinity;
-  let touchFromRunway = false;
+  let touchFromOutside = false;
   let lastY = scrollY;
+  let lastTransitionMs = 0;
+  let transitionCount = 0;
 
-  const show = (el: HTMLElement | null) => {
-    if (visible === el) return;
-    for (const item of elements) item.toggleAttribute('data-cv-muted', item !== el);
-    visible = el;
+  const shanghaiChapter = () => (chapters[0]?.kind === 'globe' ? chapters[0] : null);
+  const firstCvChapter = () => chapters.find(c => c.kind === 'cv') ?? chapters[0];
+
+  const blockedByOverlay = () =>
+    root.hasAttribute('data-creation') ||
+    root.hasAttribute('data-arrival') ||
+    root.hasAttribute('data-globe-scroll') ||
+    globeScrollGeometry.playing;
+
+  const owns = () => {
+    if (!chapters.length || blockedByOverlay()) return false;
+    return scrollY >= chapters[0].top - TOLERANCE;
   };
-  const chapterAt = (y: number) => {
-    let index = 0;
+
+  /** Desktop Globe holds a short settle window after arriving at Shanghai; respect it cleanly. */
+  const isShanghaiSettled = (now: number) =>
+    globeScrollGeometry.controlledY === null ||
+    now - globeScrollGeometry.shanghaiReachedAt >= SETTLE_MS;
+
+  const isAtShanghai = (y = scrollY) => {
+    const sh = shanghaiChapter();
+    return !!sh && Math.abs(y - sh.top) <= TOLERANCE + 2;
+  };
+
+  const chapterAt = (y: number): Chapter => {
+    const sh = shanghaiChapter();
+    const prof = firstCvChapter();
+    if (sh && prof && y < (sh.top + prof.top) / 2) return sh;
+    let index = sh ? 1 : 0;
     while (index + 1 < chapters.length && y + innerHeight / 2 >= chapters[index + 1].top) index++;
     return chapters[index];
   };
-  const owns = () => scrollY >= chapters[0].top - tolerance && globeScrollGeometry.controlledY === null
-    && !root.hasAttribute('data-globe-scroll') && !root.hasAttribute('data-creation') && !root.hasAttribute('data-arrival');
-  const next = (chapter: Chapter, dir: Direction) => chapters[chapters.indexOf(chapter) + dir];
-  const boundary = (chapter: Chapter, dir: Direction) => dir > 0 ? chapter.end : chapter.top;
-  const ignore = (target: EventTarget | null) =>
-    !!document.querySelector('[aria-modal="true"]') || (target instanceof Element &&
+
+  const nextChapter = (chapter: Chapter, dir: GestureDirection): Chapter | undefined =>
+    chapters[chapters.indexOf(chapter) + dir];
+
+  const boundary = (chapter: Chapter, dir: GestureDirection) => (dir > 0 ? chapter.end : chapter.top);
+
+  const ignoreTarget = (target: EventTarget | null) =>
+    !!document.querySelector('[aria-modal="true"]') ||
+    (target instanceof Element &&
       !!target.closest('input,select,textarea,[contenteditable]:not([contenteditable="false"]),[role="dialog"]'));
+
+  /** Exclusive visibility: at rest, at most ONE CV chapter is readable; at Shanghai, ALL CV chapters are muted. */
+  function show(active: Chapter | null) {
+    if (visibleChapter === active) return;
+    for (const el of cvElements) {
+      el.toggleAttribute('data-cv-muted', !active || active.el !== el);
+    }
+    if (globeStage) {
+      const prof = firstCvChapter();
+      const muteGlobe = !!active && active.kind === 'cv' && (!prof || scrollY >= prof.top - TOLERANCE);
+      globeStage.toggleAttribute('data-globe-muted', muteGlobe);
+    }
+    visibleChapter = active;
+  }
 
   function releaseBounds() {
     clearTimeout(boundsTimer);
     readingBounds = null;
-    atProfileEntry = false;
     root.removeAttribute('data-cv-boundary');
   }
-  function releaseAfterFling() {
+
+  function scheduleReleaseBounds() {
     clearTimeout(boundsTimer);
-    if (!fingers && readingBounds) boundsTimer = window.setTimeout(releaseBounds, SCROLL_QUIET_MS);
+    if (!fingers && (readingBounds || root.hasAttribute('data-cv-boundary'))) {
+      boundsTimer = window.setTimeout(releaseBounds, SCROLL_QUIET_MS);
+    }
   }
+
   function consumeWheel(e: WheelEvent) {
-    if (e.cancelable) e.preventDefault();
-    // Some engines make only the first wheel packet cancelable. Hold native
-    // panning for the owned stream; programmatic scroll and hit testing still work.
-    root.toggleAttribute('data-cv-boundary', true);
-    clearTimeout(boundsTimer);
-    boundsTimer = window.setTimeout(releaseBounds, SCROLL_QUIET_MS);
+    if (e.cancelable) {
+      e.preventDefault();
+    } else {
+      // Only lock root overflow when the browser already refused cancellation.
+      root.toggleAttribute('data-cv-boundary', true);
+      scheduleReleaseBounds();
+    }
   }
-  function clearAnimation(landing?: HTMLElement) {
+
+  function clearDissolveWords(ink: InkWord[]) {
+    for (const word of ink) {
+      if (word.stage) {
+        delete word.el.dataset.dissolve;
+        delete word.el.dataset.drift;
+        word.stage = '';
+      }
+    }
+  }
+
+  function clearAnimation(landing?: Chapter) {
     cancelAnimationFrame(frame);
+    frame = 0;
     if (!animation) return;
     const { from, to, ink } = animation;
-    for (const { el } of ink) delete el.dataset.drift;
-    delete from.el.dataset.cvDepart;
-    delete to.el.dataset.cvArrive;
-    for (const el of [from.el, to.el]) {
-      el.style.removeProperty('translate');
-      el.style.removeProperty('clip-path');
-      el.style.removeProperty('--cv-duration');
-      el.style.removeProperty('--cv-shift');
+    clearDissolveWords(ink);
+
+    if (from.kind === 'globe') delete from.el.dataset.globeDepart;
+    else delete from.el.dataset.cvDepart;
+    if (to.kind === 'globe') delete to.el.dataset.globeArrive;
+    else delete to.el.dataset.cvArrive;
+
+    for (const ch of [from, to]) {
+      ch.el.style.removeProperty('translate');
+      ch.el.style.removeProperty('clip-path');
+      ch.el.style.removeProperty('--cv-duration');
+      ch.el.style.removeProperty('--cv-shift');
+      ch.el.style.removeProperty('--cv-dir');
     }
-    visible = null;
-    show(landing ?? chapterAt(scrollY).el);
+
     passage.destination = null;
+    passage.settleAll = false;
     animation = null;
+    visibleChapter = null;
+
+    const target = landing ?? (scrollY < chapters[0].top - TOLERANCE ? shanghaiChapter() : chapterAt(scrollY));
+    show(target);
     passage.requestDecode?.();
   }
+
   function finish() {
     if (!animation) return;
-    const { from, to, dir, focus, offset } = animation;
-    const landing = dir > 0 ? to.top : to.end;
-    jump(landing);
-    clearAnimation(to.el);
-    // Remember reading positions within long chapters even when the original URL had no hash.
-    if (location.hash !== '#' + to.el.id) {
-      history.replaceState({ ...history.state, cvReading: { id: from.el.id, offset } }, '');
-      history.pushState({ ...history.state, cvReading: { id: to.el.id, offset: landing - to.top } }, '', '#' + to.el.id);
+    const { from, to, dir, focus, offset, began, endY } = animation;
+    const now = performance.now();
+    lastTransitionMs = Math.round(now - began);
+    transitionCount++;
+
+    // Guarantee every visible line on the landing screen is 100% crisply decoded.
+    if (to.kind === 'cv') {
+      passage.edge = dir > 0 ? innerHeight * 2 : -innerHeight;
+      passage.settleAll = true;
+      passage.requestDecode?.();
     }
-    if (focus) to.el.focus({ preventScroll: true });
+
+    expected = endY;
+    jump(endY);
+    lastY = scrollY;
+    clearAnimation(to);
+    gesture.endTransition(now, fingers > 0);
+
+    // Update URL hash and save reading state for Browser Back / Forward.
+    if (to.kind === 'cv') {
+      const targetHash = '#' + to.id;
+      if (location.hash !== targetHash) {
+        history.replaceState({ ...history.state, cvReading: { id: from.id, offset } }, '');
+        history.pushState({ ...history.state, cvReading: { id: to.id, offset: endY - to.top } }, '', targetHash);
+      }
+      if (focus) to.el.focus({ preventScroll: true });
+    } else {
+      // Returning to Shanghai: clear CV hash cleanly while preserving Back/Forward state.
+      if (location.hash) {
+        history.replaceState({ ...history.state, cvReading: { id: from.id, offset } }, '');
+        history.pushState({ ...history.state, cvReading: { id: to.id, offset: 0 } }, '', location.pathname + location.search);
+      }
+      globeScrollGeometry.requestRender?.();
+    }
   }
-  function start(from: Chapter, to: Chapter, dir: Direction, keyboard = false) {
+
+  function start(from: Chapter, to: Chapter, dir: GestureDirection, keyboard = false, now = performance.now()) {
     const startY = scrollY;
     const endY = dir > 0 ? to.top : to.end;
-    const began = performance.now();
     releaseBounds();
-    const focus = keyboard || from.el.contains(document.activeElement);
-    const ink = reduce.matches ? [] : edgeWords(from.el);
-    animation = { from, to, dir, focus, offset: startY - from.top, ink };
-    if (reduce.matches) { finish(); return; }
-    passage.destination = to.el;
+    gesture.beginTransition(dir, now);
+
+    const focus = keyboard || (from.kind === 'cv' && from.el.contains(document.activeElement));
+    const ink = !reduce.matches && from.kind === 'cv' ? sampleDissolveWords(from.el) : [];
+
+    animation = {
+      from,
+      to,
+      dir,
+      focus,
+      offset: Math.max(0, startY - from.top),
+      ink,
+      began: now,
+      startY,
+      endY
+    };
+
+    if (to.kind === 'globe') {
+      globeScrollGeometry.requestRender?.();
+    }
+
+    if (reduce.matches) {
+      finish();
+      return;
+    }
+
+    passage.destination = to.kind === 'cv' ? to.el : null;
     passage.direction = dir;
     passage.landing = endY;
+    passage.settleAll = false;
+
     const height = innerHeight;
-    const tilt = -dir * Math.min(height * .08, innerWidth * .095);
-    for (const el of [from.el, to.el]) {
-      el.style.setProperty('--cv-duration', duration + 'ms');
-      el.style.setProperty('--cv-shift', dir * 14 + 'px');
+    const shiftPx = dir * Math.round(Math.min(34, Math.max(22, height * 0.034)));
+    const tilt = -dir * Math.min(height * 0.09, innerWidth * 0.10);
+
+    for (const ch of [from, to]) {
+      ch.el.style.setProperty('--cv-duration', `${TRANSITION_DURATION_MS}ms`);
+      ch.el.style.setProperty('--cv-shift', `${shiftPx}px`);
+      ch.el.style.setProperty('--cv-dir', String(dir));
     }
-    from.el.dataset.cvDepart = '';
-    to.el.dataset.cvArrive = '';
-    // The mask is the only boundary between these two live compositions.
-    to.el.removeAttribute('data-cv-muted');
-    function tick(now: number) {
+
+    if (from.kind === 'globe') {
+      from.el.removeAttribute('data-globe-muted');
+      from.el.dataset.globeDepart = '';
+    } else {
+      from.el.removeAttribute('data-cv-muted');
+      from.el.dataset.cvDepart = '';
+    }
+
+    if (to.kind === 'globe') {
+      to.el.removeAttribute('data-globe-muted');
+      to.el.dataset.globeArrive = '';
+    } else {
+      to.el.removeAttribute('data-cv-muted');
+      to.el.dataset.cvArrive = '';
+    }
+
+    const tick = (frameNow: number) => {
       if (!animation) return;
-      if (!owns()) { clearAnimation(); sync(); return; }
-      const t = Math.min(1, (now - began) / duration);
-      const sweep = easedPhase(t, .04, .98);
-      const fraction = -.10 + 1.43 * sweep;
-      const edge = height * (dir > 0 ? fraction : 1 - fraction);
-      passage.edge = edge + tilt / 2;
-      expected = Math.round(startY + (endY - startY) * easedPhase(t, .05, .91));
-      if (scrollY !== expected) jump(expected);
-      clipChapter(from, startY, expected, edge, tilt, dir < 0);
-      clipChapter(to, endY, expected, edge, tilt, dir > 0);
-      for (const word of ink) {
-        const distance = dir * (word.y - edge - tilt * word.x);
-        if (distance >= -18 && distance < height * .085) {
-          if (!word.el.hasAttribute('data-drift')) word.el.dataset.drift = word.glyphs;
-        } else if (word.el.hasAttribute('data-drift')) delete word.el.dataset.drift;
+      if (blockedByOverlay()) {
+        clearAnimation();
+        sync();
+        return;
       }
-      passage.requestDecode?.();
+
+      const t = Math.max(0, Math.min(1, (frameNow - now) / TRANSITION_DURATION_MS));
+      const glideP = Math.max(0, Math.min(1, (t - 0.04) / 0.88));
+      expected = Math.round(startY + (endY - startY) * depthGlideEase(glideP));
+      if (scrollY !== expected) jump(expected);
+
+      // 1. Outgoing sweep (t = 0.03 -> 0.48): completely gone before incoming reads.
+      const outS = outSweepPhase(t);
+      if (outS >= 1) {
+        from.el.style.clipPath = 'inset(50%)';
+        clearDissolveWords(ink);
+      } else {
+        const outFrac = -0.14 + 1.38 * outS;
+        const outEdge = height * (dir > 0 ? outFrac : 1 - outFrac);
+        clipChapter(from, startY, expected, outEdge, tilt, dir < 0);
+
+        if (ink.length) {
+          for (const word of ink) {
+            const dist = dir * (word.y - outEdge - tilt * word.x);
+            let nextStage: '' | '1' | '2' | '3' = '';
+            if (dist >= -24 && dist < 26) nextStage = '3';
+            else if (dist >= 26 && dist < 76) nextStage = '2';
+            else if (dist >= 76 && dist < 132) nextStage = '1';
+
+            if (nextStage !== word.stage) {
+              word.stage = nextStage;
+              if (nextStage) {
+                word.el.dataset.dissolve = nextStage;
+                word.el.dataset.drift = word.glyphs[Number(nextStage) - 1];
+              } else {
+                delete word.el.dataset.dissolve;
+                delete word.el.dataset.drift;
+              }
+            }
+          }
+        }
+      }
+
+      // 2. Incoming unveil (t = 0.40 -> 0.92): clean depth separation behind outgoing.
+      const inS = inSweepPhase(t);
+      if (inS <= 0) {
+        to.el.style.translate = `0 ${expected - endY}px`;
+        to.el.style.clipPath = 'inset(50%)';
+        passage.edge = dir > 0 ? -height * 0.25 : height * 1.25;
+      } else {
+        const inFrac = -0.12 + 1.44 * inS;
+        const inEdge = height * (dir > 0 ? inFrac : 1 - inFrac);
+        clipChapter(to, endY, expected, inEdge, tilt, dir > 0);
+        passage.edge = inEdge + tilt / 2;
+      }
+
+      if (to.kind === 'cv') {
+        if (t >= 0.96) passage.settleAll = true;
+        passage.requestDecode?.();
+      }
+
       if (t >= 1) finish();
       else frame = requestAnimationFrame(tick);
-    }
-    tick(began);
+    };
+
+    tick(now);
   }
+
   function onWheel(e: WheelEvent) {
-    if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.shiftKey || !owns() || ignore(e.target)) return;
-    const now = e.timeStamp;
-    if (now - lastWheel >= SCROLL_QUIET_MS) {
-      releaseBounds();
-      wheelMode = 'armed';
-      wheelTravel = 0;
+    if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.shiftKey || ignoreTarget(e.target)) return;
+    const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? innerHeight : 1;
+    const delta = e.deltaY * unit;
+    const now = performance.now();
+
+    if (!delta || Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
+      if (animation || gesture.state === 'draining') consumeWheel(e);
+      return;
     }
-    if (wheelMode === 'armed' && (!e.deltaY || Math.abs(e.deltaX) > Math.abs(e.deltaY))) return;
-    lastWheel = now;
-    if (animation) wheelMode = 'consumed';
-    if (wheelMode === 'consumed') {
+
+    if (!animation && !owns()) {
+      gesture.noteExternalWheel(delta, now);
+      return;
+    }
+
+    // While resting at Shanghai immediately after Globe completion, respect Globe's desktop settle window.
+    if (!animation && isAtShanghai() && !isShanghaiSettled(now)) {
+      gesture.noteExternalWheel(delta, now);
+      return;
+    }
+
+    const from = animation ? animation.to : chapterAt(scrollY);
+    const action = gesture.feedWheel(delta, now, dir => {
+      const to = nextChapter(from, dir);
+      const edge = boundary(from, dir);
+      const room = (edge - scrollY) * dir;
+      return { room, hasTarget: !!to };
+    });
+
+    if (action.kind === 'ignore' || action.kind === 'passthrough') {
+      releaseBounds();
+      return;
+    }
+
+    if (action.kind === 'consume') {
       consumeWheel(e);
       return;
     }
-    if (!e.deltaY) return;
-    const dir = Math.sign(e.deltaY) as Direction;
-    const delta = e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? innerHeight : 1);
-    const from = chapterAt(scrollY), to = next(from, dir);
-    if (readingBounds) releaseBounds();
-    const edge = boundary(from, dir);
-    const room = (edge - scrollY) * dir;
-    if (!to && room <= tolerance) return;
-    if (wheelMode === 'reading' || room > tolerance) {
-      if (room <= Math.abs(delta)) {
-        wheelMode = 'consumed';
-        consumeWheel(e);
-        jump(edge);
-      } else {
-        // Let the browser integrate its own wheel/pan curve. The scroll listener
-        // clamps delayed compositor movement to this same chapter's reading edge.
-        wheelMode = 'reading';
-        readingBounds = from;
-        readingDirection = dir;
-        releaseAfterFling();
-      }
+
+    if (action.kind === 'read') {
+      readingBounds = from;
+      readingDirection = Math.sign(delta) as GestureDirection;
+      scheduleReleaseBounds();
       return;
     }
-    if (Math.sign(wheelTravel) !== dir) wheelTravel = 0;
-    wheelTravel += delta;
-    if (to && Math.abs(wheelTravel) >= GESTURE_PX) {
-      wheelMode = 'consumed';
-      start(from, to, dir);
+
+    if (action.kind === 'clamp') {
+      consumeWheel(e);
+      jump(boundary(from, action.dir));
+      return;
     }
+
+    // action.kind === 'snap'
+    const to = nextChapter(from, action.dir);
+    if (!to) return;
     consumeWheel(e);
+    if (from.kind === 'globe') globeScrollGeometry.release?.();
+    start(from, to, action.dir, false, now);
   }
 
   function onKey(e: KeyboardEvent) {
-    releaseBounds();
     if (['Home', 'End', 'Tab', 'Escape'].includes(e.key)) {
+      releaseBounds();
       if (animation) finish();
       return;
     }
-    if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey || !owns() || ignore(e.target)) return;
+    if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey || ignoreTarget(e.target)) return;
     if (e.key === ' ' && e.target instanceof Element && e.target.closest('a,button,summary')) return;
-    const dir = e.key === ' ' ? (e.shiftKey ? -1 : 1)
-      : ['PageDown', 'ArrowDown'].includes(e.key) ? 1 : ['PageUp', 'ArrowUp'].includes(e.key) ? -1 : 0;
+    const dir =
+      e.key === ' '
+        ? (e.shiftKey ? -1 : 1)
+        : ['PageDown', 'ArrowDown'].includes(e.key)
+          ? 1
+          : ['PageUp', 'ArrowUp'].includes(e.key)
+            ? -1
+            : 0;
     if (!dir) return;
-    if (animation) { e.preventDefault(); return; }
-    const from = chapterAt(scrollY), to = next(from, dir);
-    if (!to) return;
-    const edge = boundary(from, dir);
+    if (!animation && !owns()) return;
+    if (animation) {
+      e.preventDefault();
+      return;
+    }
+    if (isAtShanghai() && !isShanghaiSettled(performance.now())) return;
+
+    const from = chapterAt(scrollY);
+    const to = nextChapter(from, dir as GestureDirection);
+    if (!to) return; // Lets ArrowUp/PageUp at Shanghai flow directly to cinematicScroll.
+
+    const edge = boundary(from, dir as GestureDirection);
     const room = (edge - scrollY) * dir;
-    if (room > (e.key.startsWith('Arrow') ? 40 : innerHeight * .88)) return;
+    if (room > (e.key.startsWith('Arrow') ? 48 : innerHeight * 0.85)) return;
+
     e.preventDefault();
-    if (room > tolerance) jump(edge);
-    else if (!e.repeat) start(from, to, dir, true);
+    if (room > TOLERANCE) {
+      jump(edge);
+      return;
+    }
+    if (e.repeat) return;
+    if (from.kind === 'globe') globeScrollGeometry.release?.();
+    start(from, to, dir as GestureDirection, true);
   }
 
-  function touchStart(e: TouchEvent) {
+  function onTouchStart(e: TouchEvent) {
+    fingers = e.touches.length;
+    releaseBounds();
     touch = null;
-    if (e.touches.length !== 1 || !owns() || ignore(e.target)) return;
+
+    if (e.touches.length !== 1 || ignoreTarget(e.target)) return;
+    if (!animation && !owns()) {
+      touchFromOutside = true;
+      return;
+    }
+
+    touchFromOutside = false;
     const finger = e.touches[0];
-    touch = { chapter: chapterAt(scrollY), start: scrollY, x: finger.clientX, y: finger.clientY, taken: !!animation };
+    const taken = !!animation || gesture.state === 'draining';
+    touch = {
+      chapter: animation ? animation.to : chapterAt(scrollY),
+      startY: scrollY,
+      x: finger.clientX,
+      y: finger.clientY,
+      taken,
+      reading: false
+    };
   }
-  function touchMove(e: TouchEvent) {
-    if (e.touches.length !== 1 || (window.visualViewport?.scale ?? 1) > 1) { touch = null; releaseBounds(); return; }
+
+  function onTouchMove(e: TouchEvent) {
+    if (e.touches.length !== 1 || (window.visualViewport?.scale ?? 1) > 1) {
+      touch = null;
+      releaseBounds();
+      return;
+    }
     if (!touch) {
       if (readingBounds && e.cancelable) e.preventDefault();
       return;
     }
-    const finger = e.touches[0], dy = touch.y - finger.clientY;
-    if (touch.taken) { if (e.cancelable) e.preventDefault(); return; }
-    if (e.defaultPrevented || Math.abs(dy) < Math.abs(touch.x - finger.clientX) || !dy) return;
-    const dir = Math.sign(dy) as Direction, from = touch.chapter, to = next(from, dir);
-    if (!to) { releaseBounds(); return; }
-    if ((boundary(from, dir) - touch.start) * dir > tolerance) {
-      readingDirection = dir;
-      readingBounds = from; // Native movement, including its momentum, up to the reading edge.
-      if ((boundary(from, dir) - scrollY) * dir <= tolerance && e.cancelable) e.preventDefault();
+    if (touch.taken) {
+      if (e.cancelable) e.preventDefault();
       return;
     }
+    if (e.defaultPrevented) return;
+
+    const finger = e.touches[0];
+    const dy = touch.y - finger.clientY;
+    const dx = touch.x - finger.clientX;
+    if (!dy || Math.abs(dy) < Math.abs(dx)) return;
+
+    const dir = Math.sign(dy) as GestureDirection;
+    const from = touch.chapter;
+    const to = nextChapter(from, dir);
+
+    // At Shanghai, upward gestures (dir = -1) pass cleanly to cinematicScroll unless draining.
+    if (!to) {
+      if (from.kind === 'globe' && dir < 0) {
+        touch = null;
+        return;
+      }
+      releaseBounds();
+      return;
+    }
+
+    if (from.kind === 'globe' && !isShanghaiSettled(performance.now())) {
+      touch = null;
+      return;
+    }
+
+    // Long chapter reading: let native scroll run up to its reading edge, never past it.
+    if ((boundary(from, dir) - touch.startY) * dir > TOLERANCE) {
+      touch.reading = true;
+      readingDirection = dir;
+      readingBounds = from;
+      if ((boundary(from, dir) - scrollY) * dir <= TOLERANCE && e.cancelable) {
+        e.preventDefault();
+      }
+      return;
+    }
+
+    // At a boundary with a valid adjacent target: cancel native scroll immediately so
+    // no gap between Shanghai/Profile or adjacent CV sections ever appears.
     if (!e.cancelable) return;
     e.preventDefault();
-    if (Math.abs(dy) >= 28) { touch.taken = true; start(from, to, dir); }
+    if (Math.abs(dy) >= 28) {
+      touch.taken = true;
+      if (from.kind === 'globe') globeScrollGeometry.release?.();
+      start(from, to, dir);
+    }
   }
+
+  function onTouchEnd(e: TouchEvent) {
+    fingers = e.touches.length;
+    if (!fingers) {
+      lastTouchEnd = performance.now();
+      if (touch?.taken && !animation) {
+        gesture.reset();
+      }
+      touch = null;
+      touchFromOutside = false;
+      scheduleReleaseBounds();
+    }
+  }
+
   function sync() {
     if (!chapters.length) return;
     const now = performance.now();
     const prevY = lastY;
     lastY = scrollY;
-    if (animation && Math.abs(scrollY - expected) > tolerance) clearAnimation();
-    const inside = owns();
-    if (inside && prevY < chapters[0].top - tolerance && !animation && !readingBounds) {
-      const carriedTouch = touchFromRunway && (fingers > 0 || now - lastTouchEnd < TOUCH_MOMENTUM_MS);
-      if (carriedTouch || now - lastWheel < SCROLL_QUIET_MS) {
-        readingBounds = chapters[0];
-        readingDirection = 1;
-        atProfileEntry = true;
+
+    if (animation && Math.abs(scrollY - expected) > TOLERANCE) {
+      const lo = Math.min(animation.startY, animation.endY) - 160;
+      const hi = Math.max(animation.startY, animation.endY) + 160;
+      if (scrollY < lo || scrollY > hi) {
+        clearAnimation();
+      } else {
+        jump(expected);
+        return;
       }
     }
+
+    const inside = owns();
+    const sh = shanghaiChapter();
+    const prof = firstCvChapter();
+
+    // Guard against native touch inertia carrying from the Globe runway past Shanghai into Profile.
+    if (inside && sh && prof && prevY <= sh.top + TOLERANCE && scrollY > sh.top + TOLERANCE && !animation && !readingBounds) {
+      const carriedTouch = touchFromOutside && (fingers > 0 || now - lastTouchEnd < TOUCH_MOMENTUM_MS);
+      if (carriedTouch || now - gesture.lastEventTime < SCROLL_QUIET_MS) {
+        readingBounds = sh;
+        readingDirection = 1;
+        gesture.enterDraining(1, now);
+      }
+    }
+
     if (readingBounds && !animation) {
-      const edge = atProfileEntry ? readingBounds.top : boundary(readingBounds, readingDirection);
-      // Keep the compositor at the crossed edge until the finger and fling are quiet.
-      // An opposite-direction jump (e.g. history) is free to leave immediately.
-      if (!inside || (readingDirection > 0 ? scrollY < readingBounds.top - tolerance : scrollY > readingBounds.end + tolerance)) {
+      const edge = boundary(readingBounds, readingDirection);
+      if (
+        !inside ||
+        (readingDirection > 0 ? scrollY < readingBounds.top - TOLERANCE : scrollY > readingBounds.end + TOLERANCE)
+      ) {
         releaseBounds();
       } else {
         if ((scrollY - edge) * readingDirection > 0) {
           root.toggleAttribute('data-cv-boundary', true);
           jump(edge);
         }
-        releaseAfterFling();
+        scheduleReleaseBounds();
       }
     }
-    if (!animation) show(chapterAt(scrollY).el);
-    if (inside && !inputs) {
-      inputs = new AbortController();
-      const local = { signal: inputs.signal };
-      window.addEventListener('wheel', onWheel, { ...local, passive: false, capture: true });
-      window.addEventListener('keydown', onKey, local);
-      window.addEventListener('touchstart', touchStart, { ...local, passive: true });
-      window.addEventListener('touchmove', touchMove, { ...local, passive: false });
-      window.addEventListener('touchend', () => { touch = null; }, local);
-      window.addEventListener('touchcancel', () => { touch = null; }, local);
-    } else if (!inside && inputs) {
-      inputs.abort(); inputs = null; touch = null; releaseBounds();
-      wheelMode = 'armed'; wheelTravel = 0;
+
+    if (!animation) {
+      if (scrollY < chapters[0].top - TOLERANCE) {
+        // Above Shanghai (Hero or Doha..Pau): mute all CV sections, keep Globe visible.
+        show(sh);
+      } else {
+        show(chapterAt(scrollY));
+      }
     }
   }
+
   function measure() {
-    const fresh = elements.map(el => {
-      // A compositing offset used during a cut must never become a document anchor.
+    const fresh: Chapter[] = [];
+    if (runway && globeStage) {
+      const rr = runway.getBoundingClientRect();
+      const pr = globeStage.getBoundingClientRect();
+      const stickyTop = parseFloat(getComputedStyle(globeStage).top) || 0;
+      const shanghaiY = Math.round(rr.top + scrollY - stickyTop + Math.max(0, rr.height - pr.height));
+      fresh.push({ id: 'journey', kind: 'globe', el: globeStage, top: shanghaiY, end: shanghaiY });
+    }
+    for (const el of cvElements) {
       const staged = el.style.translate;
       if (staged) el.style.removeProperty('translate');
       const bounds = chapterBounds(el);
       if (staged) el.style.translate = staged;
-      return { el, ...bounds };
-    });
-    if (fresh.some((s, i) => s.top !== chapters[i]?.top || s.end !== chapters[i]?.end)) {
-      // A collapsing mobile toolbar resizes mid-fling: keep holding the same chapter.
+      fresh.push({ id: el.id, kind: 'cv', el, ...bounds });
+    }
+
+    const changed =
+      fresh.length !== chapters.length ||
+      fresh.some((c, i) => c.top !== chapters[i]?.top || c.end !== chapters[i]?.end);
+
+    if (changed) {
       readingBounds = readingBounds && (fresh.find(c => c.el === readingBounds!.el) ?? null);
       chapters = fresh;
       if (animation) {
-        animation.to = fresh.find(c => c.el === animation.to.el)!;
+        const nextTo = fresh.find(c => c.el === animation!.to.el);
+        if (nextTo) {
+          animation.to = nextTo;
+          animation.endY = animation.dir > 0 ? nextTo.top : nextTo.end;
+        }
         finish();
       }
     }
     sync();
   }
+
   function interrupt() {
     clearAnimation();
     touch = null;
     releaseBounds();
-    touchFromRunway = false;
-    lastWheel = -Infinity;
-    wheelMode = 'armed';
-    wheelTravel = 0;
+    touchFromOutside = false;
+    gesture.reset();
     sync();
   }
-  const focusable = elements.filter(el => !el.hasAttribute('tabindex'));
-  focusable.forEach(el => el.tabIndex = -1);
-  // Registered before the CV's own listeners, so they see input that began outside the CV.
-  window.addEventListener('wheel', e => {
-    if (inputs || !e.deltaY) return;
-    lastWheel = e.timeStamp;
-    wheelMode = 'consumed';
-  }, { ...options, passive: true });
-  window.addEventListener('touchstart', e => {
-    fingers = e.touches.length;
-    releaseBounds();
-    touchFromRunway = fingers === 1 && scrollY < chapters[0].top - tolerance;
-  }, { ...options, passive: true });
-  const lifted = (e: TouchEvent) => {
-    fingers = e.touches.length;
-    if (!fingers) { lastTouchEnd = performance.now(); releaseAfterFling(); }
-  };
-  window.addEventListener('touchend', lifted, { ...options, passive: true });
-  window.addEventListener('touchcancel', lifted, { ...options, passive: true });
+
+  const focusable = cvElements.filter(el => !el.hasAttribute('tabindex'));
+  focusable.forEach(el => { el.tabIndex = -1; });
+
+  // Persistent capture-phase listeners ensure magneticCV can hand off cleanly with
+  // cinematicScroll at Shanghai without listener-attachment races.
+  window.addEventListener('wheel', onWheel, { ...options, passive: false, capture: true });
+  window.addEventListener('keydown', onKey, { ...options, capture: true });
+  window.addEventListener('touchstart', onTouchStart, { ...options, passive: true, capture: true });
+  window.addEventListener('touchmove', onTouchMove, { ...options, passive: false, capture: true });
+  window.addEventListener('touchend', onTouchEnd, { ...options, passive: true, capture: true });
+  window.addEventListener('touchcancel', onTouchEnd, { ...options, passive: true, capture: true });
+
   measure();
-  // React can mount after the browser's first attempt to resolve the initial fragment.
-  const initial = chapters.find(c => '#' + c.el.id === location.hash);
-  if (initial && scrollY < 2) { jump(initial.top); sync(); }
+
+  // Direct fragment link on initial load.
+  const initial = chapters.find(c => c.kind === 'cv' && '#' + c.id === location.hash);
+  if (initial && scrollY < 2) {
+    jump(initial.top);
+    lastY = scrollY;
+    show(initial);
+    passage.settleAll = true;
+    passage.requestDecode?.();
+    passage.settleAll = false;
+    sync();
+  }
+
   const size = new ResizeObserver(measure);
-  elements.forEach(el => size.observe(el));
-  size.observe(document.querySelector('main')!);
+  cvElements.forEach(el => size.observe(el));
+  if (runway) size.observe(runway);
+  const mainEl = document.querySelector('main');
+  if (mainEl) size.observe(mainEl);
+
   window.addEventListener('scroll', sync, { ...options, passive: true });
   window.addEventListener('resize', measure, options);
+
   function navigateHistory(event: Event) {
     interrupt();
-    const saved = history.state?.cvReading;
-    const anchor = chapters.find(c => '#' + c.el.id === location.hash);
-    const destination = anchor ?? (!location.hash && chapters.find(c => c.el.id === saved?.id));
+    const saved = history.state?.cvReading as { id?: string; offset?: number } | undefined;
+    const anchor = chapters.find(c => '#' + c.id === location.hash);
+    const destination = anchor ?? (!location.hash ? chapters.find(c => c.id === saved?.id) : undefined);
     if (!destination) return;
-    // A traversal fires popstate and then hashchange. Let the UA restore its scroll first.
-    const offset = saved?.id === destination.el.id && Number.isFinite(saved.offset) ? saved.offset : 0;
+
+    const offset = saved?.id === destination.id && Number.isFinite(saved.offset) ? saved.offset! : 0;
     cancelAnimationFrame(navigationFrame);
     navigationFrame = requestAnimationFrame(() => {
-      jump(Math.min(destination.top + Math.max(0, offset), destination.end));
-      show(destination.el);
-      if (event.type === 'hashchange' || document.activeElement?.closest('[data-editorial-section]')) {
-        destination.el.focus({ preventScroll: true });
+      const targetY = Math.min(destination.end, destination.top + Math.max(0, offset));
+      jump(targetY);
+      lastY = scrollY;
+      show(destination);
+      if (destination.kind === 'cv') {
+        passage.settleAll = true;
+        passage.requestDecode?.();
+        passage.settleAll = false;
+        if (event.type === 'hashchange' || document.activeElement?.closest('[data-editorial-section]')) {
+          destination.el.focus({ preventScroll: true });
+        }
+      } else {
+        globeScrollGeometry.requestRender?.();
       }
     });
   }
+
   window.addEventListener('popstate', navigateHistory, options);
   window.addEventListener('hashchange', navigateHistory, options);
   window.addEventListener('pagehide', interrupt, options);
@@ -404,34 +792,69 @@ export function mountMagneticCV() {
     if (e.pointerType !== 'touch') releaseBounds();
   }, options);
   document.addEventListener('visibilitychange', interrupt, options);
+
   reduce.addEventListener('change', () => {
-    const chapter = animation?.to.el ?? (inputs && elements.find(el => '#' + el.id === location.hash));
+    const chapter = animation?.to ?? (owns() ? chapters.find(c => '#' + c.id === location.hash) : undefined);
     if (animation) finish();
-    measure(); // The reduced-motion stylesheet also changes the length of the Globe runway.
+    measure();
     if (chapter) {
-      const dest = chapters.find(c => c.el === chapter)!;
-      const saved = history.state?.cvReading;
-      const offset = saved?.id === chapter.id && Number.isFinite(saved.offset) ? saved.offset : 0;
-      jump(Math.min(dest.end, dest.top + Math.max(0, offset)));
-      sync();
+      const dest = chapters.find(c => c.el === chapter.el);
+      if (dest) {
+        const saved = history.state?.cvReading as { id?: string; offset?: number } | undefined;
+        const offset = saved?.id === dest.id && Number.isFinite(saved.offset) ? saved.offset! : 0;
+        jump(Math.min(dest.end, dest.top + Math.max(0, offset)));
+        lastY = scrollY;
+        sync();
+      }
     }
   }, options);
+
   document.addEventListener('focusin', e => {
     if (!(e.target instanceof HTMLElement)) return;
-    const chapter = e.target.closest<HTMLElement>('[data-editorial-section]');
-    if (!elements.includes(chapter)) return;
-    if (chapter !== visible || animation) {
+    const section = e.target.closest<HTMLElement>('[data-editorial-section]');
+    if (!section || !cvElements.includes(section)) return;
+    if (visibleChapter?.el !== section || animation) {
       interrupt();
-      const dest = chapters.find(c => c.el === chapter)!;
-      // Bring the focused control itself into view: in a long chapter it may sit far below the top.
-      const wanted = Math.round(e.target.getBoundingClientRect().top + scrollY - innerHeight * .3);
+      const dest = chapters.find(c => c.el === section);
+      if (!dest) return;
+      const wanted = Math.round(e.target.getBoundingClientRect().top + scrollY - innerHeight * 0.3);
       jump(Math.max(dest.top, Math.min(dest.end, wanted)));
-      show(chapter);
+      lastY = scrollY;
+      show(dest);
+      passage.settleAll = true;
+      passage.requestDecode?.();
+      passage.settleAll = false;
     }
   }, options);
+
+  // Dev-only inspection handle for automated browser validation (tree-shaken in production).
+  const win = window as unknown as Record<string, unknown>;
+  if ((import.meta as { env?: { DEV?: boolean } }).env?.DEV) {
+    win.__magneticCV = {
+      snapshot: () => ({
+        gestureState: gesture.state,
+        lockedDir: gesture.lockedDir,
+        animating: !!animation,
+        activeId: visibleChapter?.id ?? null,
+        scrollY,
+        lastTransitionMs,
+        transitionCount,
+        chapters: chapters.map(c => ({ id: c.id, kind: c.kind, top: c.top, end: c.end }))
+      })
+    };
+  }
+
   return () => {
-    lifetime.abort(); inputs?.abort(); cancelAnimationFrame(navigationFrame); releaseBounds(); size.disconnect(); clearAnimation();
-    elements.forEach(el => delete el.dataset.cvMuted);
+    lifetime.abort();
+    cancelAnimationFrame(navigationFrame);
+    releaseBounds();
+    size.disconnect();
+    clearAnimation();
+    cvElements.forEach(el => delete el.dataset.cvMuted);
+    if (globeStage) delete globeStage.dataset.globeMuted;
     focusable.forEach(el => el.removeAttribute('tabindex'));
+    if ((import.meta as { env?: { DEV?: boolean } }).env?.DEV) {
+      delete win.__magneticCV;
+    }
   };
 }

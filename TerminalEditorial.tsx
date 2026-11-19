@@ -40,7 +40,7 @@ type Line = EncryptedLineState & {
   chapter: HTMLElement | null;
   top: number;
   entryEnd: number;
-  voice: 'title' | 'meta' | 'body';
+  voice: 'title' | 'sub' | 'meta' | 'body';
   heading: boolean;
   count: number;
   words: Word[];
@@ -120,10 +120,13 @@ export function useEditorialScroll() {
           const top = rect.top + y;
           let line = siblings.find(candidate => Math.abs(candidate.top - top) <= 6);
           if (!line) {
-            const voice = block.closest('.meta, dt, time') ? 'meta' : block.closest('h2, h3') ? 'title' : 'body';
+            const isMeta = !!block.closest('.meta, dt, time');
+            const isDisplay = !isMeta && (!!block.closest('h2') || (magneticCV && !!block.closest('#introduction .lead')));
+            const isSub = !isMeta && !isDisplay && !!block.closest('h3, .entry-title, .lang-name, .contact-address');
+            const voice = isMeta ? 'meta' : isDisplay ? 'title' : isSub ? 'sub' : 'body';
             const span = chapter ? chapterSpans.get(chapter) : undefined;
             const restY = span ? (top < span.top + viewport ? span.top : span.end) : maxScroll;
-            line = { block, chapter, top, entryEnd: entryEndFor(top - restY, viewport, ENCRYPTED_ENTRY_END), count: 0, voice, heading: !!block.closest('h2'),
+            line = { block, chapter, top, entryEnd: entryEndFor(top - restY, viewport, ENCRYPTED_ENTRY_END), count: 0, voice, heading: isDisplay,
               words: [], currentP: 0, revealState: 'hidden' };
             siblings.push(line);
             lines.push(line);
@@ -192,16 +195,30 @@ export function useEditorialScroll() {
       const remaining: Line[] = [];
       for (const line of pendingLines) {
         let zone = encryptedEntryProgress(line.top - y, viewport, line.entryEnd);
-        const forced = media.matches || (focused && line.words.some(word => focused.contains(word.el)));
+        let forced = media.matches || (focused && line.words.some(word => focused.contains(word.el)));
         let movement = delta;
         if (magneticCV && passage.destination === line.chapter && line.chapter) {
           // Choreograph the lines that will be visible at rest, including the bottom
           // screen when entering a tall chapter from below. Deeper lines keep their scroll band.
           const position = line.top - passage.landing;
-          const distance = passage.direction * (passage.edge - position) / viewport;
-          const span = line.heading ? .34 : line.voice === 'meta' ? .15 : .23;
-          zone = position < viewport ? easedPhase(distance, -.06, span) : 0;
+          const onLandingScreen = position >= -40 && position < viewport;
+          if (passage.settleAll && onLandingScreen) {
+            zone = 1;
+            forced = true;
+          } else if (onLandingScreen) {
+            const distance = passage.direction * (passage.edge - position) / viewport;
+            const span = line.heading ? .34 : line.voice === 'sub' ? .24 : line.voice === 'meta' ? .13 : .22;
+            zone = easedPhase(distance, -.05, span);
+          } else {
+            zone = 0;
+          }
           movement = 1; // First visits decode in either direction. Completed lines are out of the queue.
+        } else if (magneticCV && passage.settleAll && line.chapter && !line.chapter.hasAttribute('data-cv-muted')) {
+          const position = line.top - y;
+          if (position >= -40 && position < viewport) {
+            zone = 1;
+            forced = true;
+          }
         } else if (!forced && line.chapter?.hasAttribute('data-cv-muted')) {
           zone = 0;
           movement = 0;
@@ -235,10 +252,12 @@ export function useEditorialScroll() {
         }
         if (!word.cells) continue;
         if (word.visual.firstChild !== word.cells[0]) word.visual.replaceChildren(...word.cells);
-        const lock = line.voice === 'title' ? 1 - (1 - p) ** 1.7 : p;
+        const lock = line.voice === 'title' ? 1 - (1 - p) ** 1.7 : line.voice === 'sub' ? 1 - (1 - p) ** 1.35 : p;
         const pressure = textPressureAt(word.centerX, line.top - y, oceanWake);
         const ripple = pressure * 3 * Math.sin(2 * Math.PI * (p - word.offset / line.count));
-        const lift = line.voice === 'title' ? 4 : line.voice === 'meta' ? 0 : 1;
+        const lift = magneticCV
+          ? (line.voice === 'title' ? 7 : line.voice === 'sub' ? 4 : line.voice === 'meta' ? 0.5 : 2.5)
+          : (line.voice === 'title' ? 4 : line.voice === 'meta' ? 0 : 1);
         word.visual.style.setProperty('--decode-lift', `${((lift + ripple) * (1 - p)).toFixed(1)}px`);
         for (let i = 0; i < word.chars.length; i++) {
           const state = encryptedCharacterState(lock, word.offset + i, line.count, word.seed, line.voice === 'meta' ? 6 : 32);

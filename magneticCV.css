@@ -1,11 +1,12 @@
 @media screen {
   html[data-cv-boundary] { overflow-y: hidden; }
+
   .terminal-portfolio.magnetic-cv .cv-arch > section + section { margin-top: 0 !important; }
   .terminal-portfolio.magnetic-cv .cv-arch { margin-top: 0 !important; }
   .terminal-portfolio.magnetic-cv :is(#introduction, .cv-arch > section) {
     box-sizing: border-box;
     min-height: 100dvh;
-    padding-block: clamp(48px, 7vh, 84px);
+    padding-block: clamp(56px, 8vh, 88px);
     scroll-margin-top: -4.5rem;
     /* Late font swaps must not move a resting chapter away from its anchor. */
     overflow-anchor: none;
@@ -16,54 +17,201 @@
     flex-direction: column;
     justify-content: center;
   }
-  /* Clip each chapter in its own coordinate system. Document flow stays intact
-     for selection, anchor navigation, and reading beyond the first screen. */
-  .magnetic-cv [data-cv-muted] { opacity: 0; pointer-events: none; clip-path: inset(50%); }
-  .magnetic-cv :is([data-cv-depart], [data-cv-arrive]) {
+
+  /* Exclusive section isolation: at rest only the active chapter is readable.
+     Document flow remains intact for selection, anchors, accessibility and tall sections. */
+  .magnetic-cv [data-cv-muted] {
+    opacity: 0;
+    pointer-events: none;
+    clip-path: inset(50%);
+  }
+  .magnetic-cv [data-globe-muted] {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  /* Active transition layers */
+  .magnetic-cv :is([data-cv-depart], [data-cv-arrive], [data-globe-depart], [data-globe-arrive]) {
     pointer-events: none;
     will-change: translate, clip-path;
   }
+
+  /* Coordinated typographic depth choreography (pure GPU transforms, zero reflow) */
   .magnetic-cv :is([data-cv-depart], [data-cv-arrive]) > * {
     transform-origin: 18% 45%;
-    animation-duration: var(--cv-duration);
+    animation-duration: var(--cv-duration, 600ms);
     animation-fill-mode: both;
+    animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
   }
-  .magnetic-cv [data-cv-depart] > * { animation-name: cv-copy-away; }
-  .magnetic-cv [data-cv-depart] > :first-child { animation-name: cv-title-away; }
-  .magnetic-cv [data-cv-arrive] > * { animation-name: cv-copy-land; }
-  .magnetic-cv [data-cv-arrive] > :first-child { animation-name: cv-title-land; }
 
-  .magnetic-cv [data-cv-depart] [data-drift] .ascii-visual {
-    clip-path: inset(0 44% 0 0);
+  /* Outgoing CV section — camera push through depth */
+  .magnetic-cv [data-cv-depart] > * { animation-name: cv-copy-away; }
+  .magnetic-cv [data-cv-depart] > :first-child,
+  .magnetic-cv #introduction[data-cv-depart] > .lead { animation-name: cv-title-away; }
+  .magnetic-cv #introduction[data-cv-depart] > .intro-kicker { animation-name: cv-meta-away; }
+
+  /* Incoming CV section — perspective arrival */
+  .magnetic-cv [data-cv-arrive] > * { animation-name: cv-copy-land; }
+  .magnetic-cv [data-cv-arrive] > :first-child,
+  .magnetic-cv #introduction[data-cv-arrive] > .lead { animation-name: cv-title-land; }
+  .magnetic-cv #introduction[data-cv-arrive] > .intro-kicker { animation-name: cv-meta-land; }
+
+  /* Shanghai Globe stage — subtle depth recession (Earth -> Identity) and reverse rise */
+  .magnetic-cv [data-globe-depart] > div,
+  .magnetic-cv [data-globe-arrive] > div {
+    transform-origin: 54% 48%;
+    animation-duration: var(--cv-duration, 600ms);
+    animation-fill-mode: both;
+    will-change: transform, opacity;
   }
-  .magnetic-cv [data-cv-depart] .ascii-word[data-drift]::after {
+  .magnetic-cv [data-globe-depart] > div {
+    animation-name: cv-globe-recede;
+    animation-timing-function: cubic-bezier(0.32, 0, 0.45, 1);
+  }
+  .magnetic-cv [data-globe-arrive] > div {
+    animation-name: cv-globe-return;
+    animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  /* 3-stage localized ASCII dissolution along the outgoing directional cut.
+     Bound strictly to real .ascii-word boxes; never modifies permanent decode state. */
+  .magnetic-cv [data-cv-depart] .ascii-word[data-dissolve]::after {
     content: attr(data-drift) / "";
     position: absolute;
-    inset: 0 0 0 54%;
     display: flex;
     align-items: center;
     overflow: clip;
     pointer-events: none;
     user-select: none;
     color: currentColor;
-    font: 500 .68em/1 var(--font-mono, monospace);
-    letter-spacing: .02em;
+    font: 500 0.72em/1 var(--font-mono, monospace);
+    letter-spacing: 0.04em;
+    white-space: pre;
+  }
+
+  /* Stage 1: leading fringe ahead of the clip wave */
+  .magnetic-cv [data-cv-depart] [data-dissolve="1"] .ascii-visual {
+    clip-path: inset(0 32% 0 0);
+  }
+  .magnetic-cv [data-cv-depart] .ascii-word[data-dissolve="1"]::after {
+    inset: 0 0 0 64%;
+    opacity: 0.86;
+    transform: translate3d(2px, calc(var(--cv-dir, 1) * -3px), 0);
+  }
+
+  /* Stage 2: mid-wave fragmentation into oceanic ASCII */
+  .magnetic-cv [data-cv-depart] [data-dissolve="2"] .ascii-visual {
+    clip-path: inset(0 68% 0 0);
+    opacity: 0.72;
+  }
+  .magnetic-cv [data-cv-depart] .ascii-word[data-dissolve="2"]::after {
+    inset: 0 0 0 26%;
+    opacity: 0.82;
+    transform: translate3d(4px, calc(var(--cv-dir, 1) * -7px), 0);
+  }
+
+  /* Stage 3: absorbed into the current right at the moving cut */
+  .magnetic-cv [data-cv-depart] [data-dissolve="3"] .ascii-visual {
+    opacity: 0;
+  }
+  .magnetic-cv [data-cv-depart] .ascii-word[data-dissolve="3"]::after {
+    inset: 0;
+    opacity: 0.56;
+    transform: translate3d(6px, calc(var(--cv-dir, 1) * -12px), 0);
   }
 
   @keyframes cv-title-away {
-    0% { transform: none; }
-    28%, 100% { transform: translateY(calc(-.55 * var(--cv-shift))) scale(1.065); }
+    0% {
+      transform: translate3d(0, 0, 0) scale(1);
+      opacity: 1;
+    }
+    48%, 100% {
+      transform: translate3d(0, calc(-0.72 * var(--cv-shift, 30px)), 0) scale(1.058);
+      opacity: 0.35;
+    }
   }
+
   @keyframes cv-copy-away {
-    0% { transform: none; }
-    48%, 100% { transform: translateY(calc(-1 * var(--cv-shift))) scale(1.041); }
+    0% {
+      transform: translate3d(0, 0, 0) scale(1);
+      opacity: 1;
+    }
+    50%, 100% {
+      transform: translate3d(0, calc(-1.35 * var(--cv-shift, 30px)), 0) scale(1.028);
+      opacity: 0.25;
+    }
   }
+
+  @keyframes cv-meta-away {
+    0% {
+      transform: translate3d(0, 0, 0) scale(1);
+      opacity: 1;
+    }
+    46%, 100% {
+      transform: translate3d(0, calc(-0.35 * var(--cv-shift, 30px)), 0) scale(1.014);
+      opacity: 0.3;
+    }
+  }
+
   @keyframes cv-title-land {
-    0%, 17% { transform: translateY(var(--cv-shift)) scale(.932); }
-    89%, 100% { transform: none; }
+    0%, 26% {
+      transform: translate3d(0, calc(1.10 * var(--cv-shift, 30px)), 0) scale(0.915);
+      opacity: 0.35;
+    }
+    92%, 100% {
+      transform: none;
+      opacity: 1;
+    }
   }
+
   @keyframes cv-copy-land {
-    0%, 26% { transform: translateY(var(--cv-shift)) scale(.978); }
-    100% { transform: none; }
+    0%, 32% {
+      transform: translate3d(0, calc(0.80 * var(--cv-shift, 30px)), 0) scale(0.962);
+      opacity: 0.28;
+    }
+    100% {
+      transform: none;
+      opacity: 1;
+    }
+  }
+
+  @keyframes cv-meta-land {
+    0%, 30% {
+      transform: translate3d(0, calc(0.22 * var(--cv-shift, 30px)), 0);
+      opacity: 0.35;
+    }
+    82%, 100% {
+      transform: none;
+      opacity: 1;
+    }
+  }
+
+  @keyframes cv-globe-recede {
+    0% {
+      transform: translate3d(0, 0, 0) scale(1);
+      opacity: 1;
+    }
+    52%, 100% {
+      transform: translate3d(0, -20px, 0) scale(0.925);
+      opacity: 0.14;
+    }
+  }
+
+  @keyframes cv-globe-return {
+    0%, 28% {
+      transform: translate3d(0, -16px, 0) scale(0.932);
+      opacity: 0.25;
+    }
+    94%, 100% {
+      transform: none;
+      opacity: 1;
+    }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .magnetic-cv :is([data-cv-depart], [data-cv-arrive]) > *,
+  .magnetic-cv :is([data-globe-depart], [data-globe-arrive]) > div {
+    animation: none !important;
   }
 }

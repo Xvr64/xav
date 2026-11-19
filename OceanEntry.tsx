@@ -257,14 +257,6 @@ export const ProgressiveOceanEntry: React.FC<ProgressiveOceanEntryProps> = React
             <span className="hero-name-last" data-hero-name-line>Hery</span>
           </p>
         </div>
-        <div className="cover-imprint" data-ascii-preserve>
-          <p className="cover-signature">Xavier Hery</p>
-          <p className="cover-specialty">International Business<br />ESSCA School of Management</p>
-        </div>
-        <div className="cover-foot" data-ascii-preserve>
-          <p>B2B development <span aria-hidden="true">/</span> International logistics</p>
-          <a href="#experience">Experience <span aria-hidden="true">↓</span></a>
-        </div>
         {/* The page's one h1. With motion the name resolved on the stage carries it visually, so it
             is clipped (and kept out of the word system); without motion it is set as type here. */}
         <h1 className="intro-name intro-name--carried" data-ascii-preserve>

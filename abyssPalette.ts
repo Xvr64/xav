@@ -49,7 +49,15 @@ export const ABYSS_FILLS: { token: string; name: string; light: number[]; dark: 
 export const lerpN = (a: number, b: number, t: number) => a + (b - a) * t;
 
 // Geometry is owned by JourneyGlobe's existing resize/scroll sequence.
-export const globeScrollGeometry = { start: Infinity, travel: 1, controlledY: null as number | null };
+export const globeScrollGeometry = {
+  start: Infinity,
+  travel: 1,
+  controlledY: null as number | null,
+  playing: false,
+  shanghaiReachedAt: -Infinity,
+  release: null as (() => void) | null,
+  requestRender: null as (() => void) | null
+};
 export const globeScrollProgress = () => {
   const y = globeScrollGeometry.controlledY ?? window.scrollY;
   return Math.max(0, Math.min(1, (y - globeScrollGeometry.start) / globeScrollGeometry.travel));
