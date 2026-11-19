@@ -31,7 +31,7 @@ async function encode(frames, name) {
 }
 
 async function record(width, height, touch) {
-  const c = await browser({ width, height, touch, dsf: touch ? 2 : 1, path: '/?magneticCV=1#introduction' });
+  const c = await browser({ width, height, touch, dsf: touch ? 2 : 1, path: '/#introduction' });
   const frames = [];
   let recording = false;
   let ackError;

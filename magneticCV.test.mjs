@@ -22,15 +22,15 @@ import {
   createMagneticGestureMachine
 } from './magneticCVState.ts';
 
-test('the magnetic CV is opt-in behind ?magneticCV=1 in both development and production, off by default', () => {
+test('the magnetic CV is enabled by default in both development and production, with ?magneticCV=0 as a fallback to disable it', () => {
+  assert.equal(parseMagneticCV(''), true);
+  assert.equal(parseMagneticCV('?ocean=all'), true);
   assert.equal(parseMagneticCV('?magneticCV=1'), true);
   assert.equal(parseMagneticCV('?ocean=all&magneticCV=1'), true);
-  assert.equal(parseMagneticCV(''), false);
-  assert.equal(parseMagneticCV('?ocean=all'), false);
+  assert.equal(parseMagneticCV('?magneticCV=true'), true);
   assert.equal(parseMagneticCV('?magneticCV=0'), false);
-  assert.equal(parseMagneticCV('?magneticCV=true'), false);
-  assert.equal(parseMagneticCV('?magneticcv=1'), false);
-  // Outside a browser (tests, SSR) the flag is off and nothing touches location.
+  assert.equal(parseMagneticCV('?ocean=all&magneticCV=0'), false);
+  // Outside a browser (tests, SSR) location is undefined so nothing touches the DOM.
   assert.equal(magneticCV, false);
 });
 
@@ -543,6 +543,11 @@ test('chaotic coalesced spike followed by sustained flywheel bursts during drain
   }
   // Huge coalesced spike drops into noisy flywheel bursts — must stay 100% consumed
   for (const dy of [480, 60, 70, 80, 75, 90, 100]) {
+    t += 16;
+    assert.deepEqual(m.feedWheel(dy, t, atBoundary), { kind: 'consume' });
+  }
+  // Even when a small rise precedes a 480px coalesced spike + continuing momentum (e.g. [5, 6, 480, 40, 38]), it must stay 100% consumed
+  for (const dy of [5, 5, 5, 6, 480, 40, 38, 36, 35]) {
     t += 16;
     assert.deepEqual(m.feedWheel(dy, t, atBoundary), { kind: 'consume' });
   }

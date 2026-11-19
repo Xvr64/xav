@@ -1,7 +1,7 @@
-/** The magnetic CV is opt-in via `?magneticCV=1` in both development and production;
- * normal visits without the flag keep the default continuous scroll experience. */
+/** The magnetic CV is enabled by default in both development and production;
+ * `?magneticCV=0` disables it as a troubleshooting fallback to the continuous scroll experience. */
 export function parseMagneticCV(search: string) {
-  return new URLSearchParams(search).get('magneticCV') === '1';
+  return new URLSearchParams(search).get('magneticCV') !== '0';
 }
 
 export const magneticCV = typeof location !== 'undefined' && parseMagneticCV(location.search);
@@ -470,11 +470,18 @@ export function createMagneticGestureMachine(): MagneticGestureMachine {
                   tailBaseline = Math.max(1, Math.min(tailBaseline, mag));
                 }
               } else if (mag > surgePrev) {
-                surgeRises++;
-                surgeCount++;
-                surgeAcc += mag;
-                surgePeak = Math.max(surgePeak, mag);
-                surgePrev = mag;
+                // Reject sudden massive coalesced spikes (>3.5x single-step jump to >=28px)
+                // during an active draining stream: real finger re-acceleration ramps smoothly.
+                if (mag >= 28 && mag > surgePrev * 3.5) {
+                  resetSurge();
+                  if (emaMag > 10) drainTailFaded = false;
+                } else {
+                  surgeRises++;
+                  surgeCount++;
+                  surgeAcc += mag;
+                  surgePeak = Math.max(surgePeak, mag);
+                  surgePrev = mag;
+                }
               } else if (mag === surgePrev && mag >= Math.max(tailBaseline * 2, 5)) {
                 // Integer-quantized plateau during a fresh trackpad ramp (does not increment surgeRises).
                 surgeCount++;

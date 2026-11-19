@@ -1,4 +1,4 @@
-// Validation for Abyssal Snap V3 (?magneticCV=1). Private headless Chrome over CDP.
+// Validation for Abyssal Snap V3 (default on `/`, fallback off with `/?magneticCV=0`). Private headless Chrome over CDP.
 //   node dev/magnetic-cv-validation.mjs            full matrix (1440, 1280, 768, 390, 320 + Stationary Mouse + Globe + Shanghai handoff)
 //   node dev/magnetic-cv-validation.mjs --quick    1440 + 390 quick pass
 import assert from 'node:assert/strict';
@@ -6,7 +6,8 @@ process.env.PHASE2_OUT ||= 'artifacts/magnetic-cv-v3';
 const { server, browser, png, save, stats, stopServers } = await import('./phase2-lib.mjs');
 const { sleep } = await import('./fable-cdp.mjs');
 const quick = process.argv.includes('--quick');
-const FLAG = '/?magneticCV=1';
+const FLAG = '/';
+const FALLBACK_OFF = '/?magneticCV=0';
 const SETTLE = 1360; // 1080ms CV passage + headless Chrome frame scheduling margin
 const GLOBE_SETTLE = 1480; // 1180ms Shanghai <-> Profile passage + scheduling margin
 const report = { viewports: [], stationaryMouse: null, shanghaiHandoff: [], globe: [], failures: [] };
@@ -487,10 +488,10 @@ async function fullShanghaiHandoff({ width, height, touch, dsf }) {
   }
 }
 
-/** The Globe's own controllers must behave identically with and without ?magneticCV=1. */
+/** The Globe's own controllers must behave identically on default `/` (magnetic CV on) and `/?magneticCV=0` (fallback off). */
 async function globeParity({ width, height, touch, dsf }) {
   const runs = {};
-  for (const path of ['/', FLAG]) {
+  for (const path of [FALLBACK_OFF, FLAG]) {
     const c = await browser({ width, height, touch, dsf, path });
     try {
       const journey = await c.evaluate(`Math.round(document.querySelector('#journey').getBoundingClientRect().top + scrollY)`);
@@ -499,14 +500,18 @@ async function globeParity({ width, height, touch, dsf }) {
       await sleep(900);
       for (let i = 0; i < 4; i++) { await gesture(c, 1, touch, width, height); await sleep(2600); ys.push(await c.evaluate('Math.round(scrollY)')); }
       runs[path] = { ys, errors: c.errors };
-      if (path === '/') runs[path].order = await c.evaluate(`[...document.querySelectorAll('.cv-arch > section')].map(s => s.id)`);
+      if (path === FALLBACK_OFF) {
+        runs[path].order = await c.evaluate(`[...document.querySelectorAll('.cv-arch > section')].map(s => s.id)`);
+        runs[path].hasMagneticClass = await c.evaluate(`!!document.querySelector('.terminal-portfolio.magnetic-cv')`);
+      }
     } finally { await c.close(); }
   }
-  const off = runs['/'], on = runs[FLAG];
+  const off = runs[FALLBACK_OFF], on = runs[FLAG];
   const row = { width, touch, off, on };
   try {
     assert.deepEqual(off.errors, []); assert.deepEqual(on.errors, []);
-    assert.deepEqual(off.order, ['experience', 'skills', 'education', 'languages', 'interests', 'contact'], 'flag off keeps original order');
+    assert.equal(off.hasMagneticClass, false, '?magneticCV=0 disables magnetic CV');
+    assert.deepEqual(off.order, ['experience', 'skills', 'education', 'languages', 'interests', 'contact'], '?magneticCV=0 keeps original fallback order');
     const tol = Math.round(height * .28);
     // First 2 forward stops cover Globe Doha -> Shanghai playback parity
     for (let i = 0; i < 2; i++) {
