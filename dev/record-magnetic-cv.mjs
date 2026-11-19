@@ -6,7 +6,7 @@ import { once } from 'node:events';
 import { join } from 'node:path';
 import { sleep } from './fable-cdp.mjs';
 
-process.env.PHASE2_OUT ||= 'artifacts/magnetic-cv-v2';
+process.env.PHASE2_OUT ||= 'artifacts/magnetic-cv-v3';
 const { browser, server, stopServers, out, save, stats } = await import('./phase2-lib.mjs');
 
 const pacing = process.argv.includes('--pacing');
@@ -70,7 +70,7 @@ async function record(width, height, touch) {
       for (let i = 1; i < order.length; i++) {
         if (touch) await c.swipe(dir * 240, { x: width / 2, y0: height * .52, steps: 4, ms: 40 });
         else await c.wheel(dir * 120);
-        await sleep(925);
+        await sleep(1360);
         assert.equal(await c.evaluate('location.hash'), '#' + order[i]);
       }
     }

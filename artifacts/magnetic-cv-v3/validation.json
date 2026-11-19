@@ -1,0 +1,1521 @@
+{
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900,
+      "geometry": [
+        {
+          "id": "introduction",
+          "top": 8100,
+          "end": 8100,
+          "h": 900
+        },
+        {
+          "id": "experience",
+          "top": 9000,
+          "end": 9000,
+          "h": 900
+        },
+        {
+          "id": "education",
+          "top": 9900,
+          "end": 9900,
+          "h": 900
+        },
+        {
+          "id": "skills",
+          "top": 10800,
+          "end": 10800,
+          "h": 900
+        },
+        {
+          "id": "languages",
+          "top": 11700,
+          "end": 11700,
+          "h": 900
+        },
+        {
+          "id": "interests",
+          "top": 12600,
+          "end": 12600,
+          "h": 900
+        },
+        {
+          "id": "contact",
+          "top": 13500,
+          "end": 13500,
+          "h": 900
+        }
+      ],
+      "longChapters": [],
+      "motion": {
+        "decoding": 207,
+        "maxHeroOutScale": 1.135,
+        "minBodyOutScale": 0.9,
+        "minHeroInScale": 0.821,
+        "veilActiveFrames": 65,
+        "curvedClipSeen": true,
+        "depthSilenceFrames": 0,
+        "dualReadableFrames": 0
+      },
+      "passageFrames": {
+        "frames": 64,
+        "mean": 16.95,
+        "p50": 8.4,
+        "p95": 50,
+        "p99": 116.8,
+        "max": 116.8,
+        "over34": 6
+      },
+      "duration": 1077,
+      "down": [
+        {
+          "y": 9900,
+          "visible": [
+            "education"
+          ],
+          "moved": 1,
+          "stuck": false
+        },
+        {
+          "y": 10800,
+          "visible": [
+            "skills"
+          ],
+          "moved": 1,
+          "stuck": false
+        },
+        {
+          "y": 11700,
+          "visible": [
+            "languages"
+          ],
+          "moved": 1,
+          "stuck": false
+        },
+        {
+          "y": 12600,
+          "visible": [
+            "interests"
+          ],
+          "moved": 1,
+          "stuck": false
+        },
+        {
+          "y": 13500,
+          "visible": [
+            "contact"
+          ],
+          "moved": 1,
+          "stuck": false
+        },
+        {
+          "y": 13500,
+          "visible": [
+            "contact"
+          ],
+          "moved": 0,
+          "stuck": true
+        }
+      ],
+      "up": [
+        {
+          "y": 12600,
+          "visible": [
+            "interests"
+          ],
+          "moved": -1,
+          "stuck": false
+        },
+        {
+          "y": 11700,
+          "visible": [
+            "languages"
+          ],
+          "moved": -1,
+          "stuck": false
+        },
+        {
+          "y": 10800,
+          "visible": [
+            "skills"
+          ],
+          "moved": -1,
+          "stuck": false
+        },
+        {
+          "y": 9900,
+          "visible": [
+            "education"
+          ],
+          "moved": -1,
+          "stuck": false
+        },
+        {
+          "y": 9000,
+          "visible": [
+            "experience"
+          ],
+          "moved": -1,
+          "stuck": false
+        },
+        {
+          "y": 8100,
+          "visible": [
+            "introduction"
+          ],
+          "moved": -1,
+          "stuck": false
+        }
+      ],
+      "walkDurations": [
+        1077,
+        1073,
+        1079,
+        1081,
+        1085,
+        1082,
+        1085,
+        1074,
+        1121,
+        1092,
+        1109,
+        1109
+      ],
+      "upwardMutations": 0,
+      "readCoverage": {
+        "total": 271,
+        "read": 271,
+        "missed": []
+      },
+      "shanghaiRoundtripDuration": [
+        1182,
+        1187
+      ],
+      "stressGestures": "passed",
+      "longDesktopReading": true,
+      "navigation": {
+        "hash": {
+          "id": "languages",
+          "y": 11700,
+          "top": 11700,
+          "overlap": []
+        },
+        "back": {
+          "id": "languages",
+          "y": 11700,
+          "top": 11700,
+          "overlap": []
+        },
+        "gauge": {
+          "id": "skills",
+          "y": 10800,
+          "top": 10800,
+          "overlap": []
+        },
+        "focus": {
+          "id": "contact",
+          "y": 13500,
+          "top": 13500,
+          "overlap": []
+        },
+        "headerContact": {
+          "id": "contact",
+          "y": 13500,
+          "top": 13500,
+          "overlap": []
+        }
+      },
+      "reduced": {
+        "down": [
+          "education"
+        ],
+        "up": [
+          "experience"
+        ],
+        "passages": 0
+      },
+      "errors": [],
+      "overflowX": false,
+      "pass": true
+    },
+    {
+      "width": 1280,
+      "height": 800,
+      "geometry": [
+        {
+          "id": "introduction",
+          "top": 7200,
+          "end": 7200,
+          "h": 800
+        },
+        {
+          "id": "experience",
+          "top": 8000,
+          "end": 8000,
+          "h": 800
+        },
+        {
+          "id": "education",
+          "top": 8800,
+          "end": 8800,
+          "h": 800
+        },
+        {
+          "id": "skills",
+          "top": 9600,
+          "end": 9600,
+          "h": 800
+        },
+        {
+          "id": "languages",
+          "top": 10400,
+          "end": 10400,
+          "h": 800
+        },
+        {
+          "id": "interests",
+          "top": 11200,
+          "end": 11200,
+          "h": 800
+        },
+        {
+          "id": "contact",
+          "top": 12000,
+          "end": 12000,
+          "h": 800
+        }
+      ],
+      "longChapters": [],
+      "motion": {
+        "decoding": 215,
+        "maxHeroOutScale": 1.135,
+        "minBodyOutScale": 0.9,
+        "minHeroInScale": 0.902,
+        "veilActiveFrames": 42,
+        "curvedClipSeen": true,
+        "depthSilenceFrames": 0,
+        "dualReadableFrames": 0
+      },
+      "passageFrames": {
+        "frames": 41,
+        "mean": 26.46,
+        "p50": 8.5,
+        "p95": 75.2,
+        "p99": 200.3,
+        "max": 200.3,
+        "over34": 7
+      },
+      "duration": 1079,
+      "down": [
+        {
+          "y": 8800,
+          "visible": [
+            "education"
+          ],
+          "moved": 1,
+          "stuck": false
+        },
+        {
+          "y": 9600,
+          "visible": [
+            "skills"
+          ],
+          "moved": 1,
+          "stuck": false
+        },
+        {
+          "y": 10400,
+          "visible": [
+            "languages"
+          ],
+          "moved": 1,
+          "stuck": false
+        },
+        {
+          "y": 11200,
+          "visible": [
+            "interests"
+          ],
+          "moved": 1,
+          "stuck": false
+        },
+        {
+          "y": 12000,
+          "visible": [
+            "contact"
+          ],
+          "moved": 1,
+          "stuck": false
+        },
+        {
+          "y": 12000,
+          "visible": [
+            "contact"
+          ],
+          "moved": 0,
+          "stuck": true
+        }
+      ],
+      "up": [
+        {
+          "y": 11200,
+          "visible": [
+            "interests"
+          ],
+          "moved": -1,
+          "stuck": false
+        },
+        {
+          "y": 10400,
+          "visible": [
+            "languages"
+          ],
+          "moved": -1,
+          "stuck": false
+        },
+        {
+          "y": 9600,
+          "visible": [
+            "skills"
+          ],
+          "moved": -1,
+          "stuck": false
+        },
+        {
+          "y": 8800,
+          "visible": [
+            "education"
+          ],
+          "moved": -1,
+          "stuck": false
+        },
+        {
+          "y": 8000,
+          "visible": [
+            "experience"
+          ],
+          "moved": -1,
+          "stuck": false
+        },
+        {
+          "y": 7200,
+          "visible": [
+            "introduction"
+          ],
+          "moved": -1,
+          "stuck": false
+        }
+      ],
+      "walkDurations": [
+        1079,
+        1082,
+        1080,
+        1080,
+        1082,
+        1082,
+        1078,
+        1083,
+        1083,
+        1079,
+        1092,
+        1096
+      ],
+      "upwardMutations": 0,
+      "readCoverage": {
+        "total": 271,
+        "read": 271,
+        "missed": []
+      },
+      "shanghaiRoundtripDuration": [
+        1186,
+        1195
+      ],
+      "stressGestures": "passed",
+      "navigation": {
+        "hash": {
+          "id": "languages",
+          "y": 10400,
+          "top": 10400,
+          "overlap": []
+        },
+        "back": {
+          "id": "languages",
+          "y": 10400,
+          "top": 10400,
+          "overlap": []
+        },
+        "gauge": {
+          "id": "skills",
+          "y": 9600,
+          "top": 9600,
+          "overlap": []
+        },
+        "focus": {
+          "id": "contact",
+          "y": 12000,
+          "top": 12000,
+          "overlap": []
+        },
+        "headerContact": {
+          "id": "contact",
+          "y": 12000,
+          "top": 12000,
+          "overlap": []
+        }
+      },
+      "reduced": {
+        "down": [
+          "education"
+        ],
+        "up": [
+          "experience"
+        ],
+        "passages": 0
+      },
+      "errors": [],
+      "overflowX": false,
+      "pass": true
+    },
+    {
+      "width": 768,
+      "height": 900,
+      "geometry": [
+        {
+          "id": "introduction",
+          "top": 8100,
+          "end": 8100,
+          "h": 900
+        },
+        {
+          "id": "experience",
+          "top": 9000,
+          "end": 9000,
+          "h": 900
+        },
+        {
+          "id": "education",
+          "top": 9900,
+          "end": 9900,
+          "h": 900
+        },
+        {
+          "id": "skills",
+          "top": 10800,
+          "end": 10800,
+          "h": 900
+        },
+        {
+          "id": "languages",
+          "top": 11700,
+          "end": 11700,
+          "h": 900
+        },
+        {
+          "id": "interests",
+          "top": 12600,
+          "end": 12600,
+          "h": 900
+        },
+        {
+          "id": "contact",
+          "top": 13500,
+          "end": 13500,
+          "h": 900
+        }
+      ],
+      "longChapters": [],
+      "motion": {
+        "decoding": 204,
+        "maxHeroOutScale": 1.135,
+        "minBodyOutScale": 0.9,
+        "minHeroInScale": 0.84,
+        "veilActiveFrames": 35,
+        "curvedClipSeen": true,
+        "depthSilenceFrames": 0,
+        "dualReadableFrames": 0
+      },
+      "passageFrames": {
+        "frames": 34,
+        "mean": 33.87,
+        "p50": 16.7,
+        "p95": 133.5,
+        "p99": 166.9,
+        "max": 166.9,
+        "over34": 9
+      },
+      "duration": 1158,
+      "down": [
+        {
+          "y": 9900,
+          "visible": [
+            "education"
+          ],
+          "moved": 1,
+          "stuck": false
+        },
+        {
+          "y": 10800,
+          "visible": [
+            "skills"
+          ],
+          "moved": 1,
+          "stuck": false
+        },
+        {
+          "y": 11700,
+          "visible": [
+            "languages"
+          ],
+          "moved": 1,
+          "stuck": false
+        },
+        {
+          "y": 12600,
+          "visible": [
+            "interests"
+          ],
+          "moved": 1,
+          "stuck": false
+        },
+        {
+          "y": 13500,
+          "visible": [
+            "contact"
+          ],
+          "moved": 1,
+          "stuck": false
+        },
+        {
+          "y": 13500,
+          "visible": [
+            "contact"
+          ],
+          "moved": 0,
+          "stuck": true
+        }
+      ],
+      "up": [
+        {
+          "y": 12600,
+          "visible": [
+            "interests"
+          ],
+          "moved": -1,
+          "stuck": false
+        },
+        {
+          "y": 11700,
+          "visible": [
+            "languages"
+          ],
+          "moved": -1,
+          "stuck": false
+        },
+        {
+          "y": 10800,
+          "visible": [
+            "skills"
+          ],
+          "moved": -1,
+          "stuck": false
+        },
+        {
+          "y": 9900,
+          "visible": [
+            "education"
+          ],
+          "moved": -1,
+          "stuck": false
+        },
+        {
+          "y": 9000,
+          "visible": [
+            "experience"
+          ],
+          "moved": -1,
+          "stuck": false
+        },
+        {
+          "y": 8100,
+          "visible": [
+            "introduction"
+          ],
+          "moved": -1,
+          "stuck": false
+        }
+      ],
+      "walkDurations": [
+        1158,
+        1060,
+        1071,
+        1084,
+        1079,
+        1085,
+        1084,
+        1086,
+        1083,
+        1084,
+        1110,
+        1095
+      ],
+      "upwardMutations": 0,
+      "readCoverage": {
+        "total": 271,
+        "read": 271,
+        "missed": []
+      },
+      "shanghaiRoundtripDuration": [
+        1181,
+        1185
+      ],
+      "stressGestures": "passed",
+      "navigation": {
+        "hash": {
+          "id": "languages",
+          "y": 11700,
+          "top": 11700,
+          "overlap": []
+        },
+        "back": {
+          "id": "languages",
+          "y": 11700,
+          "top": 11700,
+          "overlap": []
+        },
+        "gauge": {
+          "id": "skills",
+          "y": 10800,
+          "top": 10800,
+          "overlap": []
+        },
+        "focus": {
+          "id": "contact",
+          "y": 13500,
+          "top": 13500,
+          "overlap": []
+        },
+        "headerContact": {
+          "id": "contact",
+          "y": 13500,
+          "top": 13500,
+          "overlap": []
+        }
+      },
+      "reduced": {
+        "down": [
+          "education"
+        ],
+        "up": [
+          "experience"
+        ],
+        "passages": 0
+      },
+      "errors": [],
+      "overflowX": false,
+      "pass": true
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "touch": true,
+      "geometry": [
+        {
+          "id": "introduction",
+          "top": 7596,
+          "end": 7596,
+          "h": 865
+        },
+        {
+          "id": "experience",
+          "top": 8461,
+          "end": 8461,
+          "h": 844
+        },
+        {
+          "id": "education",
+          "top": 9305,
+          "end": 9305,
+          "h": 897
+        },
+        {
+          "id": "skills",
+          "top": 10201,
+          "end": 10201,
+          "h": 844
+        },
+        {
+          "id": "languages",
+          "top": 11045,
+          "end": 11045,
+          "h": 844
+        },
+        {
+          "id": "interests",
+          "top": 11889,
+          "end": 11889,
+          "h": 844
+        },
+        {
+          "id": "contact",
+          "top": 12733,
+          "end": 12733,
+          "h": 844
+        }
+      ],
+      "longChapters": [],
+      "motion": {
+        "decoding": 215,
+        "maxHeroOutScale": 1.135,
+        "minBodyOutScale": 0.9,
+        "minHeroInScale": 0.822,
+        "veilActiveFrames": 89,
+        "curvedClipSeen": true,
+        "depthSilenceFrames": 0,
+        "dualReadableFrames": 0
+      },
+      "passageFrames": {
+        "frames": 88,
+        "mean": 12.33,
+        "p50": 8.4,
+        "p95": 33.3,
+        "p99": 83.5,
+        "max": 83.5,
+        "over34": 2
+      },
+      "duration": 1077,
+      "down": [
+        {
+          "y": 9305,
+          "visible": [
+            "education"
+          ],
+          "moved": 1,
+          "stuck": false
+        },
+        {
+          "y": 10201,
+          "visible": [
+            "skills"
+          ],
+          "moved": 1,
+          "stuck": false
+        },
+        {
+          "y": 11045,
+          "visible": [
+            "languages"
+          ],
+          "moved": 1,
+          "stuck": false
+        },
+        {
+          "y": 11889,
+          "visible": [
+            "interests"
+          ],
+          "moved": 1,
+          "stuck": false
+        },
+        {
+          "y": 12733,
+          "visible": [
+            "contact"
+          ],
+          "moved": 1,
+          "stuck": false
+        },
+        {
+          "y": 12733,
+          "visible": [
+            "contact"
+          ],
+          "moved": 0,
+          "stuck": true
+        }
+      ],
+      "up": [
+        {
+          "y": 11889,
+          "visible": [
+            "interests"
+          ],
+          "moved": -1,
+          "stuck": false
+        },
+        {
+          "y": 11045,
+          "visible": [
+            "languages"
+          ],
+          "moved": -1,
+          "stuck": false
+        },
+        {
+          "y": 10201,
+          "visible": [
+            "skills"
+          ],
+          "moved": -1,
+          "stuck": false
+        },
+        {
+          "y": 9305,
+          "visible": [
+            "education"
+          ],
+          "moved": -1,
+          "stuck": false
+        },
+        {
+          "y": 8461,
+          "visible": [
+            "experience"
+          ],
+          "moved": -1,
+          "stuck": false
+        },
+        {
+          "y": 7596,
+          "visible": [
+            "introduction"
+          ],
+          "moved": -1,
+          "stuck": false
+        }
+      ],
+      "walkDurations": [
+        1077,
+        1077,
+        1101,
+        1079,
+        1076,
+        1078,
+        1077,
+        1077,
+        1079,
+        1109,
+        1082,
+        1081
+      ],
+      "upwardMutations": 0,
+      "readCoverage": {
+        "total": 271,
+        "read": 271,
+        "missed": []
+      },
+      "shanghaiRoundtripDuration": [
+        1180,
+        1182
+      ],
+      "stressGestures": "passed",
+      "navigation": {
+        "hash": {
+          "id": "languages",
+          "y": 11045,
+          "top": 11045,
+          "overlap": []
+        },
+        "back": {
+          "id": "languages",
+          "y": 11045,
+          "top": 11045,
+          "overlap": []
+        },
+        "gauge": {
+          "id": "skills",
+          "y": 10201,
+          "top": 10201,
+          "overlap": []
+        },
+        "focus": {
+          "id": "contact",
+          "y": 12733,
+          "top": 12733,
+          "overlap": []
+        },
+        "headerContact": {
+          "id": "contact",
+          "y": 12733,
+          "top": 12733,
+          "overlap": []
+        }
+      },
+      "reduced": {
+        "down": [
+          "education"
+        ],
+        "up": [
+          "experience"
+        ],
+        "passages": 0
+      },
+      "errors": [],
+      "overflowX": false,
+      "pass": true
+    },
+    {
+      "width": 320,
+      "height": 568,
+      "touch": true,
+      "geometry": [
+        {
+          "id": "introduction",
+          "top": 5112,
+          "end": 5400,
+          "h": 896
+        },
+        {
+          "id": "experience",
+          "top": 6008,
+          "end": 6190,
+          "h": 789
+        },
+        {
+          "id": "education",
+          "top": 6798,
+          "end": 7106,
+          "h": 917
+        },
+        {
+          "id": "skills",
+          "top": 7714,
+          "end": 7714,
+          "h": 569
+        },
+        {
+          "id": "languages",
+          "top": 8283,
+          "end": 8283,
+          "h": 574
+        },
+        {
+          "id": "interests",
+          "top": 8857,
+          "end": 8935,
+          "h": 686
+        },
+        {
+          "id": "contact",
+          "top": 9543,
+          "end": 9625,
+          "h": 690
+        }
+      ],
+      "longChapters": [
+        "introduction",
+        "experience",
+        "education",
+        "interests",
+        "contact"
+      ],
+      "motion": {
+        "decoding": 54,
+        "maxHeroOutScale": 1.135,
+        "minBodyOutScale": 0.9,
+        "minHeroInScale": 0.84,
+        "veilActiveFrames": 62,
+        "curvedClipSeen": true,
+        "depthSilenceFrames": 0,
+        "dualReadableFrames": 0
+      },
+      "passageFrames": {
+        "frames": 61,
+        "mean": 17.79,
+        "p50": 8.4,
+        "p95": 75,
+        "p99": 125.3,
+        "max": 125.3,
+        "over34": 7
+      },
+      "duration": 1083,
+      "down": [
+        {
+          "y": 6163,
+          "visible": [
+            "experience"
+          ],
+          "moved": 0,
+          "stuck": false
+        },
+        {
+          "y": 6190,
+          "visible": [
+            "experience"
+          ],
+          "moved": 0,
+          "stuck": false
+        },
+        {
+          "y": 6798,
+          "visible": [
+            "education"
+          ],
+          "moved": 1,
+          "stuck": false
+        },
+        {
+          "y": 7039,
+          "visible": [
+            "education"
+          ],
+          "moved": 0,
+          "stuck": false
+        },
+        {
+          "y": 7106,
+          "visible": [
+            "education"
+          ],
+          "moved": 0,
+          "stuck": false
+        },
+        {
+          "y": 7714,
+          "visible": [
+            "skills"
+          ],
+          "moved": 1,
+          "stuck": false
+        },
+        {
+          "y": 8283,
+          "visible": [
+            "languages"
+          ],
+          "moved": 1,
+          "stuck": false
+        },
+        {
+          "y": 8857,
+          "visible": [
+            "interests"
+          ],
+          "moved": 1,
+          "stuck": false
+        },
+        {
+          "y": 8935,
+          "visible": [
+            "interests"
+          ],
+          "moved": 0,
+          "stuck": false
+        },
+        {
+          "y": 9543,
+          "visible": [
+            "contact"
+          ],
+          "moved": 1,
+          "stuck": false
+        },
+        {
+          "y": 9665,
+          "visible": [
+            "contact"
+          ],
+          "moved": 0,
+          "stuck": false
+        },
+        {
+          "y": 9665,
+          "visible": [
+            "contact"
+          ],
+          "moved": 0,
+          "stuck": true
+        }
+      ],
+      "up": [
+        {
+          "y": 9543,
+          "visible": [
+            "contact"
+          ],
+          "moved": 0,
+          "stuck": false
+        },
+        {
+          "y": 8935,
+          "visible": [
+            "interests"
+          ],
+          "moved": -1,
+          "stuck": false
+        },
+        {
+          "y": 8857,
+          "visible": [
+            "interests"
+          ],
+          "moved": 0,
+          "stuck": false
+        },
+        {
+          "y": 8283,
+          "visible": [
+            "languages"
+          ],
+          "moved": -1,
+          "stuck": false
+        },
+        {
+          "y": 7714,
+          "visible": [
+            "skills"
+          ],
+          "moved": -1,
+          "stuck": false
+        },
+        {
+          "y": 7106,
+          "visible": [
+            "education"
+          ],
+          "moved": -1,
+          "stuck": false
+        },
+        {
+          "y": 6861,
+          "visible": [
+            "education"
+          ],
+          "moved": 0,
+          "stuck": false
+        },
+        {
+          "y": 6798,
+          "visible": [
+            "education"
+          ],
+          "moved": 0,
+          "stuck": false
+        },
+        {
+          "y": 6190,
+          "visible": [
+            "experience"
+          ],
+          "moved": -1,
+          "stuck": false
+        },
+        {
+          "y": 6008,
+          "visible": [
+            "experience"
+          ],
+          "moved": 0,
+          "stuck": false
+        },
+        {
+          "y": 5400,
+          "visible": [
+            "introduction"
+          ],
+          "moved": -1,
+          "stuck": false
+        },
+        {
+          "y": 5155,
+          "visible": [
+            "introduction"
+          ],
+          "moved": 0,
+          "stuck": false
+        },
+        {
+          "y": 5112,
+          "visible": [
+            "introduction"
+          ],
+          "moved": 0,
+          "stuck": false
+        }
+      ],
+      "walkDurations": [
+        1083,
+        1076,
+        1077,
+        1074,
+        1075,
+        1076,
+        1088,
+        1078,
+        1077,
+        1078,
+        1079,
+        1079
+      ],
+      "upwardMutations": 0,
+      "readCoverage": {
+        "total": 271,
+        "read": 271,
+        "missed": []
+      },
+      "shanghaiRoundtripDuration": [
+        1183,
+        1181
+      ],
+      "stressGestures": "passed",
+      "navigation": {
+        "hash": {
+          "id": "languages",
+          "y": 8283,
+          "top": 8283,
+          "overlap": []
+        },
+        "back": {
+          "id": "languages",
+          "y": 8283,
+          "top": 8283,
+          "overlap": []
+        },
+        "gauge": {
+          "id": "skills",
+          "y": 7714,
+          "top": 7714,
+          "overlap": []
+        },
+        "focus": {
+          "id": "contact",
+          "y": 9625,
+          "top": 9543,
+          "overlap": []
+        },
+        "headerContact": {
+          "id": "contact",
+          "y": 9543,
+          "top": 9543,
+          "overlap": []
+        }
+      },
+      "reduced": {
+        "down": [
+          "education"
+        ],
+        "up": [
+          "experience"
+        ],
+        "passages": 0
+      },
+      "errors": [],
+      "overflowX": false,
+      "pass": true
+    }
+  ],
+  "stationaryMouse": {
+    "width": 1440,
+    "height": 900,
+    "discreteForward": [
+      {
+        "want": "experience",
+        "got": "experience",
+        "st": "idle"
+      },
+      {
+        "want": "education",
+        "got": "education",
+        "st": "idle"
+      },
+      {
+        "want": "skills",
+        "got": "skills",
+        "st": "idle"
+      },
+      {
+        "want": "languages",
+        "got": "languages",
+        "st": "idle"
+      },
+      {
+        "want": "interests",
+        "got": "interests",
+        "st": "idle"
+      },
+      {
+        "want": "contact",
+        "got": "contact",
+        "st": "idle"
+      }
+    ],
+    "discreteReverse": [
+      {
+        "want": "interests",
+        "got": "interests",
+        "st": "idle"
+      },
+      {
+        "want": "languages",
+        "got": "languages",
+        "st": "idle"
+      },
+      {
+        "want": "skills",
+        "got": "skills",
+        "st": "idle"
+      },
+      {
+        "want": "education",
+        "got": "education",
+        "st": "idle"
+      },
+      {
+        "want": "experience",
+        "got": "experience",
+        "st": "idle"
+      },
+      {
+        "want": "introduction",
+        "got": "introduction",
+        "st": "idle"
+      },
+      {
+        "want": "journey",
+        "got": "journey",
+        "st": "idle"
+      }
+    ],
+    "smoothWheel": [
+      {
+        "want": "introduction",
+        "got": "introduction",
+        "st": "idle"
+      },
+      {
+        "want": "experience",
+        "got": "experience",
+        "st": "idle"
+      },
+      {
+        "want": "education",
+        "got": "education",
+        "st": "idle"
+      }
+    ],
+    "trackpadAfterTail": [
+      {
+        "afterTail": "skills",
+        "nextGentle": "languages"
+      }
+    ],
+    "pass": true
+  },
+  "shanghaiHandoff": [
+    {
+      "width": 1440,
+      "height": 900,
+      "atShanghai": {
+        "y": 7200,
+        "shanghaiTop": 7200,
+        "visible": [],
+        "globeVisible": true
+      },
+      "atProfile": {
+        "y": 8100,
+        "top": 8100,
+        "visible": [
+          "introduction"
+        ],
+        "unreadable": 0
+      },
+      "restoredShanghai": {
+        "y": 7200,
+        "activeCity": "Shanghai",
+        "visible": []
+      },
+      "globeReverseY": 6716,
+      "pass": true
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "touch": true,
+      "atShanghai": {
+        "y": 6752,
+        "shanghaiTop": 6752,
+        "visible": [],
+        "globeVisible": true
+      },
+      "atProfile": {
+        "y": 7596,
+        "top": 7596,
+        "visible": [
+          "introduction"
+        ],
+        "unreadable": 0
+      },
+      "restoredShanghai": {
+        "y": 6752,
+        "activeCity": "Shanghai",
+        "visible": []
+      },
+      "globeReverseY": 6291,
+      "pass": true
+    }
+  ],
+  "globe": [
+    {
+      "width": 1440,
+      "off": {
+        "ys": [
+          2640,
+          2700,
+          4201,
+          5465
+        ],
+        "errors": [],
+        "order": [
+          "experience",
+          "skills",
+          "education",
+          "languages",
+          "interests",
+          "contact"
+        ]
+      },
+      "on": {
+        "ys": [
+          2640,
+          2700,
+          4203,
+          5475
+        ],
+        "errors": []
+      },
+      "pass": true
+    },
+    {
+      "width": 390,
+      "touch": true,
+      "off": {
+        "ys": [
+          2532,
+          3944,
+          5292,
+          6653
+        ],
+        "errors": [],
+        "order": [
+          "experience",
+          "skills",
+          "education",
+          "languages",
+          "interests",
+          "contact"
+        ]
+      },
+      "on": {
+        "ys": [
+          2532,
+          3941,
+          5290,
+          6648
+        ],
+        "errors": []
+      },
+      "pass": true
+    }
+  ],
+  "failures": []
+}

@@ -10,33 +10,52 @@ export const magneticCV = typeof location !== 'undefined'
 /** The CV chapters isolated in reading order (Shanghai precedes them as chapter 0). */
 export const MAGNETIC_CHAPTERS = '#introduction, .cv-arch > section';
 
-/** Target transition duration (ms): squarely inside the 550–650 ms cinematic window. */
-export const TRANSITION_DURATION_MS = 600;
+/** Canonical cinematic editorial transition duration for CV <-> CV scenes (ms, 900–1200ms target). */
+export const TRANSITION_DURATION_MS = 1080;
 
-/** Arrival timing for the existing editorial decoder. */
+/** Special cinematic handoff duration for Shanghai (Globe) <-> Profile (ms, 900–1200ms target). */
+export const GLOBE_TRANSITION_DURATION_MS = 1180;
+
+/** Shared transition bridge read by the editorial ASCII decoder (TerminalEditorial.tsx) and ocean (asciiOcean.ts). */
 export const passage = {
   destination: null as HTMLElement | null,
   direction: 1 as -1 | 1,
   landing: 0,
   edge: 0,
+  /** Normalized overall transition clock 0..1 while animating, 0 at rest. */
+  progress: 0,
+  /** Heading-first reconstruction progress 0..1 (leads supporting copy during arrival). */
+  titleProgress: 0,
+  /** Supporting line-by-line cascade progress 0..1 across arrival. */
+  bodyProgress: 0,
+  /** Signed ocean depth-bridge surge (-1..1) strictly active during ?magneticCV=1 passages, 0 at rest. */
+  depthSurge: 0,
+  /** True when landing at a tall chapter's lower reading edge (heading sits above viewport). */
+  landingAtBottom: false,
   settleAll: false,
   requestDecode: null as (() => void) | null
 };
 
-export function easedPhase(t: number, start: number, end: number) {
-  const p = Math.max(0, Math.min(1, (t - start) / (end - start)));
+export function clamp01(v: number): number {
+  return v <= 0 ? 0 : v >= 1 ? 1 : v;
+}
+
+/** Smoothstep eased phase clamped cleanly to [0, 1]. */
+export function easedPhase(t: number, start: number, end: number): number {
+  const p = clamp01((t - start) / (end - start));
   return p * p * (3 - 2 * p);
 }
 
-/**
- * Controlled camera depth glide: responsive initial acceleration, fluid mid-travel,
- * long silky deceleration, zero overshoot and zero bounce.
- * Evaluates cubic-bezier(0.30, 0.06, 0.20, 1.00).
- */
-export function depthGlideEase(t: number): number {
-  const x = Math.max(0, Math.min(1, t));
+/** Smootherstep (quintic) eased phase: zero 1st & 2nd derivative at both ends for cinema poise. */
+export function cinematicPhase(t: number, start: number, end: number): number {
+  const p = clamp01((t - start) / (end - start));
+  return p * p * p * (p * (p * 6 - 15) + 10);
+}
+
+/** Exact cubic-bezier evaluator for cinema-grade, zero-overshoot easing curves. */
+export function cubicBezier(t: number, x1: number, y1: number, x2: number, y2: number): number {
+  const x = clamp01(t);
   if (x === 0 || x === 1) return x;
-  const x1 = 0.30, y1 = 0.06, x2 = 0.20, y2 = 1.00;
   const ax = 3 * x1 - 3 * x2 + 1;
   const bx = 3 * x2 - 6 * x1;
   const cx = 3 * x1;
@@ -45,22 +64,77 @@ export function depthGlideEase(t: number): number {
     const fu = ((ax * u + bx) * u + cx) * u - x;
     const dfu = (3 * ax * u + 2 * bx) * u + cx;
     if (Math.abs(fu) < 1e-6 || Math.abs(dfu) < 1e-6) break;
-    u = Math.max(0, Math.min(1, u - fu / dfu));
+    u = clamp01(u - fu / dfu);
   }
   const ay = 3 * y1 - 3 * y2 + 1;
   const by = 3 * y2 - 6 * y1;
   const cy = 3 * y1;
-  return Math.max(0, Math.min(1, ((ay * u + by) * u + cy) * u));
+  return clamp01(((ay * u + by) * u + cy) * u);
 }
 
-/** Outgoing clip & ASCII dissolution sweep: finishes cleanly before incoming text reads. */
+/**
+ * Cinema camera depth glide:
+ * - Weighted, poised departure during Camera Push-In (t = 0.00 -> 0.24),
+ * - Commanding ocean surge through the central depth bridge (t = 0.35 -> 0.65),
+ * - Long, aristocratic velvet deceleration into the magnetic landing,
+ * - Strictly monotonic, zero overshoot, zero bounce.
+ * Evaluates cubic-bezier(0.38, 0.02, 0.14, 1.00).
+ */
+export function depthGlideEase(t: number): number {
+  return cubicBezier(t, 0.38, 0.02, 0.14, 1.00);
+}
+
+/** Stage A — Camera Push-In / Optical Focus Lock (0% -> 24%): draws focal title toward lens while body recedes. */
+export function focusLockPhase(t: number): number {
+  return cubicBezier(clamp01(t / 0.24), 0.18, 0.96, 0.28, 1.0);
+}
+
+/** Stage B — Outgoing Curved Clip & Local Edge ASCII Dissolution (10% -> 48%).
+ * Guaranteed 100% cleared at t = 0.48, right as the incoming curved unveil opens cleanly. */
 export function outSweepPhase(t: number): number {
-  return easedPhase(t, 0.02, 0.50);
+  return cinematicPhase(t, 0.10, 0.48);
 }
 
-/** Incoming clip & typography reconstruction sweep: opens smoothly behind the outgoing cut. */
+/** Stage C — Continuous Ocean Depth Movement (22% -> 76%, peaking at t = 0.49 across the bridge). */
+export function depthPassagePhase(t: number): number {
+  if (t <= 0.22 || t >= 0.76) return 0;
+  if (t <= 0.49) return easedPhase(t, 0.22, 0.49);
+  return 1 - easedPhase(t, 0.49, 0.76);
+}
+
+/** Stage D — Incoming Curved Clip Reveal (48% -> 88%).
+ * Begins at t = 0.48 right as outgoing clears (0.48 >= 0.48): overlapping rhythm with zero dual-text collision. */
 export function inSweepPhase(t: number): number {
-  return easedPhase(t, 0.28, 0.88);
+  return cubicBezier(clamp01((t - 0.48) / 0.40), 0.16, 0.88, 0.22, 1.00);
+}
+
+/** Stage D1 — Dramatic Heading Reconstruction (47% -> 84%): large heading emerges first with depth zoom & ASCII decode. */
+export function titleArrivePhase(t: number): number {
+  return cubicBezier(clamp01((t - 0.47) / 0.37), 0.20, 0.14, 0.30, 1.00);
+}
+
+/** Stage D2 — Refined Staggered Supporting Cascade (55% -> 94%): follows heading in crisp reading order. */
+export function copyArrivePhase(t: number): number {
+  return cubicBezier(clamp01((t - 0.55) / 0.39), 0.22, 0.12, 0.34, 1.00);
+}
+
+/**
+ * Sculpted curved oceanic meniscus profile for both DOM clip-path polygons and
+ * typography-locked ASCII edge fragmentation. Combines a sweeping asymmetric arch with
+ * an organic dual-frequency swell so the clipping reveal reads unmistakably as a curved veil.
+ */
+export function oceanWaveY(
+  u: number,
+  baseEdge: number,
+  tilt: number,
+  amplitude: number,
+  phase: number
+): number {
+  const diag = (u - 0.5) * tilt;
+  const arch = Math.sin(u * Math.PI) * (amplitude * 0.95);
+  const swell = Math.sin(u * Math.PI * 1.6 + phase) * (amplitude * 0.52);
+  const ripple = Math.cos(u * Math.PI * 2.8 - phase * 0.7) * (amplitude * 0.16);
+  return baseEdge + diag - arch + swell + ripple;
 }
 
 /** Breathing room kept beneath a long chapter's last line when its reading edge is reached (px). */
@@ -85,13 +159,19 @@ export function chapterBounds(el: HTMLElement, y = scrollY, viewport = innerHeig
 }
 
 // ============================================================================
-// GESTURE OWNERSHIP STATE MACHINE (ONE GESTURE = ONE SECTION)
+// GESTURE OWNERSHIP STATE MACHINE (ONE GESTURE = ONE SECTION, ZERO LOCKUP)
 // ============================================================================
-// Limitation: browsers do not expose hardware gesture IDs on WheelEvent.
-// We therefore combine explicit lifecycle states with idle-gap detection,
-// directional hysteresis (ignoring tiny trackpad sign bounces), and decaying-tail
-// velocity envelope analysis (ignoring 1-vs-2 packet coalescing while still
-// recognizing a genuinely fresh flick on a dying momentum tail).
+// Design invariants:
+// 1. Strict one-gesture-one-section: continuous momentum tails, free-spinning flywheels,
+//    coalesced spikes arriving at continuous-stream cadence (<200ms), and dying momentum
+//    crumbs after frame stalls can NEVER advance a second section.
+// 2. Zero lockup on stationary mouse:
+//    - Normal gestures finish well before the ~1.08s transition ends and land directly in `idle`.
+//    - Residual momentum tails re-arm cleanly after a 200ms quiet gap (never a self-extending 450ms trap).
+//    - Precision touchpads and smooth-scroll wheels (small 3..12px packets with ±1px jitter)
+//      accumulate reliably without being wiped as "decaying crumbs".
+//    - `rearmIfQuiet(now)` lets the controller proactively transition `draining -> idle` via timer
+//      so no mouse move, hover, focus change, or click is ever required to re-enable wheel input.
 
 export type GestureState = 'idle' | 'captured' | 'transitioning' | 'draining' | 'reading';
 export type GestureDirection = -1 | 1;
@@ -122,55 +202,59 @@ export interface MagneticGestureMachine {
   endTransition(now: number, touchActive?: boolean): void;
   /** Enter draining explicitly (e.g. after touch fling or boundary clamp). */
   enterDraining(dir: GestureDirection, now: number): void;
+  /** Proactively re-arm to `idle` once the quiet window has elapsed without requiring a wheel/pointer event. */
+  rearmIfQuiet(now: number): boolean;
   reset(): void;
 }
 
-/** Intentional travel required to launch a snap (px): one wheel notch or crisp trackpad flick. */
+/** Intentional travel required to launch a snap (px): one wheel notch or crisp trackpad stroke. */
 export const MAGNETIC_GESTURE_PX = 28;
-/** Quiet gap (ms) that cleanly separates two distinct physical wheel gestures. */
-export const MAGNETIC_IDLE_GAP_MS = 210;
-/** Minimum ms after a transition ends before a sharp velocity spike on a faded tail can re-arm. */
-export const MAGNETIC_DRAIN_REFIRE_MS = 220;
-/** Minimum delta (px) for a velocity-spike re-arm during a faded momentum tail. */
-export const MAGNETIC_REARM_SPIKE_MIN = 26;
+/** Quiet gap (ms) that cleanly separates two distinct physical wheel gestures while reading. */
+export const MAGNETIC_IDLE_GAP_MS = 190;
+/** Quiet gap (ms) required to leave draining after continuous wheel/trackpad momentum.
+ * Continuous momentum & flywheels deliver packets every 8–60ms (never pausing 200ms),
+ * while two distinct human scroll gestures naturally separate cleanly without lockup. */
+export const MAGNETIC_DRAIN_IDLE_MS = 200;
+/** Shorter gap (ms) at which a bold fresh discrete impulse (>=40px) cleanly breaks out of a faded tail (<=8px). */
+const MAGNETIC_FRESH_IMPULSE_GAP_MS = 135;
+/** Peak below which a strictly-monotonically-decaying post-snap stream is treated as dying momentum crumbs. */
+const GESTURE_PEAK_PX = 14;
+/** Window after a transition ends during which strictly-decaying sub-14px crumbs in the same direction are filtered. */
+const POST_SNAP_CRUMB_WINDOW_MS = 2500;
+/** Minimum single-packet reverse travel (px) to break out of active draining (rejects flywheel recoil). */
+const DRAIN_REVERSE_PX = 96;
 const BOUNDARY_TOLERANCE = 2;
 
 export function createMagneticGestureMachine(): MagneticGestureMachine {
   let state: GestureState = 'idle';
   let lockedDir: -1 | 0 | 1 = 0;
+  let lastSnapDir: -1 | 0 | 1 = 0;
+  let lastTransitionEnd = -Infinity;
   let acc = 0;
+  let accPeak = 0;
   let accDir: -1 | 0 | 1 = 0;
-  let reverseAcc = 0;
-  let lastEventTime = -Infinity;
-  let transitionEndTime = -Infinity;
-  let prevMag = 0;
+  let prevIdleMag = 0;
+  let hasRise = false;
   let emaMag = 0;
-  let decaying = false;
-  let decaySamples = 0;
-
-  const updateStream = (mag: number, now: number) => {
-    const gap = now - lastEventTime;
-    if (gap >= MAGNETIC_IDLE_GAP_MS) {
-      prevMag = mag;
-      emaMag = mag;
-      decaying = false;
-      decaySamples = 0;
-    } else {
-      if (mag < prevMag || mag <= 10) decaying = true;
-      if (decaying && mag <= 12) decaySamples++;
-      else if (mag > Math.max(prevMag, emaMag) * 1.35) decaySamples = 0;
-      emaMag = emaMag * 0.72 + mag * 0.28;
-      prevMag = mag;
-    }
-    lastEventTime = now;
-  };
+  let reverseAcc = 0;
+  let reverseHits = 0;
+  let lastEventTime = -Infinity;
 
   const resetToIdle = () => {
     state = 'idle';
     lockedDir = 0;
     acc = 0;
+    accPeak = 0;
     accDir = 0;
+    prevIdleMag = 0;
+    hasRise = false;
+    emaMag = 0;
     reverseAcc = 0;
+    reverseHits = 0;
+  };
+
+  const trackStream = (mag: number, gap: number) => {
+    emaMag = gap > 140 ? mag : (emaMag > 0 ? emaMag * 0.75 + mag * 0.25 : mag);
   };
 
   return {
@@ -182,34 +266,37 @@ export function createMagneticGestureMachine(): MagneticGestureMachine {
       if (!delta) return;
       const dir = Math.sign(delta) as GestureDirection;
       const mag = Math.abs(delta);
-      updateStream(mag, now);
+      const gap = now - lastEventTime;
+      trackStream(mag, gap);
+      lastEventTime = now;
       if (state !== 'transitioning') {
         state = 'draining';
         lockedDir = dir;
         reverseAcc = 0;
+        reverseHits = 0;
       }
     },
 
     beginTransition(dir: GestureDirection, now: number) {
       state = 'transitioning';
       lockedDir = dir;
+      lastSnapDir = dir;
       acc = 0;
+      accPeak = 0;
       accDir = 0;
+      prevIdleMag = 0;
+      hasRise = false;
       reverseAcc = 0;
-      if (!Number.isFinite(lastEventTime) || now - lastEventTime > MAGNETIC_IDLE_GAP_MS) {
-        // Keyboard or direct trigger without an active wheel stream.
-        prevMag = 0;
-        emaMag = 0;
-        decaying = false;
-        decaySamples = 0;
-      }
+      reverseHits = 0;
+      if (!Number.isFinite(lastEventTime)) lastEventTime = now;
     },
 
     endTransition(now: number, touchActive = false) {
-      transitionEndTime = now;
-      if (touchActive || (now - lastEventTime < MAGNETIC_IDLE_GAP_MS)) {
+      lastTransitionEnd = now;
+      if (touchActive || (now - lastEventTime < MAGNETIC_DRAIN_IDLE_MS)) {
         state = 'draining';
         reverseAcc = 0;
+        reverseHits = 0;
       } else {
         resetToIdle();
       }
@@ -219,20 +306,32 @@ export function createMagneticGestureMachine(): MagneticGestureMachine {
       state = 'draining';
       lockedDir = dir;
       acc = 0;
+      accPeak = 0;
       accDir = 0;
+      prevIdleMag = 0;
+      hasRise = false;
       reverseAcc = 0;
-      transitionEndTime = now;
+      reverseHits = 0;
       lastEventTime = now;
+    },
+
+    rearmIfQuiet(now: number): boolean {
+      if (state === 'draining' && now - lastEventTime >= MAGNETIC_DRAIN_IDLE_MS) {
+        resetToIdle();
+        return true;
+      }
+      if (state === 'reading' && now - lastEventTime >= MAGNETIC_IDLE_GAP_MS) {
+        resetToIdle();
+        return true;
+      }
+      return false;
     },
 
     reset() {
       resetToIdle();
       lastEventTime = -Infinity;
-      transitionEndTime = -Infinity;
-      prevMag = 0;
-      emaMag = 0;
-      decaying = false;
-      decaySamples = 0;
+      lastSnapDir = 0;
+      lastTransitionEnd = -Infinity;
     },
 
     feedWheel(delta: number, now: number, query: WheelQuery): WheelAction {
@@ -243,37 +342,45 @@ export function createMagneticGestureMachine(): MagneticGestureMachine {
 
       // 1. Active transition owns every incoming wheel packet; never queues.
       if (state === 'transitioning' || state === 'captured') {
-        updateStream(mag, now);
+        trackStream(mag, gap);
+        lastEventTime = now;
         return { kind: 'consume' };
       }
 
-      // 2. Draining consumes residual momentum until a genuinely separate gesture starts.
+      // 2. Draining consumes residual momentum until either:
+      //    - a genuine quiet gap (>= MAGNETIC_DRAIN_IDLE_MS) separates the previous gesture,
+      //    - a bold fresh discrete impulse (>=40px) follows a faded tail (<=8px) after >=135ms, or
+      //    - a confirmed opposite-direction reversal arrives.
+      //    Continuous flywheels & coalesced momentum tails (8..60ms spacing) remain 100% consumed.
       if (state === 'draining') {
-        if (gap >= MAGNETIC_IDLE_GAP_MS) {
+        if (gap >= MAGNETIC_DRAIN_IDLE_MS) {
           resetToIdle();
         } else if (dir !== lockedDir) {
           reverseAcc += mag;
+          reverseHits++;
           lastEventTime = now;
-          if (reverseAcc < MAGNETIC_GESTURE_PX) return { kind: 'consume' };
-          // Deliberate opposite-direction gesture confirmed.
+          const confirmedReverse =
+            reverseAcc >= DRAIN_REVERSE_PX ||
+            (reverseHits >= 2 && reverseAcc >= 44);
+          if (!confirmedReverse) return { kind: 'consume' };
           const seeded = reverseAcc;
           resetToIdle();
           acc = seeded - mag; // idle branch below adds `mag`
+          accPeak = mag;
           accDir = dir;
+          hasRise = true;
         } else {
-          // Check for a fresh flick on a clearly faded tail (protects against packet coalescing).
-          const isFreshFlick =
-            now - transitionEndTime >= MAGNETIC_DRAIN_REFIRE_MS &&
-            decaying &&
-            decaySamples >= 4 &&
-            emaMag <= 10 &&
-            mag >= MAGNETIC_REARM_SPIKE_MIN &&
-            mag >= Math.max(prevMag * 2.8, emaMag * 2.5);
-          if (isFreshFlick) {
+          const isFreshDiscrete =
+            gap >= MAGNETIC_FRESH_IMPULSE_GAP_MS &&
+            emaMag <= 8 &&
+            mag >= 40;
+          if (isFreshDiscrete) {
             resetToIdle();
           } else {
             reverseAcc = 0;
-            updateStream(mag, now);
+            reverseHits = 0;
+            trackStream(mag, gap);
+            lastEventTime = now;
             return { kind: 'consume' };
           }
         }
@@ -285,7 +392,8 @@ export function createMagneticGestureMachine(): MagneticGestureMachine {
           resetToIdle();
         } else {
           const { room, hasTarget } = query(dir);
-          updateStream(mag, now);
+          trackStream(mag, gap);
+          lastEventTime = now;
           if (dir !== lockedDir) {
             if (room > BOUNDARY_TOLERANCE) {
               lockedDir = dir;
@@ -293,13 +401,11 @@ export function createMagneticGestureMachine(): MagneticGestureMachine {
             }
             state = 'draining';
             lockedDir = dir;
-            transitionEndTime = now;
             return { kind: 'clamp', dir };
           }
           if (room <= mag) {
             state = 'draining';
             lockedDir = dir;
-            transitionEndTime = now;
             return { kind: 'clamp', dir };
           }
           if (!hasTarget && room <= BOUNDARY_TOLERANCE) {
@@ -312,8 +418,11 @@ export function createMagneticGestureMachine(): MagneticGestureMachine {
 
       // 4. Idle / ready: evaluate whether we are reading a long section, passing through an
       //    outer edge (e.g. Shanghai upward back into Globe), or capturing a magnetic snap.
-      if (gap >= MAGNETIC_IDLE_GAP_MS || (accDir !== 0 && accDir !== dir)) {
+      if (gap >= 140 || (accDir !== 0 && accDir !== dir)) {
         acc = 0;
+        accPeak = 0;
+        prevIdleMag = 0;
+        hasRise = false;
         accDir = dir;
       } else if (accDir === 0) {
         accDir = dir;
@@ -325,13 +434,13 @@ export function createMagneticGestureMachine(): MagneticGestureMachine {
         return { kind: 'passthrough' };
       }
 
-      updateStream(mag, now);
+      trackStream(mag, gap);
+      lastEventTime = now;
 
       if (room > BOUNDARY_TOLERANCE) {
         if (room <= mag) {
           state = 'draining';
           lockedDir = dir;
-          transitionEndTime = now;
           return { kind: 'clamp', dir };
         }
         state = 'reading';
@@ -340,13 +449,39 @@ export function createMagneticGestureMachine(): MagneticGestureMachine {
       }
 
       // At a chapter boundary with a valid adjacent target: accumulate intentional travel.
+      // Only filter strictly-monotonically-decaying tiny crumbs (e.g. 11,10,9,8,7) that arrive
+      // right after a recent same-direction snap with zero upward acceleration — never penalizing
+      // precision touchpads or smooth-scroll mice whose packets rise (3->8->9) or hold steady (8,8,8).
+      if (prevIdleMag > 0 && mag > prevIdleMag) {
+        hasRise = true;
+      }
+      const recentSameDir =
+        dir === lastSnapDir &&
+        (now - lastTransitionEnd) < POST_SNAP_CRUMB_WINDOW_MS;
+      const isDecayingCrumb =
+        recentSameDir &&
+        !hasRise &&
+        prevIdleMag > 0 &&
+        mag < prevIdleMag &&
+        accPeak < GESTURE_PEAK_PX;
+      prevIdleMag = mag;
+      if (isDecayingCrumb) {
+        acc = 0;
+        return { kind: 'consume' };
+      }
+
       acc += mag;
+      accPeak = Math.max(accPeak, mag);
       if (acc >= MAGNETIC_GESTURE_PX) {
         state = 'captured';
         lockedDir = dir;
         acc = 0;
+        accPeak = 0;
         accDir = 0;
+        prevIdleMag = 0;
+        hasRise = false;
         reverseAcc = 0;
+        reverseHits = 0;
         return { kind: 'snap', dir };
       }
       return { kind: 'consume' };

@@ -987,7 +987,8 @@ export function createAsciiOcean(canvas: HTMLCanvasElement): AsciiOcean {
     if (resizePending && !qaPaused) applyResize();
     const dt = last ? Math.min(0.1, (now - last) / 1000) : 0;
     last = now;
-    if (!reduce) time += dt;
+    const depthSurge = !reduce && !creation.active ? ((window as { __magneticDepthSurge?: number }).__magneticDepthSurge ?? 0) : 0;
+    if (!reduce) time += dt * (1 + Math.abs(depthSurge) * 2.2);
     wakeClock = Math.min(0.25, wakeClock + dt);
     if (creation.active && !creation.ready) {
       openingWait += dt;
@@ -1014,7 +1015,8 @@ export function createAsciiOcean(canvas: HTMLCanvasElement): AsciiOcean {
       if (waterSettling(inertia) || inertia.scroll !== null) resetWaterInertia(inertia);
       lead = 0;
     }
-    const moved = scroll !== lastScroll || creationMoved || handingOff || lead !== lastLead;
+    const surgeLead = depthSurge * 116;
+    const moved = scroll !== lastScroll || creationMoved || handingOff || lead !== lastLead || depthSurge !== 0;
     // Scrolling redraws on every frame so the water moves with the page; at rest the
     // currents only need 30 fps
     if (moved || (!reduce && now - lastDraw >= 1000 / IDLE_FPS - 2)) {
@@ -1024,10 +1026,10 @@ export function createAsciiOcean(canvas: HTMLCanvasElement): AsciiOcean {
         if (DEV && stats.firstDrawMs < 0 && gl && glReady) {
           // Development only: a driver may leave part of a shader's compile to its first draw
           const started = performance.now();
-          draw(scroll, scroll + lead);
+          draw(scroll, scroll + lead + surgeLead);
           gl.finish();
           stats.firstDrawMs = performance.now() - started;
-        } else draw(scroll, scroll + lead);
+        } else draw(scroll, scroll + lead + surgeLead);
       }
       lastDraw = now;
       lastScroll = scroll;

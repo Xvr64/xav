@@ -198,17 +198,30 @@ export function useEditorialScroll() {
         let forced = media.matches || (focused && line.words.some(word => focused.contains(word.el)));
         let movement = delta;
         if (magneticCV && passage.destination === line.chapter && line.chapter) {
-          // Choreograph the lines that will be visible at rest, including the bottom
-          // screen when entering a tall chapter from below. Deeper lines keep their scroll band.
+          // Hierarchical arrival decode for lines visible on the landing screen:
+          // headings reconstruct first with the richest character depth, metadata stays
+          // restrained, and paragraphs / items cascade line by line in reading order.
           const position = line.top - passage.landing;
           const onLandingScreen = position >= -40 && position < viewport;
           if (passage.settleAll && onLandingScreen) {
             zone = 1;
             forced = true;
           } else if (onLandingScreen) {
-            const distance = passage.direction * (passage.edge - position) / viewport;
-            const span = line.heading ? .34 : line.voice === 'sub' ? .24 : line.voice === 'meta' ? .13 : .22;
-            zone = easedPhase(distance, -.05, span);
+            const rowFrac = Math.max(0, Math.min(1, position / Math.max(1, viewport)));
+            const cascadeFrac = passage.landingAtBottom ? 1 - rowFrac : rowFrac;
+            if (line.heading) {
+              const start = rowFrac * 0.20;
+              zone = easedPhase(passage.titleProgress, start, Math.min(1, start + 0.72));
+            } else if (line.voice === 'meta') {
+              const start = cascadeFrac * 0.36;
+              zone = easedPhase(passage.bodyProgress, start, Math.min(1, start + 0.30));
+            } else if (line.voice === 'sub') {
+              const start = cascadeFrac * 0.40;
+              zone = easedPhase(passage.bodyProgress, start, Math.min(1, start + 0.48));
+            } else {
+              const start = 0.08 + cascadeFrac * 0.44;
+              zone = easedPhase(passage.bodyProgress, start, Math.min(1, start + 0.36));
+            }
           } else {
             zone = 0;
           }
@@ -252,15 +265,20 @@ export function useEditorialScroll() {
         }
         if (!word.cells) continue;
         if (word.visual.firstChild !== word.cells[0]) word.visual.replaceChildren(...word.cells);
-        const lock = line.voice === 'title' ? 1 - (1 - p) ** 1.7 : line.voice === 'sub' ? 1 - (1 - p) ** 1.35 : p;
+        const lock = magneticCV
+          ? (line.voice === 'title' ? p ** 0.92 : line.voice === 'sub' ? p ** 0.96 : p)
+          : (line.voice === 'title' ? 1 - (1 - p) ** 1.7 : line.voice === 'sub' ? 1 - (1 - p) ** 1.35 : p);
         const pressure = textPressureAt(word.centerX, line.top - y, oceanWake);
         const ripple = pressure * 3 * Math.sin(2 * Math.PI * (p - word.offset / line.count));
         const lift = magneticCV
-          ? (line.voice === 'title' ? 7 : line.voice === 'sub' ? 4 : line.voice === 'meta' ? 0.5 : 2.5)
+          ? (line.voice === 'title' ? 14 : line.voice === 'sub' ? 7 : line.voice === 'meta' ? 1.5 : 4.5)
           : (line.voice === 'title' ? 4 : line.voice === 'meta' ? 0 : 1);
         word.visual.style.setProperty('--decode-lift', `${((lift + ripple) * (1 - p)).toFixed(1)}px`);
+        const ticks = magneticCV
+          ? (line.voice === 'meta' ? 6 : line.voice === 'title' ? 42 : 28)
+          : (line.voice === 'meta' ? 6 : 32);
         for (let i = 0; i < word.chars.length; i++) {
-          const state = encryptedCharacterState(lock, word.offset + i, line.count, word.seed, line.voice === 'meta' ? 6 : 32);
+          const state = encryptedCharacterState(lock, word.offset + i, line.count, word.seed, ticks);
           if (word.states[i] === state) continue;
           // A locked prefix already occupies its final baseline, even mid-word.
           if (state === -1 || word.states[i] === -2) word.cells[i].classList.toggle('unresolved', state !== -1);
