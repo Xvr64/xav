@@ -1,11 +1,10 @@
-/** The magnetic CV preview is a development-only experiment, like the other URL flags
- * (portfolioExperiments.ts): production builds never enable it, whatever the query string. */
-export function parseMagneticCV(search: string, development: boolean) {
-  return development && new URLSearchParams(search).get('magneticCV') === '1';
+/** The magnetic CV is opt-in via `?magneticCV=1` in both development and production;
+ * normal visits without the flag keep the default continuous scroll experience. */
+export function parseMagneticCV(search: string) {
+  return new URLSearchParams(search).get('magneticCV') === '1';
 }
 
-export const magneticCV = typeof location !== 'undefined'
-  && parseMagneticCV(location.search, !!(import.meta as { env?: { DEV?: boolean } }).env?.DEV);
+export const magneticCV = typeof location !== 'undefined' && parseMagneticCV(location.search);
 
 /** The CV chapters isolated in reading order (Shanghai precedes them as chapter 0). */
 export const MAGNETIC_CHAPTERS = '#introduction, .cv-arch > section';

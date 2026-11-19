@@ -22,14 +22,14 @@ import {
   createMagneticGestureMachine
 } from './magneticCVState.ts';
 
-test('the magnetic CV is a development preview behind ?magneticCV=1 only', () => {
-  assert.equal(parseMagneticCV('?magneticCV=1', true), true);
-  assert.equal(parseMagneticCV('?ocean=all&magneticCV=1', true), true);
-  assert.equal(parseMagneticCV('', true), false);
-  assert.equal(parseMagneticCV('?magneticCV=0', true), false);
-  assert.equal(parseMagneticCV('?magneticCV=true', true), false);
-  // Production never enables it, whatever the URL says.
-  assert.equal(parseMagneticCV('?magneticCV=1', false), false);
+test('the magnetic CV is opt-in behind ?magneticCV=1 in both development and production, off by default', () => {
+  assert.equal(parseMagneticCV('?magneticCV=1'), true);
+  assert.equal(parseMagneticCV('?ocean=all&magneticCV=1'), true);
+  assert.equal(parseMagneticCV(''), false);
+  assert.equal(parseMagneticCV('?ocean=all'), false);
+  assert.equal(parseMagneticCV('?magneticCV=0'), false);
+  assert.equal(parseMagneticCV('?magneticCV=true'), false);
+  assert.equal(parseMagneticCV('?magneticcv=1'), false);
   // Outside a browser (tests, SSR) the flag is off and nothing touches location.
   assert.equal(magneticCV, false);
 });
