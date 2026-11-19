@@ -412,14 +412,14 @@ export const MAGNETIC_IDLE_GAP_MS = 190;
  * Continuous momentum & flywheels deliver packets every 8–60ms (never pausing 200ms),
  * while two distinct human scroll gestures naturally separate cleanly without lockup. */
 export const MAGNETIC_DRAIN_IDLE_MS = 200;
-/** Shorter pause (ms) after a faded trackpad tail (<=6px) at which a bold new stroke (>=12px) breaks out of draining. */
-const MAGNETIC_FRESH_PAUSE_MS = 115;
+/** Shorter pause (ms) after a faded trackpad tail at which a bold new stroke (>=10px) breaks out of draining. */
+const MAGNETIC_FRESH_PAUSE_MS = 85;
 /** Shorter gap (ms) at which a bold fresh discrete impulse (>=40px) cleanly breaks out of a faded tail (<=8px). */
 const MAGNETIC_FRESH_IMPULSE_GAP_MS = 135;
 /** EMA / packet ceiling (px) defining a faded momentum tail eligible for fresh-gesture surge detection. */
 const DRAIN_TAIL_MAX_PX = 6;
 /** Minimum peak packet (px) for a multi-step re-acceleration wave on a faded tail to confirm a fresh trackpad gesture. */
-const DRAIN_SURGE_PEAK_PX = 10;
+const DRAIN_SURGE_PEAK_PX = 7;
 /** Peak below which a strictly-monotonically-decaying post-snap stream is treated as dying momentum crumbs. */
 const CRUMB_MAX_PEAK_PX = 12;
 /** Short window right after a transition ends during which strictly-decaying sub-12px crumbs after a frame stall are filtered. */
@@ -631,8 +631,8 @@ export function createMagneticGestureMachine(): MagneticGestureMachine {
             mag >= 40;
           const isFreshAfterPause =
             gap >= MAGNETIC_FRESH_PAUSE_MS &&
-            emaMag <= DRAIN_TAIL_MAX_PX &&
-            mag >= Math.max(emaMag * 2.5, 12);
+            (drainTailFaded || emaMag <= DRAIN_TAIL_MAX_PX) &&
+            mag >= Math.max((drainTailFaded ? tailBaseline : emaMag) * 2.5, 10);
 
           if (isFreshDiscrete || isFreshAfterPause) {
             resetToIdle();
@@ -648,7 +648,7 @@ export function createMagneticGestureMachine(): MagneticGestureMachine {
             // Detect when continuous momentum has genuinely faded into a low tail (<= 6px).
             if (mag <= DRAIN_TAIL_MAX_PX) {
               drainLowRun++;
-              if (!drainTailFaded && (emaMag <= DRAIN_TAIL_MAX_PX || drainLowRun >= 2)) {
+              if (!drainTailFaded && (emaMag <= DRAIN_TAIL_MAX_PX || drainLowRun >= 2 || gap >= 60)) {
                 drainTailFaded = true;
                 tailBaseline = Math.max(1, Math.min(emaMag || mag, mag));
               }
@@ -680,21 +680,21 @@ export function createMagneticGestureMachine(): MagneticGestureMachine {
                   surgePeak = Math.max(surgePeak, mag);
                   surgePrev = mag;
                 }
-              } else if (mag === surgePrev && mag >= Math.max(tailBaseline * 2, 5)) {
-                // Integer-quantized plateau during a fresh trackpad ramp (does not increment surgeRises).
+              } else if (mag === surgePrev && mag >= Math.max(tailBaseline * 2, 4.5)) {
+                // Quantized plateau during a fresh trackpad ramp (does not increment surgeRises).
                 surgeCount++;
                 surgeAcc += mag;
-              } else if (surgeRises >= 2 && mag >= Math.max(tailBaseline * 2.2, 6)) {
-                // Cresting after >=2 strict acceleration steps.
+              } else if (surgeRises >= 2 && mag >= Math.max(tailBaseline * 2, 4.5)) {
+                // Cresting after >=2 strict acceleration steps (supports 60Hz, 120Hz, and DPI-scaled pads).
                 surgeCount++;
                 surgeAcc += mag;
                 surgePrev = mag;
               } else if (
                 surgeRises >= 1 &&
-                surgePeak >= Math.max(tailBaseline * 4, 16) &&
-                mag >= Math.max(tailBaseline * 3, 12)
+                surgePeak >= Math.max(tailBaseline * 4, 12) &&
+                mag >= Math.max(tailBaseline * 2.5, 7)
               ) {
-                // Fast 2-frame-peak trackpad flick (e.g. [12, 24, 22]) sustained well above the faded tail.
+                // Fast 2-frame-peak trackpad flick (e.g. [5, 14, 12], [8, 15, 11], [12, 18, 10]) above faded tail.
                 surgeCount++;
                 surgeAcc += mag;
                 surgePrev = mag;
@@ -712,7 +712,7 @@ export function createMagneticGestureMachine(): MagneticGestureMachine {
               const confirmedTrackpadSurge =
                 surgeAcc >= MAGNETIC_GESTURE_PX && (
                   (surgeRises >= 2 && surgePeak >= Math.max(tailBaseline * 2.8, DRAIN_SURGE_PEAK_PX)) ||
-                  (surgeRises >= 1 && surgeCount >= 3 && surgePeak >= Math.max(tailBaseline * 4, 16) && mag >= Math.max(tailBaseline * 3, 12))
+                  (surgeRises >= 1 && surgeCount >= 3 && surgePeak >= Math.max(tailBaseline * 4, 12) && mag >= Math.max(tailBaseline * 2.5, 7))
                 );
 
               if (confirmedTrackpadSurge) {

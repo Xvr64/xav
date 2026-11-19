@@ -161,10 +161,61 @@ export function mountMagneticCV() {
 
   const boundary = (chapter: Chapter, dir: GestureDirection) => (dir > 0 ? chapter.end : chapter.top);
 
-  const ignoreTarget = (target: EventTarget | null) =>
-    !!document.querySelector('[aria-modal="true"]') ||
-    (target instanceof Element &&
-      !!target.closest('input,select,textarea,[contenteditable]:not([contenteditable="false"]),[role="dialog"]'));
+  const ignoreTarget = (target: EventTarget | null) => {
+    const modal = document.querySelector('[aria-modal="true"]');
+    if (modal && getComputedStyle(modal).visibility !== 'hidden') return true;
+    return (
+      target instanceof Element &&
+      !!target.closest('input,select,textarea,[contenteditable]:not([contenteditable="false"]),[role="dialog"]')
+    );
+  };
+
+  /** Zero-UI, zero-overhead opt-in trace buffer for real-device trackpad inspection (?magneticDebug=1). */
+  const debugTrace: Record<string, unknown>[] | null =
+    new URLSearchParams(location.search).get('magneticDebug') === '1' ? [] : null;
+  let debugLastWheelAt = -Infinity;
+  let debugLastMoveX = NaN;
+  let debugLastMoveY = NaN;
+  const describeNode = (node: EventTarget | null | undefined): string => {
+    if (!node) return 'null';
+    if (node === window) return 'window';
+    if (node === document) return 'document';
+    if (!(node instanceof Element)) return String((node as Node).nodeName || node);
+    const cls = typeof node.className === 'string' ? node.className.trim().split(/\s+/).filter(Boolean).slice(0, 2).join('.') : '';
+    return `${node.tagName.toLowerCase()}${node.id ? '#' + node.id : ''}${cls ? '.' + cls : ''}`;
+  };
+  const recordDebug = (entry: Record<string, unknown>) => {
+    if (!debugTrace) return;
+    if (debugTrace.length >= 1200) debugTrace.shift();
+    debugTrace.push(entry);
+  };
+  const wheelDebugBase = (e: WheelEvent, perfNow: number, now: number, gap: number) => {
+    const tgt = e.target;
+    const cs = tgt instanceof Element ? getComputedStyle(tgt) : null;
+    const hit = Number.isFinite(e.clientX) && Number.isFinite(e.clientY) ? document.elementFromPoint(e.clientX, e.clientY) : null;
+    const path = typeof e.composedPath === 'function' ? e.composedPath().slice(0, 6).map(describeNode) : [];
+    return {
+      kind: 'wheel',
+      t: Math.round(perfNow),
+      ts: Math.round(now),
+      gap,
+      x: Math.round(e.clientX),
+      y: Math.round(e.clientY),
+      dx: +e.deltaX.toFixed(2),
+      dy: +e.deltaY.toFixed(2),
+      mode: e.deltaMode,
+      canc: e.cancelable,
+      dpPre: e.defaultPrevented,
+      tgt: describeNode(tgt),
+      tgtConn: tgt instanceof Node ? tgt.isConnected : null,
+      tgtPE: cs?.pointerEvents ?? null,
+      tgtClip: cs?.clipPath && cs.clipPath !== 'none' ? cs.clipPath : null,
+      hit: describeNode(hit),
+      path,
+      active: visibleChapter?.id ?? null,
+      scrollY: Math.round(scrollY)
+    };
+  };
 
   /** Proactive transition-to-idle re-arming: never leaves the machine stranded in draining/reading. */
   function scheduleRearm() {
@@ -178,23 +229,25 @@ export function mountMagneticCV() {
       rearmTimer = window.setTimeout(() => {
         rearmTimer = 0;
         if (fingers || animation) return;
-        const rearmed = gesture.rearmIfQuiet(performance.now());
+        const prevState = gesture.state;
+        const now = performance.now();
+        const rearmed = gesture.rearmIfQuiet(now);
+        if (rearmed && debugTrace) {
+          recordDebug({
+            kind: 'rearm',
+            t: Math.round(now),
+            stateBefore: prevState,
+            stateAfter: gesture.state,
+            active: visibleChapter?.id ?? null,
+            scrollY: Math.round(scrollY)
+          });
+        }
         if (!rearmed && (gesture.state === 'draining' || gesture.state === 'reading')) {
           scheduleRearm();
         }
       }, wait);
     }
   }
-
-  /** Zero-UI, zero-overhead opt-in trace buffer for real-device trackpad inspection (?magneticDebug=1). */
-  const debugTrace: Record<string, unknown>[] | null =
-    new URLSearchParams(location.search).get('magneticDebug') === '1' ? [] : null;
-  let debugLastWheelAt = -Infinity;
-  const recordDebug = (entry: Record<string, unknown>) => {
-    if (!debugTrace) return;
-    if (debugTrace.length >= 400) debugTrace.shift();
-    debugTrace.push(entry);
-  };
 
   /** Exclusive visibility: at rest, at most ONE CV chapter is readable; at Shanghai, ALL CV chapters are muted. */
   function show(active: Chapter | null) {
@@ -224,11 +277,14 @@ export function mountMagneticCV() {
     }
   }
 
-  /** Cancel native wheel scrolling without ever locking root overflow-y on desktop. */
+  /** Cancel native wheel scrolling without ever locking root overflow-y on desktop.
+   * Also stops propagation from capture phase so bubble-phase controllers (e.g. Globe) never
+   * compete with CV navigation even if Chromium delivers a non-cancelable async wheel packet. */
   function consumeWheel(e: WheelEvent) {
     if (e.cancelable) {
       e.preventDefault();
     }
+    e.stopPropagation();
   }
 
   function clearAnimation(landing?: Chapter) {
@@ -290,6 +346,19 @@ export function mountMagneticCV() {
     clearAnimation(to);
     gesture.endTransition(now, fingers > 0);
     scheduleRearm();
+    if (debugTrace) {
+      recordDebug({
+        kind: 'transition-end',
+        t: Math.round(now),
+        from: from.id,
+        to: to.id,
+        dir,
+        ms: lastTransitionMs,
+        stateAfter: gesture.state,
+        active: visibleChapter?.id ?? null,
+        scrollY: Math.round(scrollY)
+      });
+    }
 
     // Update URL hash and save reading state for Browser Back / Forward.
     if (to.kind === 'cv') {
@@ -323,6 +392,18 @@ export function mountMagneticCV() {
     clearTimeout(rearmTimer);
     rearmTimer = 0;
     gesture.beginTransition(dir, now);
+    if (debugTrace) {
+      recordDebug({
+        kind: 'transition-start',
+        t: Math.round(now),
+        from: from.id,
+        to: to.id,
+        dir,
+        keyboard,
+        startY: Math.round(startY),
+        endY: Math.round(endY)
+      });
+    }
 
     const focus = keyboard || (from.kind === 'cv' && from.el.contains(document.activeElement));
 
@@ -490,9 +571,6 @@ export function mountMagneticCV() {
   }
 
   function onWheel(e: WheelEvent) {
-    if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.shiftKey || ignoreTarget(e.target)) return;
-    const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? innerHeight : 1;
-    const delta = e.deltaY * unit;
     const perfNow = performance.now();
     // Prefer the browser's hardware event timestamp when on the performance.now() clock so a
     // brief main-thread paint stall never fabricates a false quiet gap mid-momentum.
@@ -503,18 +581,47 @@ export function mountMagneticCV() {
     const debugGap = Number.isFinite(debugLastWheelAt) ? Math.round(now - debugLastWheelAt) : -1;
     debugLastWheelAt = now;
 
+    if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.shiftKey || ignoreTarget(e.target)) {
+      if (debugTrace) {
+        const reason = e.defaultPrevented
+          ? 'pre-defaultPrevented'
+          : e.ctrlKey || e.metaKey || e.shiftKey
+            ? 'modifier-key'
+            : 'ignore-target';
+        recordDebug({
+          ...wheelDebugBase(e, perfNow, now, debugGap),
+          reason,
+          stateBefore: gesture.state,
+          stateAfter: gesture.state,
+          dpPost: e.defaultPrevented
+        });
+      }
+      return;
+    }
+
+    const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? innerHeight : 1;
+    const delta = e.deltaY * unit;
+
     // Never leave the gesture machine stranded in transitioning/captured when no animation is running.
     if (!animation && (gesture.state === 'transitioning' || gesture.state === 'captured')) {
       gesture.reset();
     }
 
+    const isHorizontalSwipe = Math.abs(e.deltaX) >= 6 && Math.abs(e.deltaX) > Math.abs(e.deltaY) * 4;
     if (!delta || Math.abs(e.deltaX) > Math.abs(e.deltaY) * 1.5) {
-      if (animation || gesture.state === 'draining') consumeWheel(e);
+      // Prevent tiny horizontal/zero touch-down wobble (kPhaseBegan) inside magnetic CV ownership
+      // from leaking into native compositor scrolling and turning the rest of the gesture non-cancelable.
+      // Genuine horizontal two-finger swipes (|deltaX| >= 6 and > 4x |deltaY|) pass through untouched when idle.
+      if (animation || gesture.state === 'draining' || (!isHorizontalSwipe && owns())) {
+        consumeWheel(e);
+      }
       if (debugTrace) {
         recordDebug({
-          t: Math.round(now), gap: debugGap, dy: +e.deltaY.toFixed(2), dx: +e.deltaX.toFixed(2),
-          mode: e.deltaMode, canc: e.cancelable, reason: 'horizontal-or-zero',
-          state: gesture.state, active: visibleChapter?.id ?? null, y: Math.round(scrollY)
+          ...wheelDebugBase(e, perfNow, now, debugGap),
+          reason: isHorizontalSwipe ? 'horizontal-swipe' : 'horizontal-or-zero',
+          stateBefore: gesture.state,
+          stateAfter: gesture.state,
+          dpPost: e.defaultPrevented
         });
       }
       return;
@@ -525,9 +632,12 @@ export function mountMagneticCV() {
       scheduleRearm();
       if (debugTrace) {
         recordDebug({
-          t: Math.round(now), gap: debugGap, dy: +delta.toFixed(2), dx: +e.deltaX.toFixed(2),
-          canc: e.cancelable, reason: 'external-not-owned',
-          state: gesture.state, active: visibleChapter?.id ?? null, y: Math.round(scrollY)
+          ...wheelDebugBase(e, perfNow, now, debugGap),
+          dy: +delta.toFixed(2),
+          reason: 'external-not-owned',
+          stateBefore: gesture.state,
+          stateAfter: gesture.state,
+          dpPost: e.defaultPrevented
         });
       }
       return;
@@ -539,9 +649,12 @@ export function mountMagneticCV() {
       scheduleRearm();
       if (debugTrace) {
         recordDebug({
-          t: Math.round(now), gap: debugGap, dy: +delta.toFixed(2), dx: +e.deltaX.toFixed(2),
-          canc: e.cancelable, reason: 'shanghai-settle',
-          state: gesture.state, active: visibleChapter?.id ?? null, y: Math.round(scrollY)
+          ...wheelDebugBase(e, perfNow, now, debugGap),
+          dy: +delta.toFixed(2),
+          reason: 'shanghai-settle',
+          stateBefore: gesture.state,
+          stateAfter: gesture.state,
+          dpPost: e.defaultPrevented
         });
       }
       return;
@@ -558,34 +671,61 @@ export function mountMagneticCV() {
       return { room, hasTarget: !!to };
     });
 
-    if (debugTrace) {
-      recordDebug({
-        t: Math.round(now), gap: debugGap, dy: +delta.toFixed(2), dx: +e.deltaX.toFixed(2),
-        mode: e.deltaMode, canc: e.cancelable,
-        tgt: e.target instanceof Element ? `${e.target.tagName}${e.target.id ? '#' + e.target.id : ''}` : String(e.target),
-        from: from.id, span: from.end - from.top,
-        stateBefore, action: action.kind, stateAfter: gesture.state, y: Math.round(scrollY)
-      });
-    }
-
     if (action.kind === 'ignore' || action.kind === 'passthrough') {
       releaseBounds();
       scheduleRearm();
+      if (debugTrace) {
+        recordDebug({
+          ...wheelDebugBase(e, perfNow, now, debugGap),
+          dy: +delta.toFixed(2),
+          from: from.id,
+          span: from.end - from.top,
+          stateBefore,
+          action: action.kind,
+          stateAfter: gesture.state,
+          dpPost: e.defaultPrevented
+        });
+      }
       return;
     }
 
     if (action.kind === 'consume') {
       consumeWheel(e);
       scheduleRearm();
+      if (debugTrace) {
+        recordDebug({
+          ...wheelDebugBase(e, perfNow, now, debugGap),
+          dy: +delta.toFixed(2),
+          from: from.id,
+          span: from.end - from.top,
+          stateBefore,
+          action: action.kind,
+          stateAfter: gesture.state,
+          dpPost: e.defaultPrevented
+        });
+      }
       return;
     }
 
     if (action.kind === 'read') {
+      if (from.kind === 'cv') e.stopPropagation();
       root.removeAttribute('data-cv-boundary');
       readingBounds = from;
       readingDirection = Math.sign(delta) as GestureDirection;
       scheduleReleaseBounds();
       scheduleRearm();
+      if (debugTrace) {
+        recordDebug({
+          ...wheelDebugBase(e, perfNow, now, debugGap),
+          dy: +delta.toFixed(2),
+          from: from.id,
+          span: from.end - from.top,
+          stateBefore,
+          action: action.kind,
+          stateAfter: gesture.state,
+          dpPost: e.defaultPrevented
+        });
+      }
       return;
     }
 
@@ -593,6 +733,18 @@ export function mountMagneticCV() {
       consumeWheel(e);
       jump(boundary(from, action.dir));
       scheduleRearm();
+      if (debugTrace) {
+        recordDebug({
+          ...wheelDebugBase(e, perfNow, now, debugGap),
+          dy: +delta.toFixed(2),
+          from: from.id,
+          span: from.end - from.top,
+          stateBefore,
+          action: action.kind,
+          stateAfter: gesture.state,
+          dpPost: e.defaultPrevented
+        });
+      }
       return;
     }
 
@@ -600,9 +752,34 @@ export function mountMagneticCV() {
     const to = nextChapter(from, action.dir);
     if (!to) {
       gesture.reset();
+      if (debugTrace) {
+        recordDebug({
+          ...wheelDebugBase(e, perfNow, now, debugGap),
+          dy: +delta.toFixed(2),
+          from: from.id,
+          span: from.end - from.top,
+          stateBefore,
+          action: 'snap-no-target',
+          stateAfter: gesture.state,
+          dpPost: e.defaultPrevented
+        });
+      }
       return;
     }
     consumeWheel(e);
+    if (debugTrace) {
+      recordDebug({
+        ...wheelDebugBase(e, perfNow, now, debugGap),
+        dy: +delta.toFixed(2),
+        from: from.id,
+        to: to.id,
+        span: from.end - from.top,
+        stateBefore,
+        action: action.kind,
+        stateAfter: 'transitioning',
+        dpPost: e.defaultPrevented
+      });
+    }
     if (from.kind === 'globe') globeScrollGeometry.release?.();
     start(from, to, action.dir, false, perfNow);
   }
@@ -787,10 +964,11 @@ export function mountMagneticCV() {
     const sh = shanghaiChapter();
     const prof = firstCvChapter();
 
-    // Guard against native touch inertia carrying from the Globe runway past Shanghai into Profile.
+    // Guard against native touch or external Globe inertia carrying past Shanghai into Profile.
     if (inside && sh && prof && prevY <= sh.top + TOLERANCE && scrollY > sh.top + TOLERANCE && !animation && !readingBounds) {
       const carriedTouch = touchFromOutside && (fingers > 0 || now - lastTouchEnd < TOUCH_MOMENTUM_MS);
-      if (carriedTouch || now - gesture.lastEventTime < SCROLL_QUIET_MS) {
+      const externalDraining = gesture.state === 'draining' && now - gesture.lastEventTime < SCROLL_QUIET_MS;
+      if (carriedTouch || externalDraining) {
         readingBounds = sh;
         readingDirection = 1;
         gesture.enterDraining(1, now);
@@ -995,7 +1173,51 @@ export function mountMagneticCV() {
   // Dev-only inspection handle for automated browser validation (tree-shaken in production).
   const win = window as unknown as Record<string, unknown>;
   if (debugTrace) {
+    // Passive pointer-move marker strictly for opt-in ?magneticDebug=1 diagnostics
+    // (never alters navigation state; lets real-trackpad traces compare before vs after cursor movement).
+    window.addEventListener('pointermove', (e: PointerEvent) => {
+      const x = Math.round(e.clientX);
+      const y = Math.round(e.clientY);
+      if (x === debugLastMoveX && y === debugLastMoveY) return;
+      const fromX = debugLastMoveX;
+      const fromY = debugLastMoveY;
+      debugLastMoveX = x;
+      debugLastMoveY = y;
+      recordDebug({
+        kind: 'pointermove',
+        t: Math.round(performance.now()),
+        fromX: Number.isFinite(fromX) ? fromX : null,
+        fromY: Number.isFinite(fromY) ? fromY : null,
+        x,
+        y,
+        hit: describeNode(document.elementFromPoint(x, y)),
+        state: gesture.state,
+        active: visibleChapter?.id ?? null,
+        scrollY: Math.round(scrollY)
+      });
+    }, { ...options, capture: true, passive: true });
+
     win.__magneticCVTrace = debugTrace;
+    win.__magneticCVDebug = {
+      trace: debugTrace,
+      status: () => ({
+        gestureState: gesture.state,
+        lockedDir: gesture.lockedDir,
+        animating: !!animation,
+        activeId: visibleChapter?.id ?? null,
+        owns: owns(),
+        blockedByOverlay: blockedByOverlay(),
+        scrollY: Math.round(scrollY),
+        viewport: { w: innerWidth, h: innerHeight, dpr: devicePixelRatio },
+        chapters: chapters.map(c => ({ id: c.id, kind: c.kind, top: c.top, end: c.end, span: c.end - c.top })),
+        traceCount: debugTrace.length
+      }),
+      dump: (limit = 200) => JSON.stringify({
+        status: (win.__magneticCVDebug as { status: () => unknown }).status(),
+        entries: debugTrace.slice(-limit)
+      }, null, 2),
+      clear: () => { debugTrace.length = 0; }
+    };
   }
   if ((import.meta as { env?: { DEV?: boolean } }).env?.DEV) {
     win.__magneticCV = {
@@ -1027,6 +1249,7 @@ export function mountMagneticCV() {
     focusable.forEach(el => el.removeAttribute('tabindex'));
     if (debugTrace) {
       delete win.__magneticCVTrace;
+      delete win.__magneticCVDebug;
     }
     if ((import.meta as { env?: { DEV?: boolean } }).env?.DEV) {
       delete win.__magneticCV;

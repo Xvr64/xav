@@ -648,3 +648,66 @@ test('sign bounce after a 145ms slow paint frame during transitioning/draining n
   }
   assert.equal(m.state, 'draining');
 });
+
+test('real desktop trackpad profiles (Windows 125% DPI fractional, 120Hz micro-deltas, gentle bells, fast 2-frame flicks) never lock up in draining', () => {
+  const cases = [
+    { label: 'gentle bell peaking at 9px after 80ms on 1px tail', tailStart: 28, tailDecay: 0.92, pauseMs: 80, deltas: [3, 6, 8, 9, 8, 6, 4, 2] },
+    { label: 'Windows 125% DPI fractional gentle stroke on 1.6px tail', tailStart: 28, tailDecay: 0.92, pauseMs: 70, deltas: [1.6, 4, 7.2, 8.8, 7.2, 4.8, 2.4] },
+    { label: 'Windows 120Hz micro-delta stroke on 1px tail', tailStart: 28, tailDecay: 0.92, pauseMs: 50, deltas: [2, 3, 5, 7, 8, 8, 7, 5, 3, 2] },
+    { label: 'fast 2-frame peak [5,14,12,9,6,4] after 60ms on 1px tail', tailStart: 28, tailDecay: 0.92, pauseMs: 60, deltas: [5, 14, 12, 9, 6, 4] },
+    { label: 'fast 2-frame peak [8,15,11,8,5,3] after 60ms on 1px tail', tailStart: 28, tailDecay: 0.92, pauseMs: 60, deltas: [8, 15, 11, 8, 5, 3] },
+    { label: 'short crisp flick [12,18,10,5] after 60ms on 1px tail', tailStart: 28, tailDecay: 0.92, pauseMs: 60, deltas: [12, 18, 10, 5] },
+    { label: 'coalesced peak-first [24,16,10,6,3] after 90ms pause on 1px tail', tailStart: 28, tailDecay: 0.92, pauseMs: 90, deltas: [24, 16, 10, 6, 3] },
+    { label: 'gentle ramp after 90ms pause on mid 7px tail', tailStart: 42, tailDecay: 0.975, pauseMs: 90, deltas: [4, 9, 14, 18, 14, 9] }
+  ];
+
+  for (const tc of cases) {
+    const m = createMagneticGestureMachine();
+    let t = 1000;
+    assert.deepEqual(m.feedWheel(80, t, atBoundary), { kind: 'snap', dir: 1 });
+    m.beginTransition(1, t);
+    const endAt = t + TRANSITION_DURATION_MS;
+    for (let i = 0; i < 85; i++) {
+      t += 16;
+      if (m.state === 'transitioning' && t >= endAt) m.endTransition(t, false);
+      m.feedWheel(Math.max(1, +(tc.tailStart * tc.tailDecay ** i).toFixed(2)), t, atBoundary);
+    }
+    if (m.state === 'transitioning') {
+      t = endAt;
+      m.endTransition(t, false);
+    }
+    assert.equal(m.state, 'draining', `${tc.label}: enters draining on continuing tail`);
+    t += tc.pauseMs;
+    let snapped = false;
+    for (let i = 0; i < tc.deltas.length; i++) {
+      if (i > 0) t += 16;
+      const a = m.feedWheel(tc.deltas[i], t, atBoundary);
+      if (a.kind === 'snap') {
+        snapped = true;
+        break;
+      }
+    }
+    assert.equal(snapped, true, `${tc.label} must reliably unlock draining and snap`);
+  }
+});
+
+test('1-vs-2 packet coalescing and ±1-2px quantization jitter across all tail magnitudes never trigger a second snap', () => {
+  for (const base of [1, 2, 3, 4, 5, 6, 8, 12, 20]) {
+    const m = createMagneticGestureMachine();
+    let t = 1000;
+    assert.deepEqual(m.feedWheel(80, t, atBoundary), { kind: 'snap', dir: 1 });
+    m.beginTransition(1, t);
+    const endAt = t + TRANSITION_DURATION_MS;
+    for (let i = 0; i < 82; i++) {
+      t += 16;
+      if (m.state === 'transitioning' && t >= endAt) m.endTransition(t, false);
+      m.feedWheel(Math.max(base, 36 * Math.exp(-i / 18)), t, atBoundary);
+    }
+    assert.equal(m.state, 'draining');
+    for (let i = 0; i < 40; i++) {
+      t += 16;
+      const dy = i % 2 === 0 ? base : +(base * 1.6).toFixed(2);
+      assert.deepEqual(m.feedWheel(dy, t, atBoundary), { kind: 'consume' }, `base=${base} i=${i} must stay consumed`);
+    }
+  }
+});
