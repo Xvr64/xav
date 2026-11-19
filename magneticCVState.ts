@@ -208,18 +208,24 @@ export interface MagneticGestureMachine {
 
 /** Intentional travel required to launch a snap (px): one wheel notch or crisp trackpad stroke. */
 export const MAGNETIC_GESTURE_PX = 28;
-/** Quiet gap (ms) that cleanly separates two distinct physical wheel gestures while reading. */
+/** Quiet gap (ms) that cleanly separates two distinct physical wheel gestures while reading or accumulating. */
 export const MAGNETIC_IDLE_GAP_MS = 190;
 /** Quiet gap (ms) required to leave draining after continuous wheel/trackpad momentum.
  * Continuous momentum & flywheels deliver packets every 8–60ms (never pausing 200ms),
  * while two distinct human scroll gestures naturally separate cleanly without lockup. */
 export const MAGNETIC_DRAIN_IDLE_MS = 200;
+/** Shorter pause (ms) after a faded trackpad tail (<=6px) at which a bold new stroke (>=12px) breaks out of draining. */
+const MAGNETIC_FRESH_PAUSE_MS = 115;
 /** Shorter gap (ms) at which a bold fresh discrete impulse (>=40px) cleanly breaks out of a faded tail (<=8px). */
 const MAGNETIC_FRESH_IMPULSE_GAP_MS = 135;
+/** EMA / packet ceiling (px) defining a faded momentum tail eligible for fresh-gesture surge detection. */
+const DRAIN_TAIL_MAX_PX = 6;
+/** Minimum peak packet (px) for a multi-step re-acceleration wave on a faded tail to confirm a fresh trackpad gesture. */
+const DRAIN_SURGE_PEAK_PX = 10;
 /** Peak below which a strictly-monotonically-decaying post-snap stream is treated as dying momentum crumbs. */
-const GESTURE_PEAK_PX = 14;
-/** Window after a transition ends during which strictly-decaying sub-14px crumbs in the same direction are filtered. */
-const POST_SNAP_CRUMB_WINDOW_MS = 2500;
+const CRUMB_MAX_PEAK_PX = 12;
+/** Short window right after a transition ends during which strictly-decaying sub-12px crumbs after a frame stall are filtered. */
+const POST_SNAP_CRUMB_WINDOW_MS = 450;
 /** Minimum single-packet reverse travel (px) to break out of active draining (rejects flywheel recoil). */
 const DRAIN_REVERSE_PX = 96;
 const BOUNDARY_TOLERANCE = 2;
@@ -233,11 +239,41 @@ export function createMagneticGestureMachine(): MagneticGestureMachine {
   let accPeak = 0;
   let accDir: -1 | 0 | 1 = 0;
   let prevIdleMag = 0;
-  let hasRise = false;
+  let hasNonDecay = false;
+  let strictDrops = 0;
   let emaMag = 0;
+  let drainTailFaded = false;
+  let tailBaseline = 0;
+  let drainLowRun = 0;
+  let surgeAcc = 0;
+  let surgePeak = 0;
+  let surgePrev = 0;
+  let surgeRises = 0;
+  let surgeCount = 0;
   let reverseAcc = 0;
   let reverseHits = 0;
   let lastEventTime = -Infinity;
+
+  const resetSurge = () => {
+    surgeAcc = 0;
+    surgePeak = 0;
+    surgePrev = 0;
+    surgeRises = 0;
+    surgeCount = 0;
+  };
+
+  const initDrainTail = () => {
+    resetSurge();
+    if (emaMag > 0 && emaMag <= DRAIN_TAIL_MAX_PX) {
+      drainTailFaded = true;
+      tailBaseline = Math.max(1, emaMag);
+      drainLowRun = 2;
+    } else {
+      drainTailFaded = false;
+      tailBaseline = emaMag;
+      drainLowRun = 0;
+    }
+  };
 
   const resetToIdle = () => {
     state = 'idle';
@@ -246,14 +282,19 @@ export function createMagneticGestureMachine(): MagneticGestureMachine {
     accPeak = 0;
     accDir = 0;
     prevIdleMag = 0;
-    hasRise = false;
+    hasNonDecay = false;
+    strictDrops = 0;
     emaMag = 0;
+    drainTailFaded = false;
+    tailBaseline = 0;
+    drainLowRun = 0;
+    resetSurge();
     reverseAcc = 0;
     reverseHits = 0;
   };
 
-  const trackStream = (mag: number, gap: number) => {
-    emaMag = gap > 140 ? mag : (emaMag > 0 ? emaMag * 0.75 + mag * 0.25 : mag);
+  const trackStream = (mag: number) => {
+    emaMag = emaMag > 0 ? emaMag * 0.75 + mag * 0.25 : mag;
   };
 
   return {
@@ -266,13 +307,15 @@ export function createMagneticGestureMachine(): MagneticGestureMachine {
       const dir = Math.sign(delta) as GestureDirection;
       const mag = Math.abs(delta);
       const gap = now - lastEventTime;
-      trackStream(mag, gap);
+      if (gap >= MAGNETIC_DRAIN_IDLE_MS) emaMag = 0;
+      trackStream(mag);
       lastEventTime = now;
       if (state !== 'transitioning') {
         state = 'draining';
         lockedDir = dir;
         reverseAcc = 0;
         reverseHits = 0;
+        initDrainTail();
       }
     },
 
@@ -284,7 +327,12 @@ export function createMagneticGestureMachine(): MagneticGestureMachine {
       accPeak = 0;
       accDir = 0;
       prevIdleMag = 0;
-      hasRise = false;
+      hasNonDecay = false;
+      strictDrops = 0;
+      drainTailFaded = false;
+      tailBaseline = 0;
+      drainLowRun = 0;
+      resetSurge();
       reverseAcc = 0;
       reverseHits = 0;
       if (!Number.isFinite(lastEventTime)) lastEventTime = now;
@@ -296,6 +344,7 @@ export function createMagneticGestureMachine(): MagneticGestureMachine {
         state = 'draining';
         reverseAcc = 0;
         reverseHits = 0;
+        initDrainTail();
       } else {
         resetToIdle();
       }
@@ -308,9 +357,11 @@ export function createMagneticGestureMachine(): MagneticGestureMachine {
       accPeak = 0;
       accDir = 0;
       prevIdleMag = 0;
-      hasRise = false;
+      hasNonDecay = false;
+      strictDrops = 0;
       reverseAcc = 0;
       reverseHits = 0;
+      initDrainTail();
       lastEventTime = now;
     },
 
@@ -340,21 +391,27 @@ export function createMagneticGestureMachine(): MagneticGestureMachine {
       const gap = now - lastEventTime;
 
       // 1. Active transition owns every incoming wheel packet; never queues.
+      // Only same-direction packets update the momentum envelope so a -1px sign bounce
+      // after a slow paint frame can never poison emaMag down to 1px.
       if (state === 'transitioning' || state === 'captured') {
-        trackStream(mag, gap);
+        if (dir === lockedDir) trackStream(mag);
         lastEventTime = now;
         return { kind: 'consume' };
       }
 
+      let seededFromDrain = false;
+
       // 2. Draining consumes residual momentum until either:
       //    - a genuine quiet gap (>= MAGNETIC_DRAIN_IDLE_MS) separates the previous gesture,
-      //    - a bold fresh discrete impulse (>=40px) follows a faded tail (<=8px) after >=135ms, or
+      //    - a fresh gesture arrives after a brief pause (>=115ms) on a faded tail,
+      //    - a sustained multi-step trackpad re-acceleration surge rises cleanly above a faded tail
+      //      (never triggered by continuous flywheels, 1-vs-2 packet coalescing, or single coalesced spikes), or
       //    - a confirmed opposite-direction reversal arrives.
-      //    Continuous flywheels & coalesced momentum tails (8..60ms spacing) remain 100% consumed.
       if (state === 'draining') {
         if (gap >= MAGNETIC_DRAIN_IDLE_MS) {
           resetToIdle();
         } else if (dir !== lockedDir) {
+          resetSurge();
           reverseAcc += mag;
           reverseHits++;
           lastEventTime = now;
@@ -367,20 +424,107 @@ export function createMagneticGestureMachine(): MagneticGestureMachine {
           acc = seeded - mag; // idle branch below adds `mag`
           accPeak = mag;
           accDir = dir;
-          hasRise = true;
+          hasNonDecay = true;
+          seededFromDrain = true;
         } else {
           const isFreshDiscrete =
             gap >= MAGNETIC_FRESH_IMPULSE_GAP_MS &&
             emaMag <= 8 &&
             mag >= 40;
-          if (isFreshDiscrete) {
+          const isFreshAfterPause =
+            gap >= MAGNETIC_FRESH_PAUSE_MS &&
+            emaMag <= DRAIN_TAIL_MAX_PX &&
+            mag >= Math.max(emaMag * 2.5, 12);
+
+          if (isFreshDiscrete || isFreshAfterPause) {
             resetToIdle();
+            accDir = dir;
+            hasNonDecay = true;
+            seededFromDrain = true;
           } else {
             reverseAcc = 0;
             reverseHits = 0;
-            trackStream(mag, gap);
+            trackStream(mag);
             lastEventTime = now;
-            return { kind: 'consume' };
+
+            // Detect when continuous momentum has genuinely faded into a low tail (<= 6px).
+            if (mag <= DRAIN_TAIL_MAX_PX) {
+              drainLowRun++;
+              if (!drainTailFaded && (emaMag <= DRAIN_TAIL_MAX_PX || drainLowRun >= 2)) {
+                drainTailFaded = true;
+                tailBaseline = Math.max(1, Math.min(emaMag || mag, mag));
+              }
+            } else {
+              drainLowRun = 0;
+            }
+
+            if (drainTailFaded) {
+              if (surgeAcc === 0) {
+                if (mag > tailBaseline) {
+                  surgeAcc = mag;
+                  surgePeak = mag;
+                  surgePrev = mag;
+                  surgeRises = 0;
+                  surgeCount = 1;
+                } else {
+                  tailBaseline = Math.max(1, Math.min(tailBaseline, mag));
+                }
+              } else if (mag > surgePrev) {
+                surgeRises++;
+                surgeCount++;
+                surgeAcc += mag;
+                surgePeak = Math.max(surgePeak, mag);
+                surgePrev = mag;
+              } else if (mag === surgePrev && mag >= Math.max(tailBaseline * 2, 5)) {
+                // Integer-quantized plateau during a fresh trackpad ramp (does not increment surgeRises).
+                surgeCount++;
+                surgeAcc += mag;
+              } else if (surgeRises >= 2 && mag >= Math.max(tailBaseline * 2.2, 6)) {
+                // Cresting after >=2 strict acceleration steps.
+                surgeCount++;
+                surgeAcc += mag;
+                surgePrev = mag;
+              } else if (
+                surgeRises >= 1 &&
+                surgePeak >= Math.max(tailBaseline * 4, 16) &&
+                mag >= Math.max(tailBaseline * 3, 12)
+              ) {
+                // Fast 2-frame-peak trackpad flick (e.g. [12, 24, 22]) sustained well above the faded tail.
+                surgeCount++;
+                surgeAcc += mag;
+                surgePrev = mag;
+              } else {
+                // Dropped before confirming a genuine re-acceleration wave (e.g. 1-vs-2 coalescing or single spike).
+                resetSurge();
+                if (mag <= DRAIN_TAIL_MAX_PX) {
+                  tailBaseline = Math.max(1, Math.min(tailBaseline, mag));
+                } else if (mag > 10 && emaMag > 10) {
+                  // Sustained non-rising high stream (e.g. flywheel burst): require tail to fade again.
+                  drainTailFaded = false;
+                }
+              }
+
+              const confirmedTrackpadSurge =
+                surgeAcc >= MAGNETIC_GESTURE_PX && (
+                  (surgeRises >= 2 && surgePeak >= Math.max(tailBaseline * 2.8, DRAIN_SURGE_PEAK_PX)) ||
+                  (surgeRises >= 1 && surgeCount >= 3 && surgePeak >= Math.max(tailBaseline * 4, 16) && mag >= Math.max(tailBaseline * 3, 12))
+                );
+
+              if (confirmedTrackpadSurge) {
+                const seeded = surgeAcc;
+                const peak = surgePeak;
+                resetToIdle();
+                acc = seeded - mag; // idle branch below adds `mag`
+                accPeak = peak;
+                accDir = dir;
+                hasNonDecay = true;
+                seededFromDrain = true;
+              } else {
+                return { kind: 'consume' };
+              }
+            } else {
+              return { kind: 'consume' };
+            }
           }
         }
       }
@@ -391,7 +535,7 @@ export function createMagneticGestureMachine(): MagneticGestureMachine {
           resetToIdle();
         } else {
           const { room, hasTarget } = query(dir);
-          trackStream(mag, gap);
+          trackStream(mag);
           lastEventTime = now;
           if (dir !== lockedDir) {
             if (room > BOUNDARY_TOLERANCE) {
@@ -400,11 +544,13 @@ export function createMagneticGestureMachine(): MagneticGestureMachine {
             }
             state = 'draining';
             lockedDir = dir;
+            initDrainTail();
             return { kind: 'clamp', dir };
           }
           if (room <= mag) {
             state = 'draining';
             lockedDir = dir;
+            initDrainTail();
             return { kind: 'clamp', dir };
           }
           if (!hasTarget && room <= BOUNDARY_TOLERANCE) {
@@ -417,11 +563,12 @@ export function createMagneticGestureMachine(): MagneticGestureMachine {
 
       // 4. Idle / ready: evaluate whether we are reading a long section, passing through an
       //    outer edge (e.g. Shanghai upward back into Globe), or capturing a magnetic snap.
-      if (gap >= 140 || (accDir !== 0 && accDir !== dir)) {
+      if (!seededFromDrain && (gap >= MAGNETIC_IDLE_GAP_MS || (accDir !== 0 && accDir !== dir))) {
         acc = 0;
         accPeak = 0;
         prevIdleMag = 0;
-        hasRise = false;
+        hasNonDecay = false;
+        strictDrops = 0;
         accDir = dir;
       } else if (accDir === 0) {
         accDir = dir;
@@ -433,13 +580,14 @@ export function createMagneticGestureMachine(): MagneticGestureMachine {
         return { kind: 'passthrough' };
       }
 
-      trackStream(mag, gap);
+      trackStream(mag);
       lastEventTime = now;
 
       if (room > BOUNDARY_TOLERANCE) {
         if (room <= mag) {
           state = 'draining';
           lockedDir = dir;
+          initDrainTail();
           return { kind: 'clamp', dir };
         }
         state = 'reading';
@@ -448,21 +596,26 @@ export function createMagneticGestureMachine(): MagneticGestureMachine {
       }
 
       // At a chapter boundary with a valid adjacent target: accumulate intentional travel.
-      // Only filter strictly-monotonically-decaying tiny crumbs (e.g. 11,10,9,8,7) that arrive
-      // right after a recent same-direction snap with zero upward acceleration — never penalizing
-      // precision touchpads or smooth-scroll mice whose packets rise (3->8->9) or hold steady (8,8,8).
-      if (prevIdleMag > 0 && mag > prevIdleMag) {
-        hasRise = true;
+      // Only filter strictly-monotonically-decaying sub-12px crumbs (>=2 consecutive strict drops,
+      // e.g. 11->10->9->8->7) arriving immediately (<450ms) after a same-direction snap due to a frame stall.
+      // Never penalize gentle trackpad strokes with flat starts, coalesced peaks (>=12px), or 1px jitter.
+      if (!seededFromDrain && prevIdleMag > 0) {
+        if (mag >= prevIdleMag) {
+          hasNonDecay = true;
+          strictDrops = 0;
+        } else {
+          strictDrops++;
+        }
       }
       const recentSameDir =
+        !seededFromDrain &&
         dir === lastSnapDir &&
         (now - lastTransitionEnd) < POST_SNAP_CRUMB_WINDOW_MS;
       const isDecayingCrumb =
         recentSameDir &&
-        !hasRise &&
-        prevIdleMag > 0 &&
-        mag < prevIdleMag &&
-        accPeak < GESTURE_PEAK_PX;
+        !hasNonDecay &&
+        strictDrops >= 2 &&
+        accPeak < CRUMB_MAX_PEAK_PX;
       prevIdleMag = mag;
       if (isDecayingCrumb) {
         acc = 0;
@@ -478,7 +631,8 @@ export function createMagneticGestureMachine(): MagneticGestureMachine {
         accPeak = 0;
         accDir = 0;
         prevIdleMag = 0;
-        hasRise = false;
+        hasNonDecay = false;
+        strictDrops = 0;
         reverseAcc = 0;
         reverseHits = 0;
         return { kind: 'snap', dir };

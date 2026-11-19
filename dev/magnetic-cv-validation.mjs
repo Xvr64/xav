@@ -530,12 +530,14 @@ async function stationaryMouseTest() {
     await c.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: cx, y: cy });
     await sleep(200);
     await c.evaluate(`(() => {
-      window.__pointerMoves = 0; window.__clicks = 0;
+      window.__pointerMoves = 0; window.__clicks = 0; window.__focusIns = 0;
       window.addEventListener('pointermove', () => window.__pointerMoves++, { passive: true });
+      window.addEventListener('mousemove', () => window.__pointerMoves++, { passive: true });
       window.addEventListener('click', () => window.__clicks++, { passive: true });
+      document.addEventListener('focusin', () => window.__focusIns++, { passive: true });
     })()`);
 
-    // 1. Discrete stationary wheel: Profile -> Contact -> Shanghai (zero mouse move, zero clicks)
+    // 1. Discrete stationary wheel: Profile -> Contact -> Shanghai (zero mouse move, zero clicks, zero focus)
     const expectedForward = ['experience', 'education', 'skills', 'languages', 'interests', 'contact'];
     for (const want of expectedForward) {
       await c.wheel(120, cx, cy);
@@ -556,9 +558,8 @@ async function stationaryMouseTest() {
       assert.equal(s.snap?.gestureState, 'idle', `state re-arms to idle after reverse to ${want}`);
     }
 
-    // 2. Real Chromium compositor smooth-wheel (synthesizeScrollGesture) Shanghai -> Profile -> Experience -> Education
-    const smoothSeq = ['introduction', 'experience', 'education'];
-    for (const want of smoothSeq) {
+    // 2. Real Chromium compositor smooth-wheel (synthesizeScrollGesture) Shanghai -> Profile -> Experience
+    for (const want of ['introduction', 'experience']) {
       await c.send('Input.synthesizeScrollGesture', {
         x: cx, y: cy, yDistance: -120, gestureSourceType: 'mouse', speed: 850, preventFling: false
       });
@@ -568,30 +569,53 @@ async function stationaryMouseTest() {
       assert.deepEqual(s.visible, [want], `stationary compositor smooth-wheel must advance to ${want}`);
     }
 
-    // 3. Long trackpad momentum tail followed immediately by a fresh gesture (formerly locked in draining!)
-    for (let i = 0; i < 62; i++) {
-      const dy = i < 4 ? Math.round(28 * ((i + 1) / 4)) : Math.max(1, Math.round(28 * 0.92 ** (i - 3)));
-      await c.wheel(dy, cx, cy);
-      await sleep(16);
-    }
-    await sleep(320); // transition finished (~1080ms) while tail reached ~992ms
-    const landedSkills = await state(c);
-    assert.deepEqual(landedSkills.visible, ['skills'], 'trackpad flick with long tail advances strictly 1 section to skills');
-    // Immediately send a fresh gentle trackpad gesture (peak 12px) with zero mouse move!
-    for (let i = 0; i < 18; i++) {
-      const dy = i < 4 ? Math.round(12 * ((i + 1) / 4)) : Math.max(1, Math.round(12 * 0.92 ** (i - 3)));
+    // 3. Real trackpad coalesced gentle stroke [13,11,10..1] (formerly wiped by isDecayingCrumb!)
+    for (const dy of [13, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1]) {
       await c.wheel(dy, cx, cy);
       await sleep(16);
     }
     await sleep(SETTLE);
-    const landedLang = await state(c);
-    row.trackpadAfterTail.push({ afterTail: landedSkills.visible[0], nextGentle: landedLang.visible[0] });
-    assert.deepEqual(landedLang.visible, ['languages'], 'fresh gentle trackpad gesture after tail advances cleanly to languages');
+    const landedEdu = await state(c);
+    assert.deepEqual(landedEdu.visible, ['education'], 'coalesced gentle trackpad stroke must advance cleanly to education');
+
+    // 4. Flat-start gentle trackpad stroke [8,8,7,6,5,4,3] right after landing
+    for (const dy of [8, 8, 7, 6, 5, 4, 3]) {
+      await c.wheel(dy, cx, cy);
+      await sleep(16);
+    }
+    await sleep(SETTLE);
+    const landedSkills = await state(c);
+    assert.deepEqual(landedSkills.visible, ['skills'], 'flat-start gentle trackpad stroke must advance cleanly to skills');
+
+    // 5. Long trackpad momentum tail outlasting transition down to 1px + short 60ms pause (still in draining!) + fresh trackpad ramp
+    for (let i = 0; i < 74; i++) {
+      const dy = i < 4 ? Math.round(28 * ((i + 1) / 4)) : Math.max(1, Math.round(28 * 0.92 ** (i - 3)));
+      await c.wheel(dy, cx, cy);
+      await sleep(16);
+    }
+    const afterTail = await state(c);
+    assert.deepEqual(afterTail.visible, ['languages'], 'long trackpad tail advances strictly 1 section to languages');
+    await sleep(60); // intentionally < 200ms while still draining on 1px tail!
+    for (const dy of [6, 16, 26, 34, 28, 18, 10, 5, 2]) {
+      await c.wheel(dy, cx, cy);
+      await sleep(16);
+    }
+    await sleep(SETTLE);
+    const landedInterests = await state(c);
+    row.trackpadAfterTail.push({
+      coalesced: landedEdu.visible[0],
+      flatStart: landedSkills.visible[0],
+      afterTail: afterTail.visible[0],
+      freshRampOnTail: landedInterests.visible[0]
+    });
+    assert.deepEqual(landedInterests.visible, ['interests'], 'fresh trackpad ramp 60ms after 1px tail unlocks draining cleanly to interests');
 
     const moved = await c.evaluate('window.__pointerMoves');
     const clicks = await c.evaluate('window.__clicks');
-    assert.equal(moved, 0, 'zero pointer movement during entire stationary-mouse test');
+    const focusIns = await c.evaluate('window.__focusIns');
+    assert.equal(moved, 0, 'zero pointer/mouse movement during entire stationary-mouse test');
     assert.equal(clicks, 0, 'zero clicks during entire stationary-mouse test');
+    assert.equal(focusIns, 0, 'zero focus changes during entire stationary-mouse test');
     assert.deepEqual(c.errors, []);
     row.pass = true;
   } catch (error) {

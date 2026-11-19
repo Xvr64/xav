@@ -424,3 +424,179 @@ test('long section reads natively to its boundary, clamps without snapping, then
   assert.deepEqual(m.feedWheel(100, 1064, query), { kind: 'consume' });
   assert.deepEqual(m.feedWheel(80, 1064 + MAGNETIC_DRAIN_IDLE_MS + 20, query), { kind: 'snap', dir: 1 });
 });
+
+test('trackpad re-arming: coalesced, flat-start, and jittery gentle gestures snap cleanly right after a transition', () => {
+  const gestures = [
+    { label: 'coalesced start [13,11,10..1]', deltas: [13, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1], pauseMs: 320 },
+    { label: 'flat-start gentle [8,8,7,6,5,4,3]', deltas: [8, 8, 7, 6, 5, 4, 3], pauseMs: 260 },
+    { label: '1px-jitter gentle [6,5,6,5,4,3]', deltas: [6, 5, 6, 5, 4, 3], pauseMs: 260 },
+    { label: 'slow trackpad with 165ms cadence [10,10,10]', deltas: [10, 10, 10], pauseMs: 260, gapMs: 165 }
+  ];
+  const m = createMagneticGestureMachine();
+  let t = 1000;
+  // Seed initial same-direction snap
+  assert.deepEqual(m.feedWheel(80, t, atBoundary), { kind: 'snap', dir: 1 });
+  m.beginTransition(1, t);
+  t += TRANSITION_DURATION_MS;
+  m.endTransition(t, false);
+
+  for (const g of gestures) {
+    t += g.pauseMs;
+    let snapped = false;
+    for (const dy of g.deltas) {
+      t += g.gapMs ?? 16;
+      const a = m.feedWheel(dy, t, atBoundary);
+      if (a.kind === 'snap') {
+        snapped = true;
+        m.beginTransition(a.dir, t);
+        break;
+      }
+    }
+    assert.equal(snapped, true, `${g.label} must snap without waiting for cursor move or 2.5s timeout`);
+    t += TRANSITION_DURATION_MS;
+    m.endTransition(t, false);
+  }
+});
+
+test('trackpad re-arming: fresh trackpad gesture on top of a faded draining tail snaps without a 200ms silence', () => {
+  const cases = [
+    { label: 'rising ramp 60ms after 1px tail', pauseMs: 60, deltas: [6, 16, 26, 34, 28, 18] },
+    { label: 'immediate rising ramp (16ms gap) over 1px tail', pauseMs: 16, deltas: [4, 10, 18, 24, 20] },
+    { label: 'fast 2-frame-peak flick 40ms after 2px tail', pauseMs: 40, deltas: [12, 24, 22, 16, 10] },
+    { label: 'quantized plateau ramp [3,7,7,11,15] over 1px tail', pauseMs: 24, deltas: [3, 7, 7, 11, 15] },
+    { label: 'gentle downward stroke 125ms after 1px tail', pauseMs: 125, deltas: [12, 11, 10, 9, 8] }
+  ];
+
+  for (const tc of cases) {
+    const m = createMagneticGestureMachine();
+    let t = 1000;
+    assert.deepEqual(m.feedWheel(80, t, atBoundary), { kind: 'snap', dir: 1 });
+    m.beginTransition(1, t);
+    // Long momentum tail outlasting transition down to 1-2px
+    const frames = Math.ceil(TRANSITION_DURATION_MS / 16) + 8;
+    for (let i = 0; i < frames; i++) {
+      t += 16;
+      if (m.state === 'transitioning' && t >= 1000 + TRANSITION_DURATION_MS) {
+        m.endTransition(t, false);
+      }
+      m.feedWheel(Math.max(1, Math.round(28 * Math.exp(-i / 14))), t, atBoundary);
+    }
+    assert.equal(m.state, 'draining', `${tc.label}: still draining on faded 1px tail`);
+
+    t += tc.pauseMs;
+    let snapped = false;
+    for (let i = 0; i < tc.deltas.length; i++) {
+      if (i > 0) t += 16;
+      const a = m.feedWheel(tc.deltas[i], t, atBoundary);
+      if (a.kind === 'snap') {
+        snapped = true;
+        m.beginTransition(a.dir, t);
+        break;
+      }
+    }
+    assert.equal(snapped, true, `${tc.label} must unlock draining and snap cleanly`);
+  }
+});
+
+test('widening-gap dying momentum tail and quantized +1px tail jitter still trigger strictly one snap', () => {
+  const m = createMagneticGestureMachine();
+  let t = 1000;
+  let snaps = 0;
+  assert.deepEqual(m.feedWheel(60, t, atBoundary), { kind: 'snap', dir: 1 });
+  snaps++;
+  m.beginTransition(1, t);
+  // Momentum decays to 1-2px across transition
+  for (let i = 0; i < 72; i++) {
+    t += 16;
+    if (m.state === 'transitioning' && t >= 1000 + TRANSITION_DURATION_MS) m.endTransition(t, false);
+    const a = m.feedWheel(Math.max(1, Math.round(24 * Math.exp(-i / 16))), t, atBoundary);
+    if (a.kind === 'snap') snaps++;
+  }
+  assert.equal(m.state, 'draining');
+  // Quantization jitter (+1px) and widening tail intervals (24ms -> 170ms) must remain consumed
+  const jitterTail = [
+    [3, 16], [4, 16], [3, 16], [2, 16], [3, 16], [2, 24], [1, 32],
+    [2, 48], [1, 68], [1, 96], [1, 130], [1, 168]
+  ];
+  for (const [dy, dt] of jitterTail) {
+    t += dt;
+    const a = m.feedWheel(dy, t, atBoundary);
+    if (a.kind === 'snap') snaps++;
+  }
+  assert.equal(snaps, 1, 'jittery and widening-gap momentum tail must never trigger a second snap');
+});
+
+test('chaotic coalesced spike followed by sustained flywheel bursts during draining never skips a section', () => {
+  const m = createMagneticGestureMachine();
+  let t = 1000;
+  assert.deepEqual(m.feedWheel(80, t, atBoundary), { kind: 'snap', dir: 1 });
+  m.beginTransition(1, t);
+  const frames = Math.ceil(TRANSITION_DURATION_MS / 16);
+  for (let i = 0; i < frames; i++) {
+    t += 16;
+    m.feedWheel(Math.max(2, 28 * Math.exp(-i / 14)), t, atBoundary);
+  }
+  m.endTransition(t, false);
+  for (let i = 0; i < 12; i++) {
+    t += 16;
+    assert.deepEqual(m.feedWheel(2, t, atBoundary), { kind: 'consume' });
+  }
+  // Huge coalesced spike drops into noisy flywheel bursts — must stay 100% consumed
+  for (const dy of [480, 60, 70, 80, 75, 90, 100]) {
+    t += 16;
+    assert.deepEqual(m.feedWheel(dy, t, atBoundary), { kind: 'consume' });
+  }
+});
+
+test('consecutive trackpad gestures with overlapping tails traverse all 7 sections forward and reverse without cursor reset', () => {
+  const m = createMagneticGestureMachine();
+  let t = 1000;
+  for (const dir of [1, -1]) {
+    for (let step = 0; step < 7; step++) {
+      let snaps = 0;
+      let transitionEnd = Infinity;
+      const stroke = [4, 10, 18, 26, 22, 16, 10, 6, 4, 2, 1, 1];
+      for (const mag of stroke) {
+        t += 16;
+        if (m.state === 'transitioning' && t >= transitionEnd) m.endTransition(t, false);
+        const a = m.feedWheel(dir * mag, t, atBoundary);
+        if (a.kind === 'snap') {
+          snaps++;
+          assert.equal(a.dir, dir);
+          m.beginTransition(a.dir, t);
+          transitionEnd = t + TRANSITION_DURATION_MS;
+        }
+      }
+      // Continue tail past transition end, then pause briefly (90ms < 200ms!) before next gesture
+      while (t < transitionEnd + 80) {
+        t += 16;
+        if (m.state === 'transitioning' && t >= transitionEnd) m.endTransition(t, false);
+        const a = m.feedWheel(dir * 1, t, atBoundary);
+        if (a.kind === 'snap') snaps++;
+      }
+      assert.equal(snaps, 1, `dir=${dir} step=${step} must advance strictly 1 section`);
+      t += 90; // short pause (< 200ms) while still in draining on 1px tail!
+    }
+    t += MAGNETIC_DRAIN_IDLE_MS + 40;
+  }
+});
+
+test('sign bounce after a 145ms slow paint frame during transitioning/draining never poisons emaMag or skips a section', () => {
+  const m = createMagneticGestureMachine();
+  let t = 1000;
+  assert.deepEqual(m.feedWheel(42, t, atBoundary), { kind: 'snap', dir: 1 });
+  m.beginTransition(1, t);
+  // Strong momentum continues across transition at slow ~130-150ms paint-frame cadence, with a -1px sign bounce
+  for (const [dy, dt] of [[38, 130], [54, 145], [34, 135], [48, 145], [-1, 150], [44, 140], [28, 145], [40, 140]]) {
+    t += dt;
+    assert.deepEqual(m.feedWheel(dy, t, atBoundary), { kind: 'consume' });
+  }
+  m.endTransition(t + 10, false);
+  assert.equal(m.state, 'draining');
+  // Continuing coalesced momentum arriving at 135-150ms spacing must stay 100% consumed
+  for (const [dy, dt] of [[42, 145], [26, 135], [-1, 150], [36, 140], [20, 130]]) {
+    t += dt;
+    assert.deepEqual(m.feedWheel(dy, t, atBoundary), { kind: 'consume' });
+  }
+  assert.equal(m.state, 'draining');
+});
