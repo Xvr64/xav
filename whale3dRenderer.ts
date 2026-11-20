@@ -21,6 +21,8 @@ import * as THREE from 'three';
 import { SKIN_ROWS, packSkin, type Articulation, type Quat } from './whale3dPose.ts';
 import { SPINE_NODES, buildWhaleGeometry, type V3 } from './whale3dAnatomy.ts';
 import { FIELD_DEPTH, VEIL_KEEP_LINE, VEIL_KEEP_TONE, rasterizeVeil, type VeilRect } from './whaleVeil.ts';
+import { LAND_END, memoryWater } from './profileMemoryTimeline.ts';
+import { MEMORY_CELL_KEY, WhaleMemoryCurrent } from './whaleMemoryCurrent.ts';
 
 export type AsciiMode = 'shape' | 'luminance' | 'raw';
 
@@ -312,6 +314,9 @@ uniform vec4 uEdgeA;   // indices: '-', '_', '/', '\'
 uniform vec4 uEdgeB;    // indices: '|', '(', ')', 'o'
 uniform float uEyeGlyph;
 uniform sampler2D uMarks;
+uniform sampler2D uPreviousCells;
+uniform float uFreezeBelow;
+${MEMORY_CELL_KEY}
 out vec4 outCell;
 
 // 4×4 ordered dither by cell: neighbouring cells straddle two ramp steps instead of banding,
@@ -336,6 +341,12 @@ float strokeGlyph(float a) {
 
 void main() {
   vec2 cellIx = floor(gl_FragCoord.xy);              // x = column, y = row counted from the top
+  // As a cell leaves, keep the precise glyph on the last attached frame.
+  // Undeparted cells are still engraved from the live, swimming meshes.
+  if (uFreezeBelow > 0.0 && memoryKey(ivec2(cellIx)) < uFreezeBelow) {
+    outCell = texelFetch(uPreviousCells, ivec2(cellIx), 0);
+    return;
+  }
   vec2 px0 = cellIx * uCell;                         // cell's top-left, device px from the top-left
   // Most cells are open water: a 3 × 3 probe of coverage (one texel beyond the cell) skips them
   float probe = 0.0;
@@ -505,6 +516,8 @@ uniform sampler2D uVeil;
 uniform float uVeilAmount;
 uniform vec2 uVeilKeep;
 uniform float uVeilField;
+uniform float uConsumed;
+${MEMORY_CELL_KEY}
 out vec4 outColor;
 void main() {
   vec2 fc = vec2(gl_FragCoord.x, uCanvasH - gl_FragCoord.y);
@@ -517,6 +530,7 @@ void main() {
   // water around the copy (veil up to uVeilField) the modelling eases away and the drawing is
   // left as it is: the whale passes behind a body of text as a line drawing, whole
   if (c.g <= 0.0 || gi < 0.5) discard;
+  if (uConsumed > 0.0 && memoryKey(cell) < uConsumed) discard;
   // Line work (silhouette, contours, mouth, eye) is class 1; the body's tone cells carry their
   // engraver's level 0 … 1 below it
   float line = step(0.95, c.a);
@@ -586,6 +600,9 @@ export class WhaleAsciiRenderer {
   private readonly whales: { mesh: THREE.Mesh; material: THREE.ShaderMaterial; state: WhaleState | null }[] = [];
   private gbuffer: THREE.WebGLRenderTarget;
   private cells: THREE.WebGLRenderTarget;
+  private previousCells: THREE.WebGLRenderTarget | null = null;
+  private cellsValid = false;
+  private current: WhaleMemoryCurrent | null = null;
   private readonly cellMaterial: THREE.ShaderMaterial;
   private readonly compositeMaterial: THREE.ShaderMaterial;
   private readonly rawMaterial: THREE.ShaderMaterial;
@@ -706,7 +723,9 @@ export class WhaleAsciiRenderer {
         uEdgeA: { value: new THREE.Vector4(glyphIndex('-'), glyphIndex('_'), glyphIndex('/'), glyphIndex('\\')) },
         uEdgeB: { value: new THREE.Vector4(glyphIndex('|'), glyphIndex('('), glyphIndex(')'), glyphIndex('o')) },
         uEyeGlyph: { value: glyphIndex('@') },
-        uMarks: { value: null }
+        uMarks: { value: null },
+        uPreviousCells: { value: null },
+        uFreezeBelow: { value: 0 }
       }
     });
     this.compositeMaterial = new THREE.ShaderMaterial({
@@ -736,7 +755,8 @@ export class WhaleAsciiRenderer {
         uVeil: { value: null },
         uVeilAmount: { value: 0 },
         uVeilKeep: { value: new THREE.Vector2(VEIL_KEEP_TONE, VEIL_KEEP_LINE) },
-        uVeilField: { value: FIELD_DEPTH }
+        uVeilField: { value: FIELD_DEPTH },
+        uConsumed: { value: 0 }
       }
     });
     this.rawMaterial = new THREE.ShaderMaterial({
@@ -863,6 +883,7 @@ export class WhaleAsciiRenderer {
     this.atlasTexture.magFilter = THREE.NearestFilter;
     this.atlasTexture.generateMipmaps = false;
     this.cells.setSize(Math.ceil(W / cw), Math.ceil(H / ch));
+    this.cellsValid = false;
     const ramp = this.atlas.ramp;
     const u = this.cellMaterial.uniforms;
     const r = new Array(12).fill(ramp[ramp.length - 1]);
@@ -883,7 +904,7 @@ export class WhaleAsciiRenderer {
     this.atlasKey = '';
   }
 
-  render(drawOverlay = true) {
+  render(drawOverlay = true, profileMemories = false) {
     if (this.lost) return;
     const r = this.renderer;
     const { cw, ch, W, H } = this.ensureCells();
@@ -950,13 +971,31 @@ export class WhaleAsciiRenderer {
       cu.uGamma.value = this.style.gamma;
       cu.uTone.value = this.style.tone;
       this.quad.material = this.cellMaterial;
+      const consumed = profileMemories ? memoryWater.consumed : 0;
+      const flying = profileMemories && memoryWater.running && memoryWater.transferring && !!memoryWater.landings;
+      cu.uFreezeBelow.value = 0;
+      cu.uPreviousCells.value = null;
+      if (flying && !memoryWater.reversing && this.cellsValid) {
+        this.previousCells ??= this.cells.clone();
+        if (this.previousCells.width !== this.cells.width || this.previousCells.height !== this.cells.height) {
+          this.previousCells.setSize(this.cells.width, this.cells.height);
+        }
+        const previous = this.cells;
+        this.cells = this.previousCells;
+        this.previousCells = previous;
+        cu.uPreviousCells.value = previous.texture;
+        cu.uFreezeBelow.value = consumed;
+      }
       r.setRenderTarget(this.cells);
       r.clear(true, false, false);
       r.render(this.quadScene, this.quadCamera);
+      this.cellsValid = true;
 
       // 3. Composite
       r.setRenderTarget(null);
       const pu = this.compositeMaterial.uniforms;
+      pu.uCells.value = this.cells.texture;
+      pu.uConsumed.value = consumed;
       pu.uAtlas.value = this.atlasTexture;
       pu.uCell.value.set(cw, ch);
       pu.uTile.value.set(cw, ch);
@@ -972,6 +1011,15 @@ export class WhaleAsciiRenderer {
       pu.uVeilAmount.value = this.veilAmount;
       this.quad.material = this.compositeMaterial;
       r.render(this.quadScene, this.quadCamera);
+      if (flying && memoryWater.phase < LAND_END + 0.03) {
+        this.current ??= new WhaleMemoryCurrent(memoryWater.landings!);
+        this.current.draw(r, this.quadCamera, this.cells, this.atlasTexture!, cw / this.dpr, ch / this.dpr,
+          pu.uInk.value, pu.uInkFar.value, this.style.opacity);
+      } else if (profileMemories && memoryWater.framed && memoryWater.landings && !this.current) {
+        this.previousCells ??= this.cells.clone();
+        this.current = new WhaleMemoryCurrent(memoryWater.landings);
+        this.current.warm(r, this.quadCamera, this.cells, this.atlasTexture!);
+      }
     }
 
     if (drawOverlay && this.overlay.children.length) r.render(this.overlay, this.camera);
@@ -989,6 +1037,8 @@ export class WhaleAsciiRenderer {
     this.canvas.removeEventListener('webglcontextrestored', this.onRestored);
     this.gbuffer.dispose();
     this.cells.dispose();
+    this.previousCells?.dispose();
+    this.current?.dispose();
     this.atlasTexture?.dispose();
     this.veilTexture.dispose();
     this.skinTexture.dispose();

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { memoryWater } from './profileMemoryTimeline';
 import { WHALE_LOOK, WhaleAsciiRenderer, type WhaleState } from './whale3dRenderer';
 import { ambientWhalesLive, fixedCopy, globeZone, readingZones, whaleDirection, whaleStage, whaleStrength } from './oceanDirection';
 import { ambientCamera, newTravel, noteScrollIntent, projectedBounds, sampleAmbientWhale, stepTravel, type AmbientComposition } from './ambientWhaleScene';
@@ -106,6 +107,9 @@ export function mountAmbientWhales(host: HTMLElement): () => void {
   };
   // The scroll's direction drives the whales' travel: + down, - up (smoothed, saturating)
   const travel = newTravel(0);
+  let profileBlend = 0;
+  const swimRotation = new THREE.Quaternion(), profileRotation = new THREE.Quaternion();
+  const broadside = new THREE.Euler(0, 0, 0, 'ZXY');
   let lastScroll = scrollY;
   let lastCreationTime = creation.time;
   let scrollVel = 0;
@@ -177,6 +181,27 @@ export function mountAmbientWhales(host: HTMLElement): () => void {
     });
     whalesWarm = true;
     const frame = ambientCamera(vw(), vh());
+    // A broadside of both living animals in the open water around the Profile
+    // copy. Keep the actual articulated skin/fluke beat as the camera reframes.
+    const framed = Number(memoryWater.framed);
+    profileBlend += (framed - profileBlend) * (reduced() ? 1 : 1 - Math.exp(-dt * 5.5));
+    if (profileBlend > 0.002) current.forEach((w, i) => {
+      const narrow = vw() < 851;
+      const t = seconds * 0.13 + i * 2.8;
+      const x = (i ? (narrow ? 0.56 : 0.37) : (narrow ? 0.44 : 0.29)) + 0.04 * Math.sin(t);
+      const y = (i ? (narrow ? 0.72 : 0.83) : (narrow ? 0.24 : 0.16)) + 0.022 * Math.cos(t);
+      const depth = i ? -0.32 : -0.08;
+      const perspective = (frame.z - depth) / frame.z;
+      const length = vw() * (i ? (narrow ? 0.62 : 0.36) : (narrow ? 0.82 : 0.46));
+      w.position = [
+        mix(w.position[0], (x * 2 - 1) * frame.halfW * perspective, profileBlend),
+        mix(w.position[1], (1 - y * 2) * frame.halfH * perspective, profileBlend),
+        mix(w.position[2], depth, profileBlend)
+      ];
+      w.scale = mix(w.scale, length / frame.px * perspective, profileBlend);
+      broadside.set(0.10 * Math.sin(t), (i ? 1.25 : -1.22) + 0.12 * Math.cos(t), (i ? -0.21 : 0.13) + 0.05 * Math.sin(t));
+      w.quaternion = swimRotation.fromArray(w.quaternion).slerp(profileRotation.setFromEuler(broadside), profileBlend).toArray() as Quat;
+    });
     const cam = ascii.camera;
     // Slow lateral tracking and a breath of elevation
     const sway = reduced() ? 0 : 1;
@@ -201,9 +226,9 @@ export function mountAmbientWhales(host: HTMLElement): () => void {
       current[d.whale].quaternion = qy.toArray() as Quat;
     }
     current.forEach((w, i) => ascii.setWhale(i, w));
-    ambientWhalesLive.presence = presence;
+    ambientWhalesLive.presence = presence * (1 - memoryWater.consumed / 8);
     ascii.setVeil(copyRects());
-    ascii.render(false);
+    ascii.render(false, true);
     publishSpines();
   };
   const frame = (now: number) => {
@@ -212,14 +237,15 @@ export function mountAmbientWhales(host: HTMLElement): () => void {
     const dt = Math.min(0.05, Math.max(0, (now - last) / 1000)); last = now;
     // Gone while the Globe's stage is pinned: nothing to swim or draw until they are due back
     const hiddenByJourney = !reduced() && whaleDirection.presence < 0.002;
-    const running = !reduced() && !hiddenByJourney && debugTime === null;
+    const consumed = memoryWater.consumed >= 8 && !memoryWater.transferring;
+    const running = !reduced() && !hiddenByJourney && !consumed && debugTime === null;
     if (running) { seconds += dt; advanceTravel(dt); } else lastScroll = scrollY;
     // Scroll dirties the reading veil at display refresh rate. Sample it with the
-    // next swim frame; only a held scene needs an immediate one-off redraw.
-    const draw = running ? now - lastDraw >= 1000 / 30 - 0.8 : dirty;
+    // next swim frame; during Wave 1 whale-to-ASCII flight, draw at full display cadence.
+    const draw = running ? (memoryWater.transferring || now - lastDraw >= 1000 / 30 - 0.8) : dirty;
     if (draw) {
       const start = performance.now();
-      if (hiddenByJourney) {
+      if (hiddenByJourney || consumed) {
         ascii.clear(); ambientWhalesLive.presence = 0;
       } else drawAmbient(dt);
       dirty = false; lastDraw = now; frameCount++;
@@ -238,6 +264,7 @@ export function mountAmbientWhales(host: HTMLElement): () => void {
   window.addEventListener('scroll', schedule, { passive: true }); window.addEventListener('resize', schedule);
   document.addEventListener('visibilitychange', visibility); motion.addEventListener('change', onMotion);
   whaleStage.refresh = schedule;
+  memoryWater.refresh = schedule;
   const ro = new ResizeObserver(schedule); ro.observe(document.body);
   document.fonts?.ready.then(() => { if (!disposed) { ascii.invalidateAtlas(); schedule(); } });
   if ((import.meta as unknown as { env?: { DEV?: boolean } }).env?.DEV) {
@@ -280,6 +307,7 @@ export function mountAmbientWhales(host: HTMLElement): () => void {
     document.removeEventListener('visibilitychange', visibility); motion.removeEventListener('change', onMotion);
     canvas.removeEventListener('webglcontextrestored', restored);
     if (whaleStage.refresh === schedule) whaleStage.refresh = null;
+    if (memoryWater.refresh === schedule) memoryWater.refresh = null;
     ascii.dispose(); canvas.remove();
     ambientWhalesLive.presence = 0;
     if ((import.meta as unknown as { env?: { DEV?: boolean } }).env?.DEV) { delete (window as unknown as Record<string, unknown>).__ambientWhales; }

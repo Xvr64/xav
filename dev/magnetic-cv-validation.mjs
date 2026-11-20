@@ -138,6 +138,15 @@ async function gesture(c, dir, touch, width, height = 844) {
   else await c.wheel(dir * 120);
 }
 
+async function settlePhotoSequence(c) {
+  for (let attempt = 0; attempt < 110; attempt++) {
+    const playing = await c.evaluate("['revealing','restoring'].includes(document.querySelector('.profile-itinerary')?.dataset.plates)");
+    if (!playing) { await sleep(280); return; }
+    await sleep(100);
+  }
+  throw new Error('Profile photographic sequence did not settle');
+}
+
 async function traverseProfile(c, dir, touch, width, height) {
   const cityOrder = ['doha', 'paris', 'jakarta', 'moscow', 'singapore', 'pau', 'bordeaux', 'shanghai'];
   const { profileStep, profileStopCount } = (await state(c)).snap;
@@ -147,31 +156,33 @@ async function traverseProfile(c, dir, touch, width, height) {
     if (checkPin) {
       const cities = await c.evaluate(`[...document.querySelectorAll('[data-city-id]')].map(row => {
         const title = row.querySelector('.profile-city-name span:last-child').getBoundingClientRect();
-        const plate = row.querySelector('.profile-city-frame').getBoundingClientRect();
+        const fig = row.querySelector('.profile-city-frame');
+        const plate = fig.getBoundingClientRect();
+        const img = row.querySelector('img');
+        const natAr = img && img.naturalHeight ? img.naturalWidth / img.naturalHeight : 1;
+        const cs = getComputedStyle(fig);
+        const dispAr = parseFloat(cs.height) > 0 ? parseFloat(cs.width) / parseFloat(cs.height) : 1;
         return { id: row.dataset.cityId, fits: title.left >= 0 && title.top >= 0 && title.bottom <= innerHeight &&
-          title.right < plate.left && plate.top >= 0 && plate.right <= innerWidth && plate.bottom <= innerHeight &&
-          Math.abs(plate.width - plate.height) < 1 };
+          title.right < plate.left && plate.top >= 0 && plate.right <= innerWidth + 1 && plate.bottom <= innerHeight + 1 &&
+          Math.abs(dispAr - natAr) < 0.05 };
       })`);
       assert.deepEqual(cities.map(c => c.id), cityOrder);
-      assert.ok(cities.every(c => c.fits), 'all city names and square frames fit before the gesture');
+      assert.ok(cities.every(c => c.fits), 'all city names and natural-aspect photo anchors fit before the gesture');
       await c.evaluate(`window.cityAnchor = scrollY; window.cityDrift = 0;
         window.measureCityPin = () => { cityDrift = Math.max(cityDrift, Math.abs(scrollY - cityAnchor)); };
         addEventListener('scroll', measureCityPin)`);
     }
     if (touch) await gesture(c, dir, touch, width, height);
     else await c.wheel(dir * 120, width / 2, height / 2);
-    await sleep(checkPin ? 1380 : 820);
+    if (checkPin) await settlePhotoSequence(c);
+    else await sleep(820);
     const landed = await state(c);
     assert.deepEqual(landed.visible, ['introduction']);
     assert.equal(landed.snap.profileStep, i);
     if (checkPin) {
       assert.equal(await c.evaluate("removeEventListener('scroll', measureCityPin); cityDrift"), 0);
-      const surfaces = await c.evaluate(`[...document.querySelectorAll('.profile-city-placeholder')].map(el => {
-        const style = getComputedStyle(el);
-        return { opacity: Number(style.opacity), delay: parseFloat(style.animationDelay) };
-      })`);
-      assert.ok(surfaces.every(s => s.opacity === (i === 1 ? 1 : 0)));
-      if (i === 1) assert.ok(surfaces.every((s, n) => !n || s.delay > surfaces[n - 1].delay));
+      const phases = await c.evaluate(`[...document.querySelectorAll('[data-city-slot]')].map(el => el.dataset.memoryPhase)`);
+      assert.deepEqual(phases, Array(8).fill(i === 1 ? 'photo' : 'empty'));
     }
     await c.evaluate('window.scrollBy(0, 9)');
     await sleep(120);
@@ -277,6 +288,7 @@ async function walk(c, geo, dir, touch, width, height, label, row) {
     const before = s;
     await gesture(c, dir, touch, width, height);
     await sleep(SETTLE);
+    if (before.visible[0] === 'introduction') await settlePhotoSequence(c);
     s = await state(c);
     await c.evaluate('noteReadable()');
     const moved = index(geo, s.visible[0]) - index(geo, before.visible[0]);
