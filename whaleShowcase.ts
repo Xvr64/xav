@@ -37,6 +37,8 @@ interface BenchState {
   mode: AsciiMode | 'compare';
   cell: number;
   dark: boolean;
+  /** Countershading on (the site's look) or off (the earlier lit-pigment engraving), for comparison. */
+  cs: boolean;
   whales: number;
   play: boolean;
 }
@@ -66,6 +68,7 @@ const state: BenchState = {
   mode: 'shape',
   cell: 7,
   dark: false,
+  cs: true,
   whales: 1,
   play: false
 };
@@ -166,6 +169,7 @@ function frame() {
     cellW: state.cell,
     cellH: Math.round(state.cell * 1.72),
     invert: state.dark,
+    countershade: state.cs ? 1 : 0,
     ink: state.dark ? [214, 228, 232] : [31, 59, 87],
     inkFar: state.dark ? [120, 140, 150] : [118, 140, 156]
   });
@@ -233,7 +237,7 @@ function select(label: string, key: keyof BenchState, options: string[], onChang
   controls.push({ sync: () => (el.value = String(state[key])) });
   row(label, el);
 }
-function check(label: string, key: 'dark' | 'play') {
+function check(label: string, key: 'dark' | 'cs' | 'play') {
   const el = document.createElement('input');
   el.type = 'checkbox';
   el.addEventListener('change', () => {
@@ -264,6 +268,7 @@ select('render', 'mode', ['shape', 'luminance', 'compare', 'raw']);
 slider('glyph', 'cell', 4, 14, 1);
 select('whales', 'whales', ['1', '2']);
 check('dark water', 'dark');
+check('countershade', 'cs');
 check('play', 'play');
 syncControls();
 document.body.classList.toggle('dark', state.dark);

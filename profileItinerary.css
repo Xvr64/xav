@@ -276,6 +276,31 @@
   opacity: 1;
 }
 
+/* THE RED GOES FIRST: at rest the photograph is seen at depth (the graded canvas beneath), and
+   the original <img> above it stays masked except where the diver's light falls
+   (profileTorch.ts writes that mask inline). Without a graded copy the original simply shows. */
+.profile-memory-depth {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: none;
+  pointer-events: none;
+}
+
+.profile-city-photo-layer > img {
+  position: relative;
+}
+
+.profile-city-frame[data-depth="ready"][data-memory-phase="photo"] .profile-memory-depth {
+  display: block;
+}
+
+.profile-city-frame[data-depth="ready"][data-memory-phase="photo"] .profile-city-photo-layer > img {
+  -webkit-mask-image: linear-gradient(transparent, transparent);
+  mask-image: linear-gradient(transparent, transparent);
+}
+
 /* Subtle natural depth strictly on the revealed photograph itself — never on an empty container. */
 .profile-city-frame[data-memory-phase="photo"] {
   filter: drop-shadow(0 10px 24px rgba(3, 9, 32, 0.48));

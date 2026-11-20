@@ -11,6 +11,8 @@
  * detail with subtle micro-focus depth settling.
  */
 
+import { bakeDepthPhoto, gradeDepth } from './profileDepthGrade.ts';
+
 const BASE_LANDING_COLS = 36;
 const BASE_LANDING_ROWS = 28;
 const BASE_LANDING_CELLS = BASE_LANDING_COLS * BASE_LANDING_ROWS;
@@ -409,6 +411,7 @@ function bakeAsciiLayers(cells: readonly AnalyzedCell[], spec: PlateGridSpec) {
   cctx.textAlign = 'center';
   cctx.textBaseline = 'middle';
 
+  const depthRgb = [0, 0, 0];
   for (let row = 0; row < rows; row++) {
     for (let col = 0; col < cols; col++) {
       const cell = cells[row * cols + col];
@@ -431,13 +434,15 @@ function bakeAsciiLayers(cells: readonly AnalyzedCell[], spec: PlateGridSpec) {
       ictx.fillStyle = `rgba(${ir},${ig},${ib},${ia.toFixed(3)})`;
       ictx.fillText(cell.glyph, cx, cy);
 
-      // Vivid photographic color for Wave 2 chromatic awakening (gently lifted for luminous wavefront clarity).
-      const avg = (cell.r + cell.g + cell.b) / 3;
+      // Wave 2's chromatic awakening arrives in the colour the photograph keeps at depth (the reds
+      // already absorbed), gently lifted for a luminous wavefront.
+      gradeDepth(cell.r, cell.g, cell.b, depthRgb);
+      const avg = (depthRgb[0] + depthRgb[1] + depthRgb[2]) / 3;
       const boost = 1.32;
       const lift = 38;
-      const cr = Math.min(255, Math.max(0, Math.round(avg + (cell.r - avg) * boost + lift)));
-      const cg = Math.min(255, Math.max(0, Math.round(avg + (cell.g - avg) * boost + lift)));
-      const cb = Math.min(255, Math.max(0, Math.round(avg + (cell.b - avg) * boost + lift)));
+      const cr = Math.min(255, Math.max(0, Math.round(avg + (depthRgb[0] - avg) * boost + lift)));
+      const cg = Math.min(255, Math.max(0, Math.round(avg + (depthRgb[1] - avg) * boost + lift)));
+      const cb = Math.min(255, Math.max(0, Math.round(avg + (depthRgb[2] - avg) * boost + lift)));
       const ca = Math.min(1, 0.60 + tone * 0.40);
       cctx.fillStyle = `rgba(${cr},${cg},${cb},${ca.toFixed(3)})`;
       cctx.fillText(cell.glyph, cx, cy);
@@ -486,7 +491,10 @@ export async function prepareMemoryPlate(frame: HTMLElement): Promise<MemoryPlat
   const pctx = photoCanvas.getContext('2d')!;
   pctx.imageSmoothingEnabled = true;
   pctx.imageSmoothingQuality = 'high';
-  pctx.drawImage(image, 0, 0, canvasW, canvasH);
+  // Wave 2 resolves into the photograph as it is seen at depth, the same image that then rests
+  // on the page; the original colours return only under the diver's light (profileTorch.ts)
+  const depth = await bakeDepthPhoto(image);
+  pctx.drawImage(depth ?? image, 0, 0, canvasW, canvasH);
 
   const analyzed = analyzePhoto(image, cols, rows);
   const { inkCanvas, colorCanvas } = bakeAsciiLayers(analyzed, spec);

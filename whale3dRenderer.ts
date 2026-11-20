@@ -47,6 +47,8 @@ export interface AsciiStyle {
   gamma: number;
   /** Lift of the body's engraving tone scale (0 … 1): more line work, the modelling kept. */
   tone: number;
+  /** Countershading (0 … 1): tone led by the skin's dark back and pale belly, light only turning the form. */
+  countershade: number;
 }
 
 export interface WhaleState {
@@ -86,7 +88,8 @@ export const DEFAULT_STYLE: AsciiStyle = {
   farFade: WHALE_LOOK.farFade,
   invert: false,
   gamma: WHALE_LOOK.gamma,
-  tone: WHALE_LOOK.tone
+  tone: WHALE_LOOK.tone,
+  countershade: 1
 };
 
 // ---- Glyph atlas -----------------------------------------------------------------------------
@@ -234,7 +237,18 @@ uniform float uDissolve;
 uniform vec4 uOccluder;
 uniform float uOcclusion;
 uniform float uInvert;
+uniform float uCountershade;
 float hash(vec3 p) { return fract(sin(dot(p, vec3(12.9898, 78.233, 37.719))) * 43758.5453); }
+// Smooth value noise in the whale's rest frame: anything it shapes is painted on the skin and
+// travels, bends and rolls with the animal instead of sliding across the screen
+float skinNoise(vec3 p) {
+  vec3 i = floor(p);
+  vec3 f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  float a = mix(mix(hash(i), hash(i + vec3(1, 0, 0)), f.x), mix(hash(i + vec3(0, 1, 0)), hash(i + vec3(1, 1, 0)), f.x), f.y);
+  float b = mix(mix(hash(i + vec3(0, 0, 1)), hash(i + vec3(1, 0, 1)), f.x), mix(hash(i + vec3(0, 1, 1)), hash(i + vec3(1, 1, 1)), f.x), f.y);
+  return mix(a, b, f.z);
+}
 void main() {
   // Unravel from the tail: the same key orders the particles that leave the body
   if (uDissolve > 0.0) {
@@ -266,7 +280,56 @@ void main() {
   ink = max(ink, pleat * (0.3 + 0.32 * groove));
   float knob = smoothstep(0.2, 0.7, vMarks.w);
   float light = clamp(0.15 + 0.85 * wrap * (1.0 - 0.55 * pigment) + 0.25 * pow(max(lambert, 0.0), 6.0), 0.0, 1.0);
-  ink = mix(ink, light * 0.9 + 0.12 * rim, uInvert);
+  light = light * 0.9 + 0.12 * rim;
+
+  // Countershading. A real whale's dark back and pale belly cancel the light from above, so a
+  // lit model of it reads flat; the engraver keeps the pigment as the first statement instead.
+  // Tone follows the skin (the rest-frame angle around the body, carried through every bend,
+  // roll and fluke stroke), with the light only turning the form inside each zone.
+  // The dorsal/ventral boundary wanders a little along the body, like the irregular white of a
+  // humpback's flank and throat, and never as a screen-space gradient.
+  float bodyPart = vInfo.x < 0.5 ? 1.0 : 0.0;
+  float flipper = vInfo.x > 0.5 && vInfo.x < 2.5 ? 1.0 : 0.0;
+  float boundary = clamp(1.0 - abs(pigment * 2.0 - 1.12) * 1.25, 0.0, 1.0) * bodyPart * uCountershade;
+  float drift = 0.0;
+  // Only the band around the boundary pays for the noise
+  if (boundary > 0.0) {
+    drift = ((skinNoise(vRestPos * vec3(26.0, 26.0, 7.0)) - 0.5) * 0.3 + (skinNoise(vRestPos * vec3(60.0, 60.0, 19.0)) - 0.5) * 0.1) * boundary;
+  }
+  float dorsal = smoothstep(0.1, 0.96, pigment + drift);
+  // The long pectoral flippers stay pale, with a darker leading surface where they meet the light
+  dorsal = mix(dorsal, 0.16 + 0.34 * smoothstep(0.2, 0.9, lambert), flipper);
+  float ventral = 1.0 - dorsal;
+  // The turn of the flank: a soft shadow just above the pale belly where the surface rolls under
+  float turn = smoothstep(0.18, 0.5, dorsal) * (1.0 - smoothstep(0.5, 0.82, dorsal)) * (1.0 - smoothstep(-0.45, 0.35, lambert));
+  // Ventral grooves: pale pouch, fine grooves running with the body from chin to navel
+  float grooveCs = smoothstep(0.62, 0.92, 0.5 + 0.5 * cos(atan(vRestN.y, vRestN.x) * 24.0));
+  float pouch = pleat * smoothstep(0.0, 0.5, ventral);
+  // Light water: density is pigment. The back carries the deepest ink with a wet sheen along
+  // its ridge; the belly stays pale but still turns away from the light.
+  float inkCs = 0.12 + 0.5 * dorsal
+    + 0.24 * (1.0 - wrap) * (0.4 + 0.6 * ventral)
+    + 0.18 * turn
+    - 0.22 * sheen * dorsal
+    + 0.24 * rim * rim * rim;
+  inkCs = mix(inkCs, 0.16 + 0.5 * grooveCs, pouch * 0.85);
+  inkCs = smoothstep(0.03, 0.98, inkCs);
+  // Dark water: density is light. The pale belly and flippers read brightest, the back recedes
+  // into the water with only its ridge catching the light.
+  float lightCs = 0.16 + 0.47 * ventral
+    + 0.26 * wrap * (0.6 + 0.4 * ventral)
+    + 0.3 * sheen * dorsal
+    - 0.14 * turn
+    + 0.1 * rim;
+  lightCs = mix(lightCs, lightCs * (1.0 - 0.62 * grooveCs), pouch);
+  lightCs = clamp(lightCs, 0.0, 1.0);
+
+  ink = mix(ink, inkCs, uCountershade);
+  light = mix(light, lightCs, uCountershade);
+  ink = mix(ink, light, uInvert);
+  // The cell pass engraves a groove where this phase peaks across a cell: fewer, wider grooves
+  // survive the character grid as lines instead of averaging into grey
+  groove = mix(groove, 0.5 + 0.5 * cos(atan(vRestN.y, vRestN.x) * 24.0), uCountershade);
   float mouth = smoothstep(0.35, 0.8, vMarks.x);
   float eye = smoothstep(0.35, 0.8, vMarks.y);
   float depth = clamp((-vViewPos.z - uDepthRange.x) / max(1e-4, uDepthRange.y - uDepthRange.x), 0.0, 1.0);
@@ -681,7 +744,8 @@ export class WhaleAsciiRenderer {
           uDissolve: { value: 0 },
           uOccluder: { value: new THREE.Vector4() },
           uOcclusion: { value: 0 },
-          uInvert: { value: 0 }
+          uInvert: { value: 0 },
+          uCountershade: { value: 1 }
         }
       });
       const mesh = new THREE.Mesh(geometry, material);
@@ -932,6 +996,7 @@ export class WhaleAsciiRenderer {
       u.uOccluder.value.set(occ.x, occ.y, occ.z, this.occluder.radius);
       u.uOcclusion.value = this.occluder.amount;
       u.uInvert.value = this.style.invert ? 1 : 0;
+      u.uCountershade.value = this.style.countershade;
     }
 
     const anyWhale = this.whales.some((w) => w.mesh.visible);
