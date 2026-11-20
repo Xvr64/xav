@@ -1,7 +1,5 @@
 import React, { useCallback, useEffect, useRef, type CSSProperties, type ReactNode } from 'react';
 import { syncProfilePhotoSizes } from './profileMemoryPlate';
-import { mountDepthPhoto } from './profileDepthGrade';
-import { mountProfileTorch } from './profileTorch';
 import './profileItinerary.css';
 
 export type ProfileCityId =
@@ -230,9 +228,6 @@ export const ProfileCityFrame: React.FC<ProfileCityFrameProps> = React.memo(({ s
         <div className="profile-city-aperture">
           {hasPhoto && (
             <div className="profile-city-photo-layer">
-              {/* The photograph at depth (warm light absorbed); the original <img> above it is
-                  uncovered only where the diver's light falls (profileTorch.ts) */}
-              <canvas className="profile-memory-depth" aria-hidden="true" />
               <img
                 src={slot.photoSrc}
                 alt={slot.alt}
@@ -285,16 +280,6 @@ export const ProfileItinerary: React.FC<ProfileItineraryProps> = React.memo(({ s
       window.removeEventListener('resize', handleSizeSync);
     };
   }, [handleSizeSync, slots]);
-
-  // The Red Goes First: grade each photograph once, then hand the plates to the diver's light
-  useEffect(() => {
-    const el = itineraryRef.current;
-    if (!el) return;
-    el.querySelectorAll<HTMLElement>('.profile-city-frame').forEach((frame) => {
-      void mountDepthPhoto(frame);
-    });
-    return mountProfileTorch(el);
-  }, [slots]);
 
   return (
     <div className="profile-itinerary" ref={itineraryRef}>
