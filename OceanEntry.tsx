@@ -1,6 +1,5 @@
 import React, { useEffect, useRef } from 'react';
 import { AsciiText } from './TerminalEditorial';
-import { EditorialMedia } from './EditorialMedia';
 import { createHeroCurrent } from './heroCurrent';
 import { CV_DATA } from './cvData';
 import {
@@ -291,7 +290,6 @@ export const OceanIntroduction: React.FC = React.memo(() => (
       <AsciiText text="Profile" />
     </h2>
     <p className="lead" data-text-rank="2"><AsciiText text={CV_DATA.heroIntroConcise} /></p>
-    <EditorialMedia section="profile" />
     <p className="intro-support" data-text-rank="3"><AsciiText text={CV_DATA.heroIntroSecondary} /></p>
     <dl className="intro-facts">
       {INTRO_FACTS.map((fact) => (
