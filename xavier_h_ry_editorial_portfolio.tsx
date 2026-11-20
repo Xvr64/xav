@@ -145,7 +145,7 @@ const Education = () => (
         </RevealBlock>
       ))}
     </div>
-    <EditorialMedia study="education" />
+    <EditorialMedia section="education" />
   </section>
 );
 
@@ -334,7 +334,7 @@ export default function App() {
                 </RevealBlock>
               ))}
             </div>
-            <EditorialMedia study="experience" />
+            <EditorialMedia section="experience" />
           </section>
 
           {magneticCV ? <><Education /><Skills /></> : <><Skills /><Education /></>}
@@ -387,7 +387,6 @@ export default function App() {
                 </RevealBlock>
               ))}
             </div>
-            <EditorialMedia study="interests" />
           </section>
 
           {/* SECTION 08: CONTACT & DOSSIER (Direct Correspondence Suite) */}
