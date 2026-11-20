@@ -28,7 +28,7 @@ test('ASCII sampler culls the back, bounds density and emits deterministic direc
   assert.ok(sample(null, { ...frame, mobile: true }, () => {}).cellH >= 8);
 });
 
-test('constellation has exactly the seven CV cities in order, stays bounded on desktop and phone', () => {
+test('constellation has every CV city in order, stays bounded on desktop and phone', () => {
   for (const [w,h] of [[1440,900], [390,844], [844,390], [320,568]]) {
     const points = buildCityConstellation(w,h);
     assert.deepEqual(points.filter(p => p.city).map(p => p.city), CV_DATA.locations.map(c => c.city));

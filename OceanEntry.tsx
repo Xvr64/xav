@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { AsciiText } from './TerminalEditorial';
+import { ProfileItinerary } from './ProfileItinerary';
 import { createHeroCurrent } from './heroCurrent';
 import { CV_DATA } from './cvData';
 import {
@@ -285,19 +286,26 @@ const INTRO_FACTS = [
 ];
 
 export const OceanIntroduction: React.FC = React.memo(() => (
-  <section id="introduction" tabIndex={-1} aria-labelledby="profile-title" data-editorial-section className="terminal-overview ed-grid relative">
-    <h2 id="profile-title" className="intro-kicker meta">
-      <AsciiText text="Profile" />
-    </h2>
-    <p className="lead" data-text-rank="2"><AsciiText text={CV_DATA.heroIntroConcise} /></p>
-    <p className="intro-support" data-text-rank="3"><AsciiText text={CV_DATA.heroIntroSecondary} /></p>
-    <dl className="intro-facts">
-      {INTRO_FACTS.map((fact) => (
-        <div key={fact.label}>
-          <dt className="meta"><AsciiText text={fact.label} /></dt>
-          <dd className="item"><AsciiText text={fact.value} /></dd>
-        </div>
-      ))}
-    </dl>
+  <section id="introduction" tabIndex={-1} aria-labelledby="profile-title" data-editorial-section className="terminal-overview relative">
+    <div className="profile-spread">
+      <header className="profile-heading">
+        <h2 id="profile-title" className="intro-kicker meta">
+          <AsciiText text="Profile" />
+        </h2>
+        <p className="lead" data-text-rank="2"><AsciiText text={CV_DATA.heroIntroConcise} /></p>
+      </header>
+      <ProfileItinerary />
+    </div>
+    <aside className="profile-aside" aria-label="Professional summary">
+      <p className="intro-support" data-text-rank="3"><AsciiText text={CV_DATA.heroIntroSecondary} /></p>
+      <dl className="intro-facts">
+        {INTRO_FACTS.map((fact) => (
+          <div key={fact.label}>
+            <dt className="meta"><AsciiText text={fact.label} /></dt>
+            <dd className="item"><AsciiText text={fact.value} /></dd>
+          </div>
+        ))}
+      </dl>
+    </aside>
   </section>
 ));

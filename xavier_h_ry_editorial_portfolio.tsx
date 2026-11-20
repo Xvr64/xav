@@ -278,7 +278,7 @@ export default function App() {
         {/* THE DESCENT: straight from the cover into the Globe's pinned runway. The whales give way
             as it rises; the city journey takes the runway, and the water darkens with it, reaching
             the deep ocean as the last city's dwell ends. The scroll position IS the timeline. */}
-        <section id="journey" aria-label="Seven cities" className="relative">
+        <section id="journey" aria-label={`Journey through ${CV_DATA.locations.length} cities`} className="relative">
           <div
             data-journey-runway
             data-ascii-preserve

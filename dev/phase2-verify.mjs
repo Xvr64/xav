@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 const results = [];
 const pass = (name, detail) => { results.push({ name, ok: true, detail }); console.log('PASS', name, detail === undefined ? '' : JSON.stringify(detail)); };
 const city = (c) => c.evaluate(`document.querySelector('.globe-caption [aria-hidden="false"] .globe-city')?.textContent ?? null`);
-const CITIES = ['Doha', 'Paris', 'Jakarta', 'Moscow', 'Singapore', 'Pau', 'Shanghai'];
+const CITIES = ['Doha', 'Paris', 'Jakarta', 'Moscow', 'Singapore', 'Pau', 'Bordeaux', 'Shanghai'];
 
 /** Poll the Globe's caption until `want` shows, recording each city once in the order seen. */
 async function follow(c, want, ms) {
@@ -89,12 +89,12 @@ async function globe() {
     assert.equal(await city(c), 'Doha');
     await c.wheel(120);
     const forward = await follow(c, 'Shanghai', 16000);
-    assert.deepEqual(forward, CITIES, 'forward through all seven cities');
+    assert.deepEqual(forward, CITIES, 'forward through all cities');
     await jpg(c, 'verify/globe-shanghai');
     await sleep(2600);
     await c.wheel(-120);
     const back = await follow(c, 'Doha', 16000);
-    assert.deepEqual(back, [...CITIES].reverse(), 'reverse through all seven cities');
+    assert.deepEqual(back, [...CITIES].reverse(), 'reverse through all cities');
     await sleep(1500);
     const diag = await c.evaluate(`(() => { const s = window.__globeDiagnostics?.at(-1); return s ? { ownership: s.ownership, playing: s.playing, rp: s.renderedProgress } : null; })()`);
     pass('Globe desktop: Doha → Shanghai → Doha', { forward, back, diag });

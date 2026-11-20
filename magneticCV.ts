@@ -19,6 +19,7 @@ import {
   type GestureDirection
 } from './magneticCVState';
 import { createAbyssalCipher } from './abyssalCipher';
+import { profileCityStops } from './profileCityStops';
 
 const TOLERANCE = 2;
 /** Native touch momentum can continue briefly after finger lift inside a long chapter (ms). */
@@ -81,6 +82,16 @@ export function mountMagneticCV() {
   const cipher = createAbyssalCipher();
 
   const gesture = createMagneticGestureMachine();
+  const profile = cvElements.find(el => el.id === 'introduction');
+  const itinerary = profile?.querySelector<HTMLElement>('.profile-itinerary');
+  let cityStops: number[] = [];
+  let lastProfileWheel = -Infinity;
+  let cityStep = 0;
+  const isProfile = (ch: Chapter | null) => !!cityStops.length && ch?.el === profile;
+  function selectStep(index: number) {
+    cityStep = Math.max(0, Math.min(index, cityStops.length - 1));
+    if (itinerary) itinerary.dataset.plates = cityStep === 0 ? 'waiting' : 'revealed';
+  }
   let chapters: Chapter[] = [];
   let visibleChapter: Chapter | null = null;
   let animation: {
@@ -156,8 +167,11 @@ export function mountMagneticCV() {
     return chapters[index];
   };
 
-  const nextChapter = (chapter: Chapter, dir: GestureDirection): Chapter | undefined =>
-    chapters[chapters.indexOf(chapter) + dir];
+  function nextChapter(chapter: Chapter, dir: GestureDirection): Chapter | undefined {
+    const step = cityStep + dir;
+    if (isProfile(chapter) && step >= 0 && step < cityStops.length) return chapter;
+    return chapters[chapters.indexOf(chapter) + dir];
+  }
 
   const boundary = (chapter: Chapter, dir: GestureDirection) => (dir > 0 ? chapter.end : chapter.top);
 
@@ -252,6 +266,7 @@ export function mountMagneticCV() {
   /** Exclusive visibility: at rest, at most ONE CV chapter is readable; at Shanghai, ALL CV chapters are muted. */
   function show(active: Chapter | null) {
     if (visibleChapter === active) return;
+    root.toggleAttribute('data-profile-steps', isProfile(active));
     for (const el of cvElements) {
       el.toggleAttribute('data-cv-muted', !active || active.el !== el);
     }
@@ -364,14 +379,14 @@ export function mountMagneticCV() {
     if (to.kind === 'cv') {
       const targetHash = '#' + to.id;
       if (location.hash !== targetHash) {
-        history.replaceState({ ...history.state, cvReading: { id: from.id, offset } }, '');
+        history.replaceState({ ...history.state, cvReading: { id: from.id, offset, step: isProfile(from) ? cityStep : undefined } }, '');
         history.pushState({ ...history.state, cvReading: { id: to.id, offset: endY - to.top } }, '', targetHash);
       }
       if (focus) to.el.focus({ preventScroll: true });
     } else {
       // Returning to Shanghai: clear CV hash cleanly while preserving Back/Forward state.
       if (location.hash) {
-        history.replaceState({ ...history.state, cvReading: { id: from.id, offset } }, '');
+        history.replaceState({ ...history.state, cvReading: { id: from.id, offset, step: isProfile(from) ? cityStep : undefined } }, '');
         history.pushState({ ...history.state, cvReading: { id: to.id, offset: 0 } }, '', location.pathname + location.search);
       }
       globeScrollGeometry.requestRender?.();
@@ -381,10 +396,13 @@ export function mountMagneticCV() {
   function start(from: Chapter, to: Chapter, dir: GestureDirection, keyboard = false, now = performance.now()) {
     userInteracted = true;
     const startY = scrollY;
-    const endY = dir > 0 ? to.top : to.end;
+    const cityMove = from === to;
+    if (isProfile(to)) selectStep(cityMove ? cityStep + dir : dir > 0 ? 0 : cityStops.length - 1);
+    const endY = isProfile(to) ? cityStops[cityStep] : dir > 0 ? to.top : to.end;
     const isGlobeHandoff = from.kind === 'globe' || to.kind === 'globe';
     const preset = transitionPresetFor(from.id, to.id, dir);
-    const duration = preset.duration;
+    // Keep the reveal pinned through the final plate's fade (7 × 95ms + 460ms).
+    const duration = cityMove ? (startY === endY && dir > 0 ? 1150 : 540) : preset.duration;
     const landingOffset = Math.max(0, endY - to.top);
     const landingAtBottom = dir < 0 && landingOffset > 40;
 
@@ -421,6 +439,7 @@ export function mountMagneticCV() {
       startY,
       endY
     };
+    if (isProfile(from) || isProfile(to)) root.setAttribute('data-profile-steps', '');
 
     if (to.kind === 'globe') {
       globeScrollGeometry.requestRender?.();
@@ -428,6 +447,18 @@ export function mountMagneticCV() {
 
     if (reduce.matches) {
       finish();
+      return;
+    }
+    if (cityMove) {
+      const glide = (time: number) => {
+        const progress = Math.min(1, Math.max(0, (time - now) / duration));
+        const eased = depthGlideEase(progress);
+        expected = Math.round(startY + (endY - startY) * eased);
+        if (scrollY !== expected) jump(expected);
+        if (progress === 1) finish();
+        else frame = requestAnimationFrame(glide);
+      };
+      glide(now);
       return;
     }
 
@@ -602,6 +633,15 @@ export function mountMagneticCV() {
     const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? innerHeight : 1;
     const delta = e.deltaY * unit;
 
+    // A city stroke must end before another can begin. Coalesced peaks and
+    // direction bounces in the same stream are still part of that stroke.
+    if (now - lastProfileWheel < MAGNETIC_DRAIN_IDLE_MS ||
+        (animation && (isProfile(animation.from) || isProfile(animation.to)))) {
+      lastProfileWheel = now;
+      consumeWheel(e);
+      return;
+    }
+
     // Never leave the gesture machine stranded in transitioning/captured when no animation is running.
     if (!animation && (gesture.state === 'transitioning' || gesture.state === 'captured')) {
       gesture.reset();
@@ -663,7 +703,7 @@ export function mountMagneticCV() {
     userInteracted = true;
     const stateBefore = gesture.state;
     const from = animation ? animation.to : chapterAt(scrollY);
-    const hasSpan = from.end - from.top > TOLERANCE;
+    const hasSpan = !isProfile(from) && from.end - from.top > TOLERANCE;
     const action = gesture.feedWheel(delta, now, dir => {
       const to = nextChapter(from, dir);
       const edge = boundary(from, dir);
@@ -781,6 +821,7 @@ export function mountMagneticCV() {
       });
     }
     if (from.kind === 'globe') globeScrollGeometry.release?.();
+    if (isProfile(from) || isProfile(to)) lastProfileWheel = now;
     start(from, to, action.dir, false, perfNow);
   }
 
@@ -815,7 +856,7 @@ export function mountMagneticCV() {
     if (!to) return; // Lets ArrowUp/PageUp at Shanghai flow directly to cinematicScroll.
 
     const edge = boundary(from, dir as GestureDirection);
-    const room = (edge - scrollY) * dir;
+    const room = isProfile(from) ? 0 : (edge - scrollY) * dir;
     if (room > (e.key.startsWith('Arrow') ? 48 : innerHeight * 0.85)) return;
 
     e.preventDefault();
@@ -901,7 +942,7 @@ export function mountMagneticCV() {
     }
 
     // Long chapter reading: let native scroll run up to its reading edge, never past it.
-    if ((boundary(from, dir) - touch.startY) * dir > TOLERANCE) {
+    if (!isProfile(from) && (boundary(from, dir) - touch.startY) * dir > TOLERANCE) {
       touch.reading = true;
       readingDirection = dir;
       readingBounds = from;
@@ -949,7 +990,7 @@ export function mountMagneticCV() {
     if (animation && Math.abs(scrollY - expected) > TOLERANCE) {
       const lo = Math.min(animation.startY, animation.endY) - 160;
       const hi = Math.max(animation.startY, animation.endY) + 160;
-      if (scrollY < lo || scrollY > hi) {
+      if (animation.from !== animation.to && (scrollY < lo || scrollY > hi)) {
         clearTimeout(rearmTimer);
         rearmTimer = 0;
         clearAnimation();
@@ -1000,7 +1041,15 @@ export function mountMagneticCV() {
         // Above Shanghai (Hero or Doha..Pau): mute all CV sections, keep Globe visible.
         show(sh);
       } else {
-        show(chapterAt(scrollY));
+        const active = chapterAt(scrollY);
+        if (isProfile(active) && !blockedByOverlay()) {
+          if (!isProfile(visibleChapter)) {
+            selectStep(cityStops.reduce((best, y, i) =>
+              Math.abs(y - scrollY) < Math.abs(cityStops[best] - scrollY) ? i : best, 0));
+          }
+          if (Math.abs(scrollY - cityStops[cityStep]) > 0.5) jump(cityStops[cityStep]);
+        }
+        show(active);
       }
     }
   }
@@ -1024,6 +1073,7 @@ export function mountMagneticCV() {
 
   function measure() {
     const fresh: Chapter[] = [];
+    let stepsChanged = false;
     if (runway && globeStage) {
       const rr = runway.getBoundingClientRect();
       const pr = globeStage.getBoundingClientRect();
@@ -1035,12 +1085,18 @@ export function mountMagneticCV() {
       const staged = el.style.translate;
       if (staged) el.style.removeProperty('translate');
       const bounds = chapterBounds(el);
+      if (el === profile && itinerary) {
+        const stops = profileCityStops(bounds.top, bounds.end, innerHeight);
+        stepsChanged = stops.length !== cityStops.length || stops.some((y, i) => y !== cityStops[i]);
+        cityStops = stops;
+        if (stepsChanged) selectStep(cityStep);
+      }
       if (staged) el.style.translate = staged;
       fresh.push({ id: el.id, kind: 'cv', el, ...bounds });
     }
 
     const changed =
-      fresh.length !== chapters.length ||
+      stepsChanged || fresh.length !== chapters.length ||
       fresh.some((c, i) => c.top !== chapters[i]?.top || c.end !== chapters[i]?.end);
 
     if (changed) {
@@ -1050,9 +1106,14 @@ export function mountMagneticCV() {
         const nextTo = fresh.find(c => c.el === animation!.to.el);
         if (nextTo) {
           animation.to = nextTo;
-          animation.endY = animation.dir > 0 ? nextTo.top : nextTo.end;
+          animation.endY = isProfile(nextTo) ? cityStops[cityStep] : animation.dir > 0 ? nextTo.top : nextTo.end;
         }
         finish();
+      } else if (isProfile(visibleChapter)) {
+        // A font swap or orientation change can move the entire section past
+        // the old scroll position. Keep the selected city through remeasurement.
+        jump(cityStops[cityStep]);
+        lastY = scrollY;
       } else if (!userInteracted && location.hash) {
         alignInitialHash();
       }
@@ -1105,7 +1166,7 @@ export function mountMagneticCV() {
   function navigateHistory(event: Event) {
     userInteracted = true;
     interrupt();
-    const saved = history.state?.cvReading as { id?: string; offset?: number } | undefined;
+    const saved = history.state?.cvReading as { id?: string; offset?: number; step?: number } | undefined;
     const anchor = chapters.find(c => '#' + c.id === location.hash);
     const destination = anchor ?? (!location.hash ? chapters.find(c => c.id === saved?.id) : undefined);
     if (!destination) return;
@@ -1113,7 +1174,8 @@ export function mountMagneticCV() {
     const offset = saved?.id === destination.id && Number.isFinite(saved.offset) ? saved.offset! : 0;
     cancelAnimationFrame(navigationFrame);
     navigationFrame = requestAnimationFrame(() => {
-      const targetY = Math.min(destination.end, destination.top + Math.max(0, offset));
+      if (isProfile(destination)) selectStep(saved?.id === destination.id && Number.isInteger(saved.step) ? saved.step! : 0);
+      const targetY = isProfile(destination) ? cityStops[cityStep] : Math.min(destination.end, destination.top + Math.max(0, offset));
       jump(targetY);
       lastY = scrollY;
       show(destination);
@@ -1144,7 +1206,7 @@ export function mountMagneticCV() {
       if (dest) {
         const saved = history.state?.cvReading as { id?: string; offset?: number } | undefined;
         const offset = saved?.id === dest.id && Number.isFinite(saved.offset) ? saved.offset! : 0;
-        jump(Math.min(dest.end, dest.top + Math.max(0, offset)));
+        jump(isProfile(dest) ? cityStops[cityStep] : Math.min(dest.end, dest.top + Math.max(0, offset)));
         lastY = scrollY;
         sync();
       }
@@ -1227,6 +1289,8 @@ export function mountMagneticCV() {
         animating: !!animation,
         activeId: visibleChapter?.id ?? null,
         scrollY,
+        profileStep: cityStep,
+        profileStopCount: cityStops.length,
         lastTransitionMs,
         lastDurationTargetMs,
         lastVeilFragments,
@@ -1243,6 +1307,8 @@ export function mountMagneticCV() {
     releaseBounds();
     size.disconnect();
     clearAnimation();
+    root.removeAttribute('data-profile-steps');
+    itinerary?.removeAttribute('data-plates');
     cipher.destroy();
     cvElements.forEach(el => delete el.dataset.cvMuted);
     if (globeStage) delete globeStage.dataset.globeMuted;

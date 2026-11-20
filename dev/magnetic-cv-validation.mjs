@@ -137,6 +137,48 @@ async function gesture(c, dir, touch, width, height = 844) {
   if (touch) await c.swipe(dir * 170, { x: width / 2, y0, steps: 8, ms: 150 });
   else await c.wheel(dir * 120);
 }
+
+async function traverseProfile(c, dir, touch, width, height) {
+  const cityOrder = ['doha', 'paris', 'jakarta', 'moscow', 'singapore', 'pau', 'bordeaux', 'shanghai'];
+  const { profileStep, profileStopCount } = (await state(c)).snap;
+  assert.ok(profileStopCount >= 2);
+  for (let i = profileStep + dir; i >= 0 && i < profileStopCount; i += dir) {
+    const checkPin = i <= 1 && i - dir <= 1;
+    if (checkPin) {
+      const cities = await c.evaluate(`[...document.querySelectorAll('[data-city-id]')].map(row => {
+        const title = row.querySelector('.profile-city-name span:last-child').getBoundingClientRect();
+        const plate = row.querySelector('.profile-city-frame').getBoundingClientRect();
+        return { id: row.dataset.cityId, fits: title.left >= 0 && title.top >= 0 && title.bottom <= innerHeight &&
+          title.right < plate.left && plate.top >= 0 && plate.right <= innerWidth && plate.bottom <= innerHeight &&
+          Math.abs(plate.width - plate.height) < 1 };
+      })`);
+      assert.deepEqual(cities.map(c => c.id), cityOrder);
+      assert.ok(cities.every(c => c.fits), 'all city names and square frames fit before the gesture');
+      await c.evaluate(`window.cityAnchor = scrollY; window.cityDrift = 0;
+        window.measureCityPin = () => { cityDrift = Math.max(cityDrift, Math.abs(scrollY - cityAnchor)); };
+        addEventListener('scroll', measureCityPin)`);
+    }
+    if (touch) await gesture(c, dir, touch, width, height);
+    else await c.wheel(dir * 120, width / 2, height / 2);
+    await sleep(checkPin ? 1380 : 820);
+    const landed = await state(c);
+    assert.deepEqual(landed.visible, ['introduction']);
+    assert.equal(landed.snap.profileStep, i);
+    if (checkPin) {
+      assert.equal(await c.evaluate("removeEventListener('scroll', measureCityPin); cityDrift"), 0);
+      const surfaces = await c.evaluate(`[...document.querySelectorAll('.profile-city-placeholder')].map(el => {
+        const style = getComputedStyle(el);
+        return { opacity: Number(style.opacity), delay: parseFloat(style.animationDelay) };
+      })`);
+      assert.ok(surfaces.every(s => s.opacity === (i === 1 ? 1 : 0)));
+      if (i === 1) assert.ok(surfaces.every((s, n) => !n || s.delay > surfaces[n - 1].delay));
+    }
+    await c.evaluate('window.scrollBy(0, 9)');
+    await sleep(120);
+    assert.equal((await state(c)).y, landed.y, 'the city holds its landing between gestures');
+    await c.evaluate('noteReadable()');
+  }
+}
 /** A trackpad flick: one hand stroke followed by a long decaying momentum tail (~1.8s). */
 async function trackpad(c, dir, events = 110, start = 52) {
   for (let i = 0; i < events; i++) {
@@ -230,7 +272,7 @@ async function walk(c, geo, dir, touch, width, height, label, row) {
   let s = await state(c);
   const startId = s.visible[0];
   const goal = dir > 0 ? geo.at(-1).id : geo[0].id;
-  const done = () => s.visible[0] === goal && (dir < 0 ? s.y <= geo[0].top + 2 : steps.at(-1)?.stuck);
+  const done = () => s.visible[0] === goal && (dir < 0 ? s.snap.profileStep === 0 : steps.at(-1)?.stuck);
   for (let i = 0; i < 40 && !done(); i++) {
     const before = s;
     await gesture(c, dir, touch, width, height);
@@ -245,7 +287,9 @@ async function walk(c, geo, dir, touch, width, height, label, row) {
     assert.ok(Math.abs(moved) <= 1 && moved * dir >= 0, `${label}: one gesture moves at most one chapter, in its direction`);
     const origin = geo[index(geo, before.visible[0])];
     const canSnap = dir > 0 ? before.y >= origin.end - 2 : before.y <= origin.top + 2;
-    if (geo[index(geo, origin.id) + dir]) assert.equal(moved, canSnap ? dir : 0, 'only a gesture at a reading edge advances');
+    const insideProfile = origin.id === 'introduction' && before.snap.profileStep + dir >= 0 &&
+      before.snap.profileStep + dir < before.snap.profileStopCount;
+    if (geo[index(geo, origin.id) + dir]) assert.equal(moved, canSnap && !insideProfile ? dir : 0, 'only a gesture at a reading edge advances');
     if (moved) {
       const dest = geo[index(geo, s.visible[0])];
       assert.ok(Math.abs(s.y - (dir > 0 ? dest.top : dest.end)) <= 2, 'precise landing');
@@ -275,7 +319,7 @@ async function viewport({ width, height, touch, dsf }) {
     await c.evaluate('noteReadable()');
     const first = await state(c);
     assert.deepEqual(first.visible, ['introduction']);
-    await c.evaluate(`jumpTo(${geo[0].end})`);
+    await traverseProfile(c, 1, touch, width, height);
     await c.evaluate('(window.frameLog = recordFrames(1800), 0)');
     await gesture(c, 1, touch, width, height);
     const { frames, ...motion } = await c.evaluate('frameLog');
@@ -373,6 +417,7 @@ async function viewport({ width, height, touch, dsf }) {
     });
     await c.evaluate(`jumpTo(${geo[0].end})`);
     await sleep(300);
+    await traverseProfile(c, 1, touch, width, height);
     await key('keyDown');
     await sleep(SETTLE);
     await key('keyDown', true);
@@ -545,6 +590,7 @@ async function stationaryMouseTest() {
 
     // 1. Discrete stationary wheel: Profile -> Contact -> Shanghai (zero mouse move, zero clicks, zero focus)
     const expectedForward = ['experience', 'education', 'skills', 'languages', 'interests', 'contact'];
+    await traverseProfile(c, 1, false, width, height);
     for (const want of expectedForward) {
       await c.wheel(120, cx, cy);
       await sleep(SETTLE);
@@ -555,6 +601,7 @@ async function stationaryMouseTest() {
     }
     const expectedReverse = ['interests', 'languages', 'skills', 'education', 'experience', 'introduction', 'journey'];
     for (const want of expectedReverse) {
+      if (want === 'journey') await traverseProfile(c, -1, false, width, height);
       await c.wheel(-120, cx, cy);
       await sleep(want === 'journey' ? GLOBE_SETTLE : SETTLE);
       const s = await state(c);
@@ -566,6 +613,7 @@ async function stationaryMouseTest() {
 
     // 2. Real Chromium compositor smooth-wheel (synthesizeScrollGesture) Shanghai -> Profile -> Experience
     for (const want of ['introduction', 'experience']) {
+      if (want === 'experience') await traverseProfile(c, 1, false, width, height);
       await c.send('Input.synthesizeScrollGesture', {
         x: cx, y: cy, yDistance: -120, gestureSourceType: 'mouse', speed: 850, preventFling: false
       });

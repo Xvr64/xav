@@ -1,0 +1,776 @@
+/* ============================================================================
+   PROFILE (#introduction) — SINGLE-SCREEN EDITORIAL SPREAD
+   Wide viewports: left editorial statement & facts anchored to the page margin;
+   right sculpted eight-city itinerary with an interleaved vertical sequence of
+   square photographic plates, all visible at once on one screen.
+   One scroll reveals all eight plates sequentially from Doha down to Shanghai.
+   ============================================================================ */
+
+.terminal-portfolio.magnetic-cv #introduction.terminal-overview,
+.terminal-portfolio #introduction.terminal-overview {
+  --profile-top-inset: clamp(54px, 6.4svh, 68px);
+  --profile-bottom-inset: clamp(24px, 3.6svh, 42px);
+  --profile-stage-h: min(820px, calc(100svh - var(--profile-top-inset) - var(--profile-bottom-inset)));
+  box-sizing: border-box;
+  display: grid;
+  grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.08fr);
+  grid-template-rows: auto auto;
+  align-content: center;
+  column-gap: clamp(28px, 3.8vw, 58px);
+  row-gap: clamp(16px, 2.4svh, 28px);
+  min-height: 100svh;
+  padding-block: var(--profile-top-inset) var(--profile-bottom-inset);
+}
+
+.profile-spread {
+  display: contents;
+}
+
+/* Left column: Profile heading + statement anchored cleanly to the site margin */
+.profile-heading {
+  grid-area: 1 / 1;
+  align-self: end;
+}
+
+.terminal-portfolio #introduction .intro-kicker {
+  margin: 0 0 0.85em;
+}
+
+.terminal-portfolio #introduction .lead {
+  max-width: 19em;
+  margin: 0;
+  font-size: clamp(26px, min(2.65vw, 4.4svh), 41px);
+  font-variation-settings: 'opsz' 60;
+  line-height: 1.13;
+  letter-spacing: -0.018em;
+  text-wrap: pretty;
+}
+
+/* Left column lower band: concise editorial narrative + 2x2 scannable facts */
+.terminal-portfolio #introduction .profile-aside {
+  grid-area: 2 / 1;
+  align-self: start;
+  max-width: 48ch;
+}
+
+.terminal-portfolio #introduction .profile-aside .intro-support {
+  grid-column: auto;
+  grid-row: auto;
+  margin: 0;
+  max-width: none;
+  font-family: var(--font-sans);
+  font-size: clamp(15px, min(1.16vw, 2.15svh), 17.5px);
+  line-height: 1.58;
+  letter-spacing: var(--tracking-body);
+  color: var(--ink-2B353B, #2B353B);
+}
+
+.terminal-portfolio #introduction .profile-aside .intro-facts {
+  grid-column: auto;
+  grid-row: auto;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: clamp(18px, 2vw, 28px);
+  row-gap: clamp(12px, 1.65svh, 18px);
+  margin: clamp(18px, 2.4svh, 28px) 0 0;
+  padding-top: clamp(16px, 2.1svh, 24px);
+  border-top: 1px solid var(--rule-15, rgba(23, 23, 23, 0.15));
+}
+
+.terminal-portfolio #introduction .profile-aside .intro-facts > div + div {
+  margin-top: 0;
+}
+
+.terminal-portfolio #introduction .profile-aside .intro-facts dt {
+  margin: 0;
+}
+
+.terminal-portfolio #introduction .profile-aside .intro-facts dd {
+  margin: 3px 0 0;
+  font-size: clamp(14.5px, min(1.04vw, 1.95svh), 16.5px);
+  line-height: 1.36;
+  color: color-mix(in srgb, var(--ink-171717, #171717) 92%, transparent);
+}
+
+/* ============================================================================
+   RIGHT CANVAS: EIGHT-CITY EDITORIAL TYPOGRAPHY & INTERLEAVED SQUARE PLATES
+   ============================================================================ */
+
+.profile-itinerary {
+  grid-area: 1 / 2 / span 2;
+  align-self: center;
+  justify-self: end;
+  width: min(100%, 38.5rem);
+  height: var(--profile-stage-h);
+  container-type: size;
+  --plate-base: clamp(84px, min(16.6cqh, 22.4cqw), 140px);
+  --lane-gap: clamp(14px, 2.6cqw, 20px);
+}
+
+.profile-itinerary-track {
+  box-sizing: border-box;
+  display: grid;
+  grid-template-rows: repeat(8, minmax(0, 1fr));
+  height: 100%;
+  padding-block: calc(var(--plate-base) * 0.22);
+  padding-inline-end: 8px;
+}
+
+.profile-itinerary-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--plate-base) var(--lane-gap) var(--plate-base);
+  align-items: center;
+  min-height: 0;
+}
+
+/* Left typography column: organic oceanic swell coupled to alternating lanes */
+.profile-city-name {
+  position: relative;
+  z-index: 1;
+  grid-column: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.24em;
+  margin: 0;
+  padding-left: calc(var(--city-indent) * 1cqw);
+  padding-right: clamp(14px, 2.4cqw, 22px);
+  transform: translateY(var(--city-y));
+  font-family: var(--font-display);
+  font-variation-settings: 'opsz' 72;
+  font-weight: var(--display-weight);
+  font-size: clamp(24px, min(7.4cqw, 5.65cqh), 47px);
+  line-height: 0.96;
+  letter-spacing: -0.032em;
+  color: var(--ink-171717);
+  white-space: nowrap;
+}
+
+/* Even cities glide inward and extend their leader through the open ocean channel to Lane B */
+.profile-itinerary-row[data-plate-lane="b"] .profile-city-name {
+  grid-column: 1 / 4;
+}
+
+/* Whisper-fine architectural leader linking each city cleanly to its square plate */
+.profile-city-name::after {
+  content: '';
+  flex: 1;
+  min-width: 14px;
+  height: 3px;
+  margin-left: 0.28em;
+  background:
+    radial-gradient(circle at calc(100% - 1.5px) 50%, currentColor 1.25px, transparent 1.6px),
+    linear-gradient(
+      to right,
+      color-mix(in srgb, currentColor 22%, transparent),
+      color-mix(in srgb, currentColor 54%, transparent)
+    ) 0 1px / calc(100% - 4px) 1px no-repeat;
+  opacity: 0.44;
+  transition: opacity 420ms cubic-bezier(0.16, 1, 0.28, 1);
+}
+
+.profile-itinerary[data-plates="waiting"] .profile-city-name::after {
+  opacity: 0.18;
+}
+
+.profile-itinerary[data-plates="revealed"] .profile-city-name::after {
+  opacity: 0.46;
+  transition-delay: calc(var(--plate-index) * 95ms);
+}
+
+.profile-itinerary-row:is([data-city-id="paris"], [data-city-id="pau"], [data-city-id="shanghai"]) .profile-city-name {
+  font-style: italic;
+}
+
+.profile-city-plate-index {
+  align-self: flex-start;
+  margin-top: 0.34em;
+  font: normal clamp(8.5px, 1.35cqh, 11px) / 1 var(--font-mono);
+  letter-spacing: 0.06em;
+  opacity: 0.62;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Right square photographic plates: alternating lanes A (col 2) and B (col 4) */
+.profile-city-frame {
+  position: relative;
+  z-index: 2;
+  grid-column: 2;
+  justify-self: center;
+  margin: 0;
+  width: calc(var(--plate-base) * var(--plate-scale));
+  color: var(--ink-171717);
+  transform: translateX(var(--plate-x)) rotate(var(--plate-rot));
+}
+
+.profile-itinerary-row[data-plate-lane="b"] .profile-city-frame {
+  grid-column: 4;
+}
+
+/* ============================================================================
+   ONE-SCROLL TOP-TO-BOTTOM PHOTOGRAPHIC APPEARANCE SEQUENCE
+   Waiting state: all 8 cities + quiet square architectural mounts visible in place.
+   Revealed state: one scroll develops the 8 plates sequentially from 01 Doha to 08 Shanghai.
+   ============================================================================ */
+
+.profile-itinerary[data-plates="waiting"] .profile-city-aperture > * {
+  opacity: 0;
+}
+
+@media screen and (prefers-reduced-motion: no-preference) {
+  .profile-itinerary[data-plates="revealed"] .profile-city-aperture > * {
+    animation: profile-plate-in 460ms cubic-bezier(0.16, 1, 0.28, 1) backwards;
+    animation-delay: calc(var(--plate-index) * 95ms);
+  }
+
+  @keyframes profile-plate-in {
+    from {
+      opacity: 0;
+      transform: translateY(6%) scale(1.035);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+}
+
+@media screen {
+  html[data-profile-steps] {
+    overflow-y: hidden;
+    overscroll-behavior-y: none;
+    touch-action: pinch-zoom;
+  }
+}
+
+/* Offset translucent paper-mat shadow plane behind each square aperture */
+.profile-city-ghost {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  transform: translate(calc(var(--ghost-x) * 0.72), calc(var(--ghost-y) * 0.72));
+  border: 1px solid color-mix(in srgb, var(--ink-2F4858, currentColor) 20%, transparent);
+  background: color-mix(in srgb, var(--ink-2F4858, currentColor) 3.5%, transparent);
+  opacity: 1;
+  transition:
+    transform 480ms cubic-bezier(0.16, 1, 0.28, 1),
+    opacity 460ms cubic-bezier(0.16, 1, 0.28, 1);
+}
+
+.profile-itinerary[data-plates="waiting"] .profile-city-ghost {
+  transform: translate(calc(var(--ghost-x) * 0.28), calc(var(--ghost-y) * 0.28));
+  opacity: 0.36;
+}
+
+.profile-itinerary[data-plates="revealed"] .profile-city-ghost {
+  transition-delay: calc(var(--plate-index) * 95ms);
+}
+
+/* Archival dashed proof outline on offset-double plates */
+.profile-city-frame--offset-double .profile-city-ghost {
+  border-style: dashed;
+  border-color: color-mix(in srgb, var(--ink-2F4858, currentColor) 24%, transparent);
+}
+
+/* Open-horizon plates carry a horizontal slip-mat rather than a closed four-sided box */
+.profile-city-frame--open-horizon .profile-city-ghost {
+  border-left: 0;
+  border-right: 0;
+  border-top-color: color-mix(in srgb, var(--ink-2F4858, currentColor) 22%, transparent);
+  border-bottom-color: color-mix(in srgb, var(--ink-2F4858, currentColor) 15%, transparent);
+}
+
+/* Delicate outer registration crosshair tucked into the ocean margin around each square */
+.profile-city-outer-mark {
+  position: absolute;
+  z-index: 0;
+  width: 9px;
+  height: 9px;
+  pointer-events: none;
+  opacity: 0.36;
+  background:
+    linear-gradient(currentColor, currentColor) 0 4px / 9px 1px no-repeat,
+    linear-gradient(currentColor, currentColor) 4px 0 / 1px 9px no-repeat;
+  transition: opacity 420ms cubic-bezier(0.16, 1, 0.28, 1);
+}
+
+.profile-itinerary[data-plates="waiting"] .profile-city-outer-mark {
+  opacity: 0.22;
+}
+
+.profile-itinerary[data-plates="revealed"] .profile-city-outer-mark {
+  transition-delay: calc(var(--plate-index) * 95ms);
+}
+
+.profile-city-outer-mark--top-left {
+  top: -5px;
+  left: -5px;
+}
+
+.profile-city-outer-mark--top-right {
+  top: -5px;
+  right: -5px;
+}
+
+.profile-city-outer-mark--bottom-left {
+  bottom: -5px;
+  left: -5px;
+}
+
+.profile-city-outer-mark--bottom-right {
+  bottom: -5px;
+  right: -5px;
+}
+
+/* Square photographic aperture: strictly 1:1, tactile ocean-vellum finish, whales clearly visible behind */
+.profile-city-aperture {
+  container-type: inline-size;
+  position: relative;
+  z-index: 1;
+  isolation: isolate;
+  overflow: hidden;
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 0;
+  border: 1px solid color-mix(in srgb, currentColor 26%, transparent);
+  background:
+    radial-gradient(
+      ellipse 120% 105% at 18% 12%,
+      color-mix(in srgb, var(--ink-2F4858, currentColor) 14%, transparent) 0%,
+      transparent 68%
+    ),
+    linear-gradient(
+      var(--wash-angle),
+      color-mix(in srgb, var(--ink-2F4858, currentColor) 11%, color-mix(in srgb, var(--ocean-background) 28%, transparent)) 0%,
+      color-mix(in srgb, var(--ocean-background) 44%, transparent) 54%,
+      color-mix(in srgb, var(--ocean-background) 60%, color-mix(in srgb, currentColor 4%, transparent)) 100%
+    );
+  background-color: color-mix(in srgb, var(--ocean-background) 68%, transparent);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    0 6px 14px -6px rgba(4, 11, 38, 0.56);
+  transition:
+    border-color 460ms cubic-bezier(0.16, 1, 0.28, 1),
+    background-color 460ms cubic-bezier(0.16, 1, 0.28, 1),
+    box-shadow 460ms cubic-bezier(0.16, 1, 0.28, 1);
+}
+
+/* Quiet unexposed architectural mount while waiting for the reveal gesture */
+.profile-itinerary[data-plates="waiting"] .profile-city-aperture {
+  border-color: color-mix(in srgb, currentColor 13%, transparent);
+  background-color: color-mix(in srgb, var(--ocean-background) 26%, transparent);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.profile-itinerary[data-plates="revealed"] .profile-city-aperture {
+  transition-delay: calc(var(--plate-index) * 95ms);
+}
+
+/* Frame treatment variations across plates */
+.profile-city-frame--offset-double .profile-city-aperture {
+  border-color:
+    color-mix(in srgb, currentColor 34%, transparent)
+    color-mix(in srgb, currentColor 15%, transparent)
+    color-mix(in srgb, currentColor 15%, transparent)
+    color-mix(in srgb, currentColor 32%, transparent);
+}
+
+.profile-itinerary[data-plates="waiting"] .profile-city-frame--offset-double .profile-city-aperture {
+  border-color:
+    color-mix(in srgb, currentColor 17%, transparent)
+    color-mix(in srgb, currentColor 9%, transparent)
+    color-mix(in srgb, currentColor 9%, transparent)
+    color-mix(in srgb, currentColor 15%, transparent);
+}
+
+.profile-city-frame--open-horizon .profile-city-aperture {
+  border-top-color: color-mix(in srgb, currentColor 36%, transparent);
+  border-bottom-color: color-mix(in srgb, currentColor 30%, transparent);
+  border-left-color: transparent;
+  border-right-color: transparent;
+}
+
+.profile-itinerary[data-plates="waiting"] .profile-city-frame--open-horizon .profile-city-aperture {
+  border-top-color: color-mix(in srgb, currentColor 18%, transparent);
+  border-bottom-color: color-mix(in srgb, currentColor 14%, transparent);
+  border-left-color: transparent;
+  border-right-color: transparent;
+}
+
+.profile-city-frame--crosshair .profile-city-aperture {
+  border-color: color-mix(in srgb, currentColor 22%, transparent);
+}
+
+.profile-itinerary[data-plates="waiting"] .profile-city-frame--crosshair .profile-city-aperture {
+  border-color: color-mix(in srgb, currentColor 12%, transparent);
+}
+
+/* Subtle recessed inner hairline mat */
+.profile-city-inner-frame {
+  position: absolute;
+  inset: 6px;
+  z-index: 2;
+  pointer-events: none;
+  border: 1px solid color-mix(in srgb, var(--ink-2F4858, currentColor) 12%, transparent);
+}
+
+.profile-city-frame--offset-double .profile-city-inner-frame {
+  inset: 7px 5px 5px 7px;
+  border-color: color-mix(in srgb, var(--ink-2F4858, currentColor) 15%, transparent);
+}
+
+.profile-city-frame--open-horizon .profile-city-inner-frame {
+  inset: 6px 0;
+  border-left: 0;
+  border-right: 0;
+  border-top: 1px solid color-mix(in srgb, var(--ink-2F4858, currentColor) 11%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--ink-2F4858, currentColor) 11%, transparent);
+}
+
+/* Crisp corner registration brackets / editorial crop ticks */
+.profile-city-corners {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  background:
+    linear-gradient(currentColor, currentColor) 0 0 / 10px 1px no-repeat,
+    linear-gradient(currentColor, currentColor) 0 0 / 1px 10px no-repeat,
+    linear-gradient(currentColor, currentColor) 100% 0 / 10px 1px no-repeat,
+    linear-gradient(currentColor, currentColor) 100% 0 / 1px 10px no-repeat,
+    linear-gradient(currentColor, currentColor) 0 100% / 10px 1px no-repeat,
+    linear-gradient(currentColor, currentColor) 0 100% / 1px 10px no-repeat,
+    linear-gradient(currentColor, currentColor) 100% 100% / 10px 1px no-repeat,
+    linear-gradient(currentColor, currentColor) 100% 100% / 1px 10px no-repeat;
+  opacity: 0.56;
+}
+
+.profile-city-frame--open-horizon .profile-city-corners {
+  background:
+    linear-gradient(currentColor, currentColor) 0 0 / 18px 1px no-repeat,
+    linear-gradient(currentColor, currentColor) 0 0 / 1px 7px no-repeat,
+    linear-gradient(currentColor, currentColor) 100% 0 / 18px 1px no-repeat,
+    linear-gradient(currentColor, currentColor) 100% 0 / 1px 7px no-repeat,
+    linear-gradient(currentColor, currentColor) 0 100% / 18px 1px no-repeat,
+    linear-gradient(currentColor, currentColor) 0 100% / 1px 7px no-repeat,
+    linear-gradient(currentColor, currentColor) 100% 100% / 18px 1px no-repeat,
+    linear-gradient(currentColor, currentColor) 100% 100% / 1px 7px no-repeat;
+  opacity: 0.62;
+}
+
+/* Cartographic + crosshairs tucked safely near opposing corners so they never intersect EN TRAVAUX */
+.profile-city-frame--crosshair .profile-city-corners {
+  inset: 7px;
+  background:
+    linear-gradient(currentColor, currentColor) 0 3px / 7px 1px no-repeat,
+    linear-gradient(currentColor, currentColor) 3px 0 / 1px 7px no-repeat,
+    linear-gradient(currentColor, currentColor) 100% calc(100% - 3px) / 7px 1px no-repeat,
+    linear-gradient(currentColor, currentColor) calc(100% - 3px) 100% / 1px 7px no-repeat;
+  opacity: 0.48;
+}
+
+/* Future photo & overlay layers */
+.profile-city-photo-layer,
+.profile-city-overlay-layer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.profile-city-photo-layer > img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: var(--city-crop);
+}
+
+.profile-city-overlay-layer {
+  pointer-events: none;
+}
+
+/* Static textured placeholder stage inside each square aperture */
+.profile-city-placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  padding: 13% 11%;
+  pointer-events: none;
+}
+
+/* Bespoke square oceanographic & ASCII SVG texture layer */
+.profile-city-texture {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  display: block;
+  color: var(--ink-2F4858, currentColor);
+  pointer-events: none;
+}
+
+.profile-city-ascii-field text {
+  font-family: 'JetBrains Mono', var(--font-mono);
+  font-size: 9.2px;
+  font-weight: 400;
+  letter-spacing: 0.14em;
+}
+
+/* Subtle archival contact-sheet frame number inside the opposing corner */
+.profile-city-plate-code {
+  position: absolute;
+  z-index: 4;
+  font: 400 clamp(7.5px, 7.6cqw, 9.5px) / 1 var(--font-mono);
+  letter-spacing: 0.08em;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-171717);
+  opacity: 0.44;
+  text-shadow: 0 0 4px var(--ocean-background);
+}
+
+.profile-city-plate-code--top-left {
+  top: 10%;
+  left: 11%;
+}
+
+.profile-city-plate-code--top-right {
+  top: 10%;
+  right: 11%;
+}
+
+.profile-city-plate-code--bottom-left {
+  bottom: 10%;
+  left: 11%;
+}
+
+.profile-city-plate-code--bottom-right {
+  bottom: 10%;
+  right: 11%;
+}
+
+/* Refined EN TRAVAUX editorial stamp */
+.profile-city-status-wrap {
+  position: relative;
+  z-index: 4;
+  align-self: center;
+  margin-inline: auto;
+  color: var(--ink-171717);
+  text-align: center;
+  text-shadow: 0 0 6px var(--ocean-background);
+}
+
+.profile-city-status {
+  display: block;
+  font: 400 clamp(7px, 7.8cqw, 9.5px) / 1.2 var(--font-mono);
+  letter-spacing: 0.11em;
+  opacity: 0.88;
+  white-space: nowrap;
+}
+
+.profile-city-frame--bottom-left .profile-city-status-wrap {
+  align-self: end;
+  margin-inline: 0 auto;
+  text-align: left;
+}
+
+.profile-city-frame--bottom-right .profile-city-status-wrap {
+  align-self: end;
+  margin-inline: auto 0;
+  text-align: right;
+}
+
+.profile-city-frame--top-left .profile-city-status-wrap {
+  align-self: start;
+  margin-inline: 0 auto;
+  text-align: left;
+}
+
+.profile-city-frame--top-right .profile-city-status-wrap {
+  align-self: start;
+  margin-inline: auto 0;
+  text-align: right;
+}
+
+.profile-city-frame--center-right .profile-city-status-wrap {
+  align-self: center;
+  margin-inline: auto 0;
+  text-align: right;
+}
+
+/* On compact square apertures (< 88px, e.g. phones), center cleanly and tighten marks so plates stay airy */
+@container (max-width: 88px) {
+  .profile-city-placeholder {
+    padding: 9% 7%;
+  }
+
+  .profile-city-inner-frame {
+    inset: 3px;
+  }
+
+  .profile-city-frame--crosshair .profile-city-corners {
+    inset: 3px;
+    background:
+      linear-gradient(currentColor, currentColor) 0 2px / 5px 1px no-repeat,
+      linear-gradient(currentColor, currentColor) 2px 0 / 1px 5px no-repeat,
+      linear-gradient(currentColor, currentColor) 100% calc(100% - 2px) / 5px 1px no-repeat,
+      linear-gradient(currentColor, currentColor) calc(100% - 2px) 100% / 1px 5px no-repeat;
+  }
+
+  .profile-city-plate-code {
+    display: none;
+  }
+
+  .profile-city-frame .profile-city-status-wrap {
+    align-self: center;
+    margin-inline: auto;
+    text-align: center;
+  }
+
+  .profile-city-status {
+    white-space: normal;
+    font-size: clamp(6.5px, 12.5cqw, 8.5px);
+    letter-spacing: 0.05em;
+    line-height: 1.15;
+  }
+}
+
+/* ============================================================================
+   RESPONSIVE: PORTRAIT TABLETS (<= 850px) & SHORT VIEWPORTS (<= 650px)
+   Heading + full eight-city composition fill Screen 1; summary aside follows below.
+   ============================================================================ */
+
+@media (max-width: 850px), (max-height: 650px) {
+  .terminal-portfolio.magnetic-cv #introduction.terminal-overview,
+  .terminal-portfolio #introduction.terminal-overview {
+    display: block;
+    --profile-top-inset: clamp(44px, 6.2svh, 58px);
+    --profile-bottom-inset: clamp(20px, 3.2svh, 34px);
+    padding-block: var(--profile-top-inset) var(--profile-bottom-inset);
+  }
+
+  .profile-spread {
+    display: grid;
+    height: calc(100svh - var(--profile-top-inset) - var(--profile-bottom-inset));
+    grid-template: auto minmax(0, 1fr) / minmax(0, 1fr);
+    gap: clamp(10px, 2svh, 20px);
+  }
+
+  .profile-heading {
+    grid-area: 1 / 1;
+    align-self: start;
+  }
+
+  .profile-itinerary {
+    grid-area: 2 / 1;
+    height: 100%;
+    width: min(100%, 38.5rem);
+    justify-self: center;
+  }
+
+  .terminal-portfolio #introduction .lead {
+    max-width: 24em;
+    font-size: clamp(20px, 4.8vw, 31px);
+  }
+
+  .terminal-portfolio #introduction .profile-aside {
+    max-width: 48ch;
+    margin: clamp(32px, 5svh, 48px) auto 0;
+    padding-top: 22px;
+    border-top: 1px solid var(--rule-15);
+  }
+}
+
+/* Compact phones (<= 600px) & short screens (<= 650px): single-lane crisp square stack */
+@media (max-width: 600px), (max-height: 650px) {
+  .profile-itinerary {
+    width: min(100%, 27.5rem);
+    --plate-base: clamp(42px, min(10.8cqh, 20.5cqw), 74px);
+  }
+
+  .profile-itinerary-track {
+    padding-block: 0;
+    padding-inline-end: 6px;
+  }
+
+  .profile-itinerary-row {
+    grid-template-columns: minmax(0, 1fr) var(--plate-base);
+    gap: clamp(10px, 3.2cqw, 18px);
+  }
+
+  .profile-city-name,
+  .profile-itinerary-row[data-plate-lane="b"] .profile-city-name {
+    grid-column: 1;
+    padding-left: calc(var(--city-indent) * 0.44cqw);
+    padding-right: 0;
+    font-size: clamp(19px, min(9.5cqw, 6.6cqh), 38px);
+  }
+
+  .profile-city-frame,
+  .profile-itinerary-row[data-plate-lane="b"] .profile-city-frame {
+    grid-column: 2;
+    transform: translateX(calc(var(--plate-x) * 0.65)) rotate(var(--plate-rot));
+  }
+
+  .profile-city-outer-mark {
+    width: 6px;
+    height: 6px;
+    background:
+      linear-gradient(currentColor, currentColor) 0 2.5px / 6px 1px no-repeat,
+      linear-gradient(currentColor, currentColor) 2.5px 0 / 1px 6px no-repeat;
+  }
+
+  .profile-city-outer-mark--top-left { top: -3px; left: -3px; }
+  .profile-city-outer-mark--top-right { top: -3px; right: -3px; }
+  .profile-city-outer-mark--bottom-left { bottom: -3px; left: -3px; }
+  .profile-city-outer-mark--bottom-right { bottom: -3px; right: -3px; }
+
+  .terminal-portfolio #introduction .profile-aside .intro-facts {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: 14px;
+  }
+}
+
+/* Short landscape screens (landscape phones / compact split windows) */
+@media (min-aspect-ratio: 3/2) and (max-height: 650px) {
+  .profile-spread {
+    grid-template: minmax(0, 1fr) / minmax(0, 0.9fr) minmax(0, 1.1fr);
+    column-gap: clamp(18px, 4vw, 56px);
+  }
+
+  .profile-heading {
+    grid-area: 1 / 1;
+    align-self: center;
+  }
+
+  .profile-itinerary {
+    grid-area: 1 / 2;
+    justify-self: end;
+  }
+}
+
+@media print {
+  .profile-city-frame {
+    display: none;
+  }
+
+  .profile-itinerary {
+    height: auto;
+    container-type: normal;
+  }
+
+  .profile-spread {
+    display: contents;
+  }
+
+  .profile-city-name {
+    font-size: 16pt;
+    padding-left: 0;
+  }
+
+  .profile-city-name::after {
+    display: none;
+  }
+}

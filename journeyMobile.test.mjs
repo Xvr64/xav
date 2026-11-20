@@ -157,7 +157,7 @@ function globe({ staleReads = false, coarse = true, ascii = false } = {}) {
   };
 }
 
-test('production controller + Globe: single mobile swipe paints all seven cities and releases', () => {
+test('production controller + Globe: single mobile swipe paints all eight cities and releases', () => {
   const b = globe();
   try {
     assert.equal(b.hint, true);
@@ -165,7 +165,7 @@ test('production controller + Globe: single mobile swipe paints all seven cities
     assert.equal(b.hint, false);
     assert.equal(b.controller.snapshot().ownership, 'playing');
     b.advance(13000);
-    assert.deepEqual(b.cities, ['doha', 'paris', 'jakarta', 'moscow', 'singapore', 'pau', 'shanghai']);
+    assert.deepEqual(b.cities, ['doha', 'paris', 'jakarta', 'moscow', 'singapore', 'pau', 'bordeaux', 'shanghai']);
     for (const loc of CV_DATA.locations) assert.ok(b.paintedLabels.has(loc.city.toUpperCase()), loc.city);
     assert.ok(b.blits > 300);
     assert.equal(b.p, 1);
@@ -221,7 +221,7 @@ test('production Globe: mobile reverse/resume keeps position continuous and retu
     b.swipe(100); assert.equal(b.p, reversed);
     b.advance(13000); assert.equal(b.p, 1);
     b.swipe(-100); b.advance(13000);
-    assert.deepEqual(b.cities.slice(-7), ['shanghai', 'pau', 'singapore', 'moscow', 'jakarta', 'paris', 'doha']);
+    assert.deepEqual(b.cities.slice(-8), ['shanghai', 'bordeaux', 'pau', 'singapore', 'moscow', 'jakarta', 'paris', 'doha']);
     assert.equal(b.hint, true);
     b.swipe(-100);
     assert.equal(b.controller.snapshot().ownership, 'document');

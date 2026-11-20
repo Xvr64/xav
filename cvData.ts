@@ -84,7 +84,7 @@ export const CV_DATA = {
   linkedin: 'https://www.linkedin.com/in/xavierhry/',
   linkedinDisplay: 'linkedin.com/in/xavierhry',
   heroIntroConcise:
-    'Like the whale migrating across oceans without borders, my journey has been shaped by constant movement, living across Doha, Paris, Jakarta, Moscow, Singapore, Pau, Bordeaux, and Shanghai.',
+    'Like the whale migrating across oceans without borders, my journey has been shaped by constant movement.',
   heroIntroSecondary:
     'Navigating shifting currents from one culture to the next forged natural adaptability and cross-cultural communication. Today, I am a third-year International Business student at ESSCA.',
   verbatimProfile:
@@ -206,8 +206,20 @@ export const CV_DATA = {
       documentedInstitution: 'Lycée Saint-Cricq, Pau (2023–2024)'
     },
     {
-      id: 'shanghai',
+      id: 'bordeaux',
       index: '07',
+      city: 'Bordeaux',
+      country: 'France',
+      period: '2024–2026',
+      region: 'France · Europe',
+      coordinates: '44.8378° N, 0.5792° W',
+      lat: 44.8378,
+      lon: -0.5792,
+      cvContext: 'Lived in Bordeaux, France from 2024 to 2026.'
+    },
+    {
+      id: 'shanghai',
+      index: '08',
       city: 'Shanghai',
       country: 'China',
       period: '2026',

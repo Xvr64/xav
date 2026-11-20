@@ -86,7 +86,7 @@ export const globeFrame = (W: number, H: number) => {
   };
 };
 
-/** Canvas label placement per city (keeps Paris/Pau and Singapore/Jakarta apart) */
+/** Canvas label placement keeps nearby cities readable. */
 export const JOURNEY_LABEL_OFFSETS: Record<string, { dx: number; dy: number; align: CanvasTextAlign }> = {
   doha: { dx: 13, dy: 17, align: 'left' },
   paris: { dx: 13, dy: -11, align: 'left' },
@@ -94,6 +94,7 @@ export const JOURNEY_LABEL_OFFSETS: Record<string, { dx: number; dy: number; ali
   moscow: { dx: 13, dy: -11, align: 'left' },
   singapore: { dx: -13, dy: -11, align: 'right' },
   pau: { dx: -13, dy: 17, align: 'right' },
+  bordeaux: { dx: -13, dy: -11, align: 'right' },
   shanghai: { dx: 13, dy: -11, align: 'left' }
 };
 
@@ -636,7 +637,7 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
         : null;
     if (globeIo) globeIo.observe(runway || stage);
 
-    // Choreography knots for the 7 cities and final release. Knot 0 is Doha at g0,
+    // Choreography knots for each city and the final release. Knot 0 is Doha at g0,
     // where the globe rests and waits for the visitor to explore.
     const cinematicStops = (): CinematicStops | null => {
       const g0 = globeScrollGeometry.start;
@@ -782,7 +783,7 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
         }}
       />
 
-      {/* Current destination — all 7 captions pre-mounted in a grid stack (zero DOM childList mutations on city change) */}
+      {/* Current destination — captions pre-mounted in a grid stack (zero DOM childList mutations on city change) */}
       <div
         ref={captionRef}
         className="globe-caption grid items-center absolute left-0 right-0 bottom-24 md:right-auto md:bottom-auto md:top-1/2 md:-translate-y-1/2 md:w-[min(30vw,460px)]"

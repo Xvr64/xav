@@ -5,13 +5,13 @@ export interface ConstellationGlyph { x: number; y: number; glyph: string; light
  * Cached on resize; the arrival's existing lattice, quiet mask, fade and scheduler own drawing.
  */
 export function buildCityConstellation(w: number, h: number): ConstellationGlyph[] {
-  const positions = [[0, 0.62], [0.18, 0.2], [0.36, 0.72], [0.49, 0], [0.65, 0.51], [0.78, 0.29], [1, 0.42]];
+  const positions = [[0, 0.62], [0.18, 0.2], [0.36, 0.72], [0.49, 0], [0.65, 0.51], [0.78, 0.29], [0.89, 0.61], [1, 0.42]];
   const narrow = w / h < 0.9;
   const left = w * (narrow ? 0.3 : 0.58), top = h * (narrow ? 0.09 : 0.12);
   const width = w * (narrow ? 0.58 : 0.32), height = Math.min(h * 0.14, w * 0.2);
   const stars = CV_DATA.locations.map((city, i) => ({
     x: left + positions[i][0] * width, y: top + positions[i][1] * height,
-    glyph: i === 0 || i === 6 ? '*' : '+', light: 0.36, city: city.city
+    glyph: i === 0 || i === CV_DATA.locations.length - 1 ? '*' : '+', light: 0.36, city: city.city
   }));
   const glyphs: ConstellationGlyph[] = [];
   for (let i = 1; i < stars.length; i++) {
