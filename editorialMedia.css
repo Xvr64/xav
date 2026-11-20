@@ -1,0 +1,182 @@
+/* One aperture for the proof, still, footage and a masked ASCII overlay.
+   A future player can change --ascii-mask independently of chapter navigation. */
+.editorial-media {
+  --aperture: 2 / 1;
+  margin: 0;
+  min-width: 0;
+  color: var(--ink-171717, #171717);
+}
+.media-aperture {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  width: 100%;
+  aspect-ratio: var(--aperture);
+  border: 1px solid color-mix(in srgb, currentColor 37%, transparent);
+}
+.media-original, .media-original > :is(img, video, canvas), .media-ascii, .media-ascii > canvas,
+.media-proof, .media-contours {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.media-ascii { pointer-events: none; mask-image: var(--ascii-mask, none); }
+.media-proof {
+  overflow: hidden;
+  pointer-events: none;
+  background: linear-gradient(148deg, rgb(7 15 47 / .37), transparent 74%),
+              linear-gradient(22deg, rgb(4 13 34 / .32), rgb(162 191 209 / .10));
+}
+/* Cropped sounding contours. Each proof takes a different cross-section through
+   the same field. These are static printing marks, with open water between them. */
+.media-contours {
+  --pitch: 9px;
+  --origin: 78% 148%;
+  --radius: 75% 100%;
+  background: repeating-radial-gradient(ellipse var(--radius) at var(--origin),
+    transparent 0 calc(var(--pitch) - 1px), currentColor calc(var(--pitch) - .55px), transparent var(--pitch));
+  opacity: .46;
+  mask-image: linear-gradient(var(--fade, 108deg), transparent 6%, #0009 43%, #000 82%);
+}
+.media-status {
+  position: absolute;
+  left: clamp(12px, 1.6vw, 23px);
+  top: clamp(12px, 1.4vw, 20px);
+  display: inline-flex;
+  align-items: center;
+  gap: .75em;
+  font: 400 12px/1.3 var(--font-mono);
+  letter-spacing: .14em;
+  text-shadow: 0 0 4px var(--ocean-background);
+}
+.media-status::before { content: ''; width: 1.65em; height: 1px; background: currentColor; }
+.media-city-proof {
+  position: absolute;
+  inset: auto 0 0;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 8% clamp(16px, 2.2vw, 32px) clamp(14px, 1.7vw, 24px);
+  background: linear-gradient(transparent, rgb(5 15 43 / .48));
+}
+.media-city-proof span {
+  font: italic var(--display-weight) clamp(30px, 3.8vw, 58px)/.95 var(--font-display);
+  letter-spacing: var(--tracking-display);
+}
+.media-city-proof small { font: 12px/1 var(--font-mono); letter-spacing: .09em; }
+.editorial-media figcaption { margin-top: 12px; }
+.media-itinerary {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font: 400 12px/1.5 var(--font-mono);
+  color: var(--ink-52595E, #52595e);
+}
+.media-itinerary li { display: flex; align-items: center; flex: 1 1 auto; gap: inherit; }
+.media-itinerary li:last-child { flex: none; }
+.media-itinerary li:not(:last-child)::after {
+  content: '';
+  flex: 1;
+  min-width: 3px;
+  height: 1px;
+  background: currentColor;
+  opacity: .36;
+}
+
+/* Keep the lists as direct chapter children: the existing cipher measures them. */
+.terminal-portfolio .cv-arch > :is(#experience, #education, #interests) {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: clamp(20px, 2.5vw, 38px) var(--gutter);
+  align-content: center;
+  justify-content: stretch;
+}
+.cv-arch :is(#experience, #education, #interests) .section-head {
+  display: block;
+  padding: 0;
+}
+.terminal-portfolio #introduction { row-gap: clamp(20px, 2.2vw, 34px); align-items: start; }
+#introduction .intro-kicker { align-self: baseline; }
+#introduction .lead { grid-column: b / end; align-self: baseline; max-width: 26em; }
+.editorial-media--profile {
+  --aperture: 2.35 / 1;
+  grid-column: a / c;
+  grid-row: 2 / span 2;
+  align-self: center;
+}
+#introduction .intro-support { grid-column: c / end; grid-row: 2; }
+#introduction .intro-facts { grid-column: c / end; grid-row: 3; }
+.editorial-media--profile .media-contours {
+  --origin: 78% 173%; --radius: 66% 125%; --pitch: 13px;
+  transform: skewY(-7deg) scale(1.25);
+}
+
+#experience > :first-child { grid-area: 1 / 1 / 2 / 7; align-self: end; }
+#experience .station-list { grid-area: 2 / 1 / 3 / -1; padding-top: 0; }
+#experience .station-list > * + * { margin-top: clamp(32px, 4vw, 64px); }
+#experience .station { padding-top: var(--space-m); }
+.editorial-media--experience { --aperture: 2.6 / 1; grid-area: 1 / 8 / 2 / -1; }
+.editorial-media--experience .media-contours { --origin: 134% -250%; --radius: 85% 150%; --pitch: 12px; }
+
+#education > :first-child { grid-area: 1 / 1 / 2 / 9; }
+#education .edu-list { grid-area: 2 / 1 / 3 / 9; }
+#education .edu-entry { grid-template-columns: minmax(7em, .85fr) minmax(0, 2.2fr) minmax(0, 1.25fr); }
+#education .edu-when, #education .edu-body, #education .edu-where { grid-column: auto; }
+#education .edu-tier-label { padding-left: 0; margin: var(--space-l) 0 var(--space-s); }
+#education .edu-entry--school::before { left: 0; }
+.editorial-media--education { --aperture: 3 / 4; grid-area: 1 / 10 / 3 / -1; align-self: end; }
+.editorial-media--education .media-contours { --origin: 182% 96%; --radius: 30% 100%; --pitch: 8px; --fade: 150deg; }
+
+#interests > :first-child { grid-area: 1 / 1 / 2 / 8; }
+#interests .interest-list { grid-area: 2 / 8 / 3 / -1; align-self: center; }
+#interests .interest { display: block; }
+#interests .interest-label { margin-bottom: var(--space-xs); }
+#interests .interest-list > * + * { margin-top: var(--space-m); }
+.editorial-media--interests { --aperture: 4 / 3; grid-area: 2 / 1 / 3 / 7; align-self: start; }
+.editorial-media--interests .media-contours { --origin: 94% 98%; --radius: 86% 112%; --pitch: 11px; }
+
+@media (min-width: 768px) and (max-width: 1000px) {
+  #introduction .lead { grid-column: b / end; }
+  .editorial-media--profile { grid-column: 1 / 8; --aperture: 1.6; }
+  #introduction :is(.intro-support, .intro-facts) { grid-column: 8 / end; }
+  #education .edu-entry { grid-template-columns: 6em minmax(0, 1fr); gap: 4px 14px; }
+  #education .edu-where { grid-column: 2; }
+  .editorial-media--education { grid-column: 9 / -1; align-self: center; }
+}
+@media (max-width: 1000px) {
+  .media-itinerary { flex-wrap: wrap; gap: 2px 8px; }
+  .media-itinerary li { flex: none; }
+  .media-itinerary li:not(:last-child)::after { width: 8px; }
+}
+@media (max-width: 767px) {
+  .terminal-portfolio .cv-arch > :is(#experience, #education, #interests) {
+    grid-template-columns: minmax(0, 1fr);
+    grid-auto-flow: row;
+    gap: var(--space-m);
+  }
+  .terminal-portfolio .cv-arch > :is(#experience, #education, #interests) > * {
+    grid-area: auto;
+  }
+  .editorial-media--profile { --aperture: 1.95; }
+  .editorial-media--experience { --aperture: 2.6; width: 84%; justify-self: end; }
+  #education .edu-entry { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  .editorial-media--education { width: 42%; justify-self: end; max-width: 190px; }
+  .editorial-media--interests { --aperture: 1.55; }
+  /* The portrait shares the opening spread with the title, leaving the
+     degree and four school rows together in one uninterrupted reading column. */
+  .terminal-portfolio .cv-arch > #education { grid-template-columns: minmax(0, 1fr) 36%; }
+  .terminal-portfolio .cv-arch > #education > :first-child { grid-area: 1 / 1; align-self: end; }
+  .terminal-portfolio .cv-arch > #education > .editorial-media { grid-area: 1 / 2; width: 100%; }
+  .terminal-portfolio .cv-arch > #education > .edu-list { grid-area: 2 / 1 / 3 / -1; }
+  .editorial-media--education .media-status::before { display: none; }
+}
+@media (max-width: 359px) {
+  .editorial-media--education .media-status { left: 8px; letter-spacing: .055em; }
+  .terminal-portfolio #contact .contact-address { font-size: 31px; }
+}
+@media print { .editorial-media { display: none; } }

@@ -31,6 +31,7 @@ import {
 } from './OceanEntry';
 import { magneticCV } from './magneticCVState';
 import { mountMagneticCV } from './magneticCV';
+import { EditorialMedia } from './EditorialMedia';
 import './magneticCV.css';
 import { GLOBAL_PORTFOLIO_CSS } from './portfolioStyles';
 
@@ -144,6 +145,7 @@ const Education = () => (
         </RevealBlock>
       ))}
     </div>
+    <EditorialMedia study="education" />
   </section>
 );
 
@@ -332,6 +334,7 @@ export default function App() {
                 </RevealBlock>
               ))}
             </div>
+            <EditorialMedia study="experience" />
           </section>
 
           {magneticCV ? <><Education /><Skills /></> : <><Skills /><Education /></>}
@@ -384,6 +387,7 @@ export default function App() {
                 </RevealBlock>
               ))}
             </div>
+            <EditorialMedia study="interests" />
           </section>
 
           {/* SECTION 08: CONTACT & DOSSIER (Direct Correspondence Suite) */}

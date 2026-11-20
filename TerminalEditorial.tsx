@@ -4,8 +4,6 @@ import { magneticCV, passage, easedPhase, chapterBounds, MAGNETIC_CHAPTERS } fro
 import { entryEndFor } from './terminalMotion';
 import { advanceEncryptedLine, encryptedEntryProgress, encryptedCharacterState, ENCRYPTED_CHARSET, ENCRYPTED_ENTRY_END, type EncryptedLineState } from './encryptedMotion';
 import { creation, HERO_TEXT_AT } from './creationTimeline';
-import { oceanWake } from './oceanWake';
-import { textPressureAt } from './whaleTextPressure';
 import { EncryptedText } from './components/ui/encrypted-text';
 import {
   disableDecodeSound, disposeDecodeSound, enableDecodeSound, noteDecodeActivity,
@@ -269,12 +267,10 @@ export function useEditorialScroll() {
         const lock = magneticCV
           ? (line.voice === 'title' ? p ** 0.92 : line.voice === 'sub' ? p ** 0.96 : p)
           : (line.voice === 'title' ? 1 - (1 - p) ** 1.7 : line.voice === 'sub' ? 1 - (1 - p) ** 1.35 : p);
-        const pressure = textPressureAt(word.centerX, line.top - y, oceanWake);
-        const ripple = pressure * 3 * Math.sin(2 * Math.PI * (p - word.offset / line.count));
         const lift = magneticCV
           ? (line.voice === 'title' ? 14 : line.voice === 'sub' ? 7 : line.voice === 'meta' ? 1.5 : 4.5)
           : (line.voice === 'title' ? 4 : line.voice === 'meta' ? 0 : 1);
-        word.visual.style.setProperty('--decode-lift', `${((lift + ripple) * (1 - p)).toFixed(1)}px`);
+        word.visual.style.setProperty('--decode-lift', `${(lift * (1 - p)).toFixed(1)}px`);
         const ticks = magneticCV
           ? (line.voice === 'meta' ? 6 : line.voice === 'title' ? 42 : 28)
           : (line.voice === 'meta' ? 6 : 32);

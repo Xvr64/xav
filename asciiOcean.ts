@@ -576,9 +576,9 @@ void main() {
 /** What one wake step keeps and takes (WAKE_STEP's uKeep and uTake), at WAKE_HZ. */
 const WAKE_KEEP = { flow: 0.955, churn: 0.97, drift: 2.3, spread: 0.08, take: 0.14 };
 /**
- * Sparse strokes in moved water only. The screen pass bends the local lattice by up to 1.8 rows.
+ * Carry the tonal water current with the whale's passage without creating wake glyphs.
  */
-const WAKE_SHOW = { carry: 3.4, density: 0.48, ink: 1.6, lift: 0 };
+const WAKE_SHOW = { carry: 3.4, density: 0, ink: 0, lift: 0 };
 /**
  * The lines of moving water (livingCells' uFlow and uFlowShow). A phone's screen is a quarter as
  * wide, so its lines are shorter and a little closer, or one line would span the screen and
