@@ -18,7 +18,11 @@
   revert or clean them.
 
 ## Build and test
-- `npx tsc --noEmit` and `node --test` (run from the worktree root).
+- `npx tsc --noEmit` and `node --test` (run from the worktree root). `node --test` skips `.claude/`:
+  Ocean Team tooling is tested with `node --test ".claude/ocean-team/*.test.mjs"` and
+  `node .claude/hooks/protect-main.mjs --self-test`.
+- Ocean Team missions verify their work with `node .claude/ocean-team/loop.mjs` (units, checks,
+  bounded retries; see the playbook). Verified lessons from past missions: `.claude/ocean-team/lessons.md`.
 - Build checks: `npx vite build --outDir /tmp/portfolio-guardian/<id>/dist --emptyOutDir`. Do not
   rebuild the tracked `dist/`; Cloudflare builds it.
 - Headless harness: `node dev/phase2.mjs shots|whales|verify|perf` and

@@ -63,3 +63,6 @@ When you are a teammate (you have `SendMessage` and the task tools):
 - Claim and complete your tasks in the shared task list; mark them completed when done.
 - Finish with one message to the lead: the final proposal, what changed after the discussion, and
   who disagreed about what. You never implement; `ocean-implementer` does, on the mission branch.
+- When a unit has a visual criterion reviewed `by: "director"`, judge the exact frames the lead
+  names (before/after paths), say whether each was live or a still frame, and give a pass or fail
+  with the frame that decides it. Visual judgement is recorded as judgement, never as a measurement.

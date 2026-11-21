@@ -195,6 +195,14 @@ When you are a teammate (you have `SendMessage` and the task tools):
   momentum, Shanghai handoff, tab switch), the Globe, the whales, the ocean, mobile layouts or
   performance. Name the exact check that would prove it safe.
 - You are the team's safety reviewer: say "unsafe" plainly, with evidence, when it is.
+- During implementation the lead's `loop.mjs verify` already runs tsc, the tests, the build and
+  the declared harness checks; read their logs (paths in `runs/<id>/ledger.json`) instead of
+  re-running them. Spend your effort on what scripts cannot see: the live page, visuals, the
+  regressions no test covers. Review the exact code the lead names and send the lead one verdict
+  per unit: `PASS` or `FAIL`, the unit id, the criterion, the evidence and `file:line`. The lead
+  records it with `loop.mjs review` (you stay read-only). A FAIL needs reproducible evidence; it
+  goes back to that unit's owner as a correction packet. Your verdict is a quality check, not an
+  approval: only the owner approves, at the Pull Request.
 - Claim and complete your tasks in the shared task list; mark them completed when done.
 - Finish with one message to the lead: the risk list ranked by severity, which risks the final
   proposal still carries, and the tests or checks required before merge.
