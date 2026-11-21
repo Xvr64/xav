@@ -665,7 +665,20 @@ body {
   transition: border-color 160ms ease;
 }
 .text-control:hover { border-color: currentColor; }
-.text-control--bare { padding-inline: 0; border-color: transparent; }
+.text-control--bare {
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 4px;
+  text-decoration-color: var(--rule-20, rgba(23, 23, 23, 0.3));
+  transition: text-decoration-color 160ms ease, color 160ms ease;
+}
+.text-control--bare:hover {
+  border-color: transparent;
+  text-decoration-color: currentColor;
+}
 
 /* ---------------------------------------------------------------------------
    Links & focus
@@ -817,7 +830,8 @@ body {
   line-height: var(--leading-meta);
   letter-spacing: var(--tracking-mono);
   color: var(--ink-52595E, var(--ink-muted));
-  opacity: 0.7;
+  /* Resting opacity >= 0.82 keeps 13px mono >= 4.5:1 WCAG AA over deep #172264 water. */
+  opacity: 0.82;
   cursor: pointer;
   transition: opacity 0.2s ease;
 }

@@ -16,7 +16,7 @@ export const READING_WHALE_ALPHA = [1, 0.5, 0.16];
  * eases down with the water's darkness (`ink`, 0 surface .. 1 abyss) for as long as a composed
  * stretch holds them (`weight`), and is whole again in open water. 0 restores the old look.
  */
-export const DEEP_READING_RECESSION = 0.22;
+export const DEEP_READING_RECESSION = 0.28;
 export const whaleStrength = (weight: number, ink: number): number =>
   1 - (0.06 + DEEP_READING_RECESSION * Math.max(0, Math.min(1, ink))) * Math.max(0, Math.min(1, weight));
 

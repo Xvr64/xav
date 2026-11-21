@@ -219,7 +219,7 @@ export function mountAmbientWhales(host: HTMLElement): () => void {
     // Deep ocean blue on light water, a pale sea-glass on the abyss. Nothing masks or fills behind them: the glyphs are the whale.
     const near = WHALE_LOOK.ink, far = WHALE_LOOK.inkFar;
     ascii.setStyle({ opacity: presence * whaleStrength(composition.weight, ink) * (creation.active ? easeRange(creation.time, WHALES_ARRIVE_AT, WHALES_ARRIVE_AT + WHALE_FADE_SPAN) : 1), gamma: WHALE_LOOK.gamma, tone: WHALE_LOOK.tone, contrast: WHALE_LOOK.contrast, farFade: WHALE_LOOK.farFade, invert: ink > 0.5,
-      ink: [mix(near[0], 196, ink), mix(near[1], 218, ink), mix(near[2], 228, ink)], inkFar: [mix(far[0], 132, ink), mix(far[1], 168, ink), mix(far[2], 182, ink)] });
+      ink: [mix(near[0], 154, ink), mix(near[1], 188, ink), mix(near[2], 212, ink)], inkFar: [mix(far[0], 96, ink), mix(far[1], 134, ink), mix(far[2], 166, ink)] });
     if (debugAngles) {
       const d = debugAngles;
       const qy = new THREE.Quaternion().setFromEuler(new THREE.Euler(d.pitch, d.yaw, d.roll, 'YXZ'));

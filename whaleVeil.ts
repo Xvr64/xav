@@ -27,7 +27,7 @@ export interface VeilRect {
 
 /** What survives right behind copy: the body's tone cells, and the line work that holds the form. */
 export const VEIL_KEEP_TONE = 0.1;
-export const VEIL_KEEP_LINE = 0.34;
+export const VEIL_KEEP_LINE = 0.22;
 /** Clear water kept around each line box (CSS px), before the feather. */
 export const VEIL_PAD_X = 16;
 export const VEIL_PAD_Y = 9;
@@ -40,30 +40,112 @@ const BLUR_Y = 1;
  * field off and leave the tight veil exactly as it was). The contour is untouched up to that
  * value and only softens above it, right behind a line (the composite pass, whale3dRenderer.ts).
  */
-export const FIELD_DEPTH = 0.64;
+export const FIELD_DEPTH = 0.74;
 /** How far the field reaches past the copy (CSS px, half-widths of its two box feathers). */
 export const FIELD_REACH_X = 66;
 export const FIELD_REACH_Y = 44;
 /** Gain before the clamp: rows of a list a line apart still add up to one unbroken field. */
 const FIELD_GAIN = 3.3;
 
-/** One box blur along rows (step 1) or columns (step cols), by running sums; edge taps are left
- * out of the mean, so copy at a screen edge keeps its full value. */
-function boxBlur(src: Float32Array, dst: Float32Array, cols: number, rows: number, radius: number, alongRows: boolean): void {
-  const lines = alongRows ? rows : cols;
-  const length = alongRows ? cols : rows;
-  const step = alongRows ? 1 : cols;
-  for (let l = 0; l < lines; l++) {
-    const start = alongRows ? l * cols : l;
+/** Horizontal box blur by running sums; edge taps are left out of the mean. */
+function boxBlurX(src: Float32Array, dst: Float32Array, cols: number, rows: number, radius: number): void {
+  const span = 2 * radius + 1;
+  if (cols < span) {
+    for (let y = 0; y < rows; y++) {
+      const row = y * cols;
+      let sum = 0;
+      let taps = 0;
+      for (let k = 0; k <= radius && k < cols; k++) { sum += src[row + k]; taps++; }
+      for (let x = 0; x < cols; x++) {
+        dst[row + x] = sum / taps;
+        const enter = x + radius + 1;
+        const leave = x - radius;
+        if (enter < cols) { sum += src[row + enter]; taps++; }
+        if (leave >= 0) { sum -= src[row + leave]; taps--; }
+      }
+    }
+    return;
+  }
+  const invSpan = 1 / span;
+  const midEnd = cols - radius - 1;
+  for (let y = 0; y < rows; y++) {
+    const row = y * cols;
     let sum = 0;
-    let taps = 0;
-    for (let k = 0; k <= radius && k < length; k++) { sum += src[start + k * step]; taps++; }
-    for (let i = 0; i < length; i++) {
-      dst[start + i * step] = sum / taps;
-      const enter = i + radius + 1;
-      const leave = i - radius;
-      if (enter < length) { sum += src[start + enter * step]; taps++; }
-      if (leave >= 0) { sum -= src[start + leave * step]; taps--; }
+    for (let k = 0; k <= radius; k++) sum += src[row + k];
+    let taps = radius + 1;
+    for (let x = 0; x < radius; x++) {
+      dst[row + x] = sum / taps;
+      sum += src[row + x + radius + 1];
+      taps++;
+    }
+    for (let x = radius; x < midEnd; x++) {
+      dst[row + x] = sum * invSpan;
+      sum += src[row + x + radius + 1] - src[row + x - radius];
+    }
+    taps = span;
+    for (let x = midEnd; x < cols; x++) {
+      dst[row + x] = sum / taps;
+      sum -= src[row + x - radius];
+      taps--;
+    }
+  }
+}
+
+/** Vertical box blur by running sums; edge taps are left out of the mean. */
+function boxBlurY(src: Float32Array, dst: Float32Array, cols: number, rows: number, radius: number): void {
+  if (radius === 1 && rows >= 2) {
+    for (let x = 0; x < cols; x++) dst[x] = (src[x] + src[x + cols]) * 0.5;
+    const inv3 = 1 / 3;
+    for (let y = 1; y < rows - 1; y++) {
+      const prev = (y - 1) * cols;
+      const cur = y * cols;
+      const next = (y + 1) * cols;
+      for (let x = 0; x < cols; x++) dst[cur + x] = (src[prev + x] + src[cur + x] + src[next + x]) * inv3;
+    }
+    const prev = (rows - 2) * cols;
+    const cur = (rows - 1) * cols;
+    for (let x = 0; x < cols; x++) dst[cur + x] = (src[prev + x] + src[cur + x]) * 0.5;
+    return;
+  }
+  const span = 2 * radius + 1;
+  if (rows < span) {
+    for (let x = 0; x < cols; x++) {
+      let sum = 0;
+      let taps = 0;
+      for (let k = 0; k <= radius && k < rows; k++) { sum += src[x + k * cols]; taps++; }
+      for (let y = 0; y < rows; y++) {
+        dst[x + y * cols] = sum / taps;
+        const enter = y + radius + 1;
+        const leave = y - radius;
+        if (enter < rows) { sum += src[x + enter * cols]; taps++; }
+        if (leave >= 0) { sum -= src[x + leave * cols]; taps--; }
+      }
+    }
+    return;
+  }
+  const invSpan = 1 / span;
+  const midEnd = rows - radius - 1;
+  const enterOff = (radius + 1) * cols;
+  const leaveOff = radius * cols;
+  for (let x = 0; x < cols; x++) {
+    let sum = 0;
+    for (let k = 0, p = x; k <= radius; k++, p += cols) sum += src[p];
+    let idx = x;
+    let taps = radius + 1;
+    for (let y = 0; y < radius; y++, idx += cols) {
+      dst[idx] = sum / taps;
+      sum += src[idx + enterOff];
+      taps++;
+    }
+    for (let y = radius; y < midEnd; y++, idx += cols) {
+      dst[idx] = sum * invSpan;
+      sum += src[idx + enterOff] - src[idx - leaveOff];
+    }
+    taps = span;
+    for (let y = midEnd; y < rows; y++, idx += cols) {
+      dst[idx] = sum / taps;
+      sum -= src[idx - leaveOff];
+      taps--;
     }
   }
 }
@@ -109,8 +191,8 @@ export function rasterizeVeil(
   if (!any) { out.fill(0); return; }
   // Separable box feather: along the rows into b, then down the columns back into a.
   // Taps past the screen edge are left out of the mean, so copy at an edge is veiled in full.
-  boxBlur(a, b, cols, rows, BLUR_X, true);
-  boxBlur(b, a, cols, rows, BLUR_Y, false);
+  boxBlurX(a, b, cols, rows, BLUR_X);
+  boxBlurY(b, a, cols, rows, BLUR_Y);
   if (anyField) {
     // A row of the editorial grid is one line of reading, whatever stands on it (a date on the
     // margin, a name, a place on the annotation line): the water between its columns is part
@@ -125,19 +207,40 @@ export function rasterizeVeil(
     // blurs make a tent, so it has no visible shoulder), lifted so a list's rows join up
     const rx = Math.max(1, Math.round(FIELD_REACH_X / (cellW * 2)));
     const ry = Math.max(1, Math.round(FIELD_REACH_Y / (cellH * 2)));
-    boxBlur(f, g, hc, hr, rx, true);
-    boxBlur(g, f, hc, hr, ry, false);
-    boxBlur(f, g, hc, hr, rx, true);
-    boxBlur(g, f, hc, hr, ry, false);
+    boxBlurX(f, g, hc, hr, rx);
+    boxBlurY(g, f, hc, hr, ry);
+    boxBlurX(f, g, hc, hr, rx);
+    boxBlurY(g, f, hc, hr, ry);
   }
   if (!anyField) {
-    for (let i = 0; i < n; i++) out[i] = Math.round(255 * Math.min(1, a[i]));
+    for (let i = 0; i < n; i++) {
+      const av = a[i];
+      out[i] = ((av >= 1 ? 1 : av) * 255 + 0.5) | 0;
+    }
     return;
   }
+  const hn = hc * hr;
+  for (let k = 0; k < hn; k++) {
+    const v = f[k] * FIELD_GAIN;
+    f[k] = v >= 1 ? FIELD_DEPTH : v * FIELD_DEPTH;
+  }
+  const evenCols = cols & ~1;
   for (let y = 0, i = 0; y < rows; y++) {
     const half = (y >> 1) * hc;
-    for (let x = 0; x < cols; x++, i++) {
-      out[i] = Math.round(255 * Math.max(Math.min(1, a[i]), FIELD_DEPTH * Math.min(1, f[half + (x >> 1)] * FIELD_GAIN)));
+    for (let x = 0, hx = 0; x < evenCols; x += 2, hx++, i += 2) {
+      const fv = f[half + hx];
+      const a0 = a[i];
+      const m0 = a0 > fv ? (a0 >= 1 ? 1 : a0) : fv;
+      out[i] = (m0 * 255 + 0.5) | 0;
+      const a1 = a[i + 1];
+      const m1 = a1 > fv ? (a1 >= 1 ? 1 : a1) : fv;
+      out[i + 1] = (m1 * 255 + 0.5) | 0;
+    }
+    if (cols & 1) {
+      const fv = f[half + (evenCols >> 1)];
+      const av = a[i];
+      const m = av > fv ? (av >= 1 ? 1 : av) : fv;
+      out[i++] = (m * 255 + 0.5) | 0;
     }
   }
 }

@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Eye, Download, X, Check } from 'lucide-react';
+import { Download, X, Check } from 'lucide-react';
 import { AsciiText, useEditorialScroll } from './TerminalEditorial';
 import { mountLanternCursor } from './lanternCursor';
 import { CV_DATA, CV_PDF_URL } from './cvData';
@@ -423,12 +423,10 @@ export default function App() {
                   <BioWords text="English · PDF" />
                 </p>
                 <div className="contact-actions">
-                  <button type="button" onClick={() => setCvModalOpen(true)} className="text-control" aria-haspopup="dialog">
-                    <Eye className="w-4 h-4" aria-hidden="true" />
+                  <button type="button" onClick={() => setCvModalOpen(true)} className="text-control text-control--bare" aria-haspopup="dialog">
                     <AsciiText text="preview" />
                   </button>
-                  <button type="button" onClick={handleDownloadOriginalCv} className="text-control">
-                    <Download className="w-4 h-4" aria-hidden="true" />
+                  <button type="button" onClick={handleDownloadOriginalCv} className="text-control text-control--bare">
                     <AsciiText text="download" />
                   </button>
                 </div>
