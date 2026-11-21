@@ -87,7 +87,7 @@ new. Regressions in areas those reports say were fixed are high-value findings.
   to tie a regression to the commit that introduced it.
 - **Live checks (in-app browser):** `preview_start` with name `portfolio` (port 5174). If that
   port is held by another session's Vite that serves stale CSS, use the `whales-3d` entry
-  (port 5181, same app). Test the viewport matrix used by the project's own validation:
+  (port 5182, same app; 5181 is the owner's Ocean Preview). Test the viewport matrix used by the project's own validation:
   **1440, 1280, 768, 390, 320** wide (`resize_window`; widths under 768 also emulate a touch
   phone, reload after switching). Check the console and failed network requests at each.
   Screenshots from `computer` are evidence you can see; say which viewport and URL each shows.

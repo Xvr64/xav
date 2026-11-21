@@ -36,7 +36,7 @@ edit, build or commit anything.
 # How you work
 
 1. Look before you judge. Use the in-app browser on the local dev server only (`preview_start`
-   name `portfolio`, or `whales-3d` on 5181 if 5174 is stale). Prefer your own tab
+   name `portfolio`, or `whales-3d` on 5182 if 5174 is stale). Prefer your own tab
    (`tabs_create`, then `navigate` with that `tabId`). Check 1440 and 390 wide at least.
    If the pane is hidden, animation frames do not advance; say so instead of judging motion
    from a frozen frame. Files under `/tmp/portfolio-guardian/` (screenshots, `.mp4` walks made

@@ -3,9 +3,14 @@
 ## Git workflow (permanent)
 - **Never modify or commit to `main`.** All work happens on a feature branch in its own worktree.
   `main` changes only when the owner merges a Pull Request; Cloudflare deploys `main`.
-- Ocean Team missions: `npm run ocean -- [id]` creates `.claude/worktrees/ocean-<id>/` on branch
-  `ocean/<id>` (with `node_modules` linked). Run `/ocean-team <mission>` or `/ocean-team continue <id>`
-  from the main checkout; the playbook is `.claude/skills/ocean-team/SKILL.md`.
+- Ocean Team missions have readable names: `npm run ocean -- <name>` (e.g. `scroll-improvements`)
+  creates `.claude/worktrees/ocean-<name>/` on branch `ocean/<name>` (with `node_modules` linked) and
+  makes it the current mission; a unique internal id stays in `runs/<name>/worktree.json`. Run
+  `/ocean-team <mission>` or `/ocean-team continue <name>` from the main checkout; the playbook is
+  `.claude/skills/ocean-team/SKILL.md`. Never rename or move a mission worktree while agents work in it.
+- **Ocean Preview**: the owner types `npm run ocean:preview` in the main checkout to see the active
+  mission at http://localhost:5181 (`.claude/ocean-team/preview.mjs` detects the worktree; `-- <name>`
+  picks one). Port 5181 is reserved for Ocean Preview.
 - Push only the feature branch, open a PR to `main`, and stop. Never merge, force-push or deploy
   without the owner's explicit approval. `.claude/hooks/protect-main.mjs` enforces the main-branch
   rules; `.claude/settings.json` denies force pushes, pushes to main, `gh pr merge` and wrangler deploys.
@@ -19,4 +24,5 @@
 - Headless harness: `node dev/phase2.mjs shots|whales|verify|perf` and
   `node dev/record-magnetic-cv.mjs --pacing`, always with `PHASE2_OUT=/tmp/portfolio-guardian/...`
   (the default output is the tracked `artifacts/`).
-- Dev server for previews: `npx vite --port 5181 --strictPort` (other ports may be stale servers).
+- Dev server for agent previews: `npx vite --port 5182 --strictPort` (5181 is Ocean Preview; other
+  ports may be stale servers).

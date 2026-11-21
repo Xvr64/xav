@@ -2,7 +2,7 @@
 name: ocean-team
 description: Lead the ocean agent team (visual-director, motion-engineer, portfolio-guardian, ocean-implementer) through research, a plan, autonomous implementation in an isolated worktree on a feature branch, independent review, and a Pull Request to main. Use only when the user runs /ocean-team.
 disable-model-invocation: true
-argument-hint: "<mission | continue <id>>"
+argument-hint: "<mission | continue <name>>"
 ---
 
 # Ocean team: Team Lead protocol (autonomous mode)
@@ -15,9 +15,15 @@ the read-only guard hook are archived in `.claude/ocean-team/archive/approval-ga
 
 ## Fixed rules
 
-- **Every mission runs in its own worktree and branch**: `.claude/worktrees/ocean-<id>/` on
-  `ocean/<id>`, created by `npm run ocean -- <id>` (`.claude/ocean-team/new-mission.mjs`). It links
-  `node_modules` and opens `.claude/ocean-team/runs/<id>/` for the plan and reports.
+- **Every mission runs in its own worktree and branch, named readably**: `.claude/worktrees/ocean-<id>/`
+  on `ocean/<id>`, created by `npm run ocean -- <id>` (`.claude/ocean-team/new-mission.mjs`). Here
+  `<id>` is the mission **name**: 2 to 4 kebab-case words chosen from the mission, such as
+  `portfolio-v2` or `scroll-improvements` (the launcher slugifies whatever it is given and keeps a
+  unique internal id in `runs/<id>/worktree.json`). Older missions are named by their date id. It
+  links `node_modules`, opens `.claude/ocean-team/runs/<id>/` for the plan and reports, and makes the
+  mission current for **Ocean Preview** (`npm run ocean:preview`, port 5181, the owner's preview).
+  Agents preview on 5182 (`whales-3d`) or 5174, never 5181. Never rename or move a mission's
+  worktree or branch while agents work in it.
 - **Never modify or commit to `main`.** `.claude/hooks/protect-main.mjs` refuses commits, merges,
   pulls and rebases while on main, pushes that target main, force pushes, `gh pr merge` and
   deploys. The main checkout's uncommitted files belong to the owner and are never touched.
@@ -28,9 +34,10 @@ the read-only guard hook are archived in `.claude/ocean-team/archive/approval-ga
 
 ## Phase 0: set up
 
-1. Mission id: `continue <id>` reuses an existing run (read its `plan.md`, `findings.md`,
-   `team-messages.md` and do not redo finished planning). Otherwise run `npm run ocean` and use the
-   id it prints.
+1. Mission name: `continue <name>` reuses an existing run: run `npm run ocean -- <name>` (it reattaches
+   the worktree if needed and makes it the current mission), then read its `plan.md`, `findings.md`,
+   `team-messages.md` and do not redo finished planning. Otherwise pick a short readable name that is
+   not taken (`npm run ocean -- --list`), run `npm run ocean -- <name>` and use the name it prints.
 2. Record `git status --short` of the main checkout; it must be unchanged at the end.
 3. Baseline in the worktree: `npx tsc --noEmit`, `node --test` (from the worktree root),
    isolated build. Note the numbers in `runs/<id>/report.md`.
@@ -75,6 +82,6 @@ reduced motion and back/forward. Before/after screenshots from the baseline and 
 2. Open the PR to `main` (`gh pr create` if `gh` is installed; otherwise give the owner the
    `https://github.com/<owner>/<repo>/compare/main...ocean/<id>?expand=1` link and the PR text).
 3. Write `runs/<id>/report.md` and tell the owner: summary of changes, test and performance
-   results, before/after screenshots, how to preview (`cd .claude/worktrees/ocean-<id> &&
-   npx vite --port 5181 --strictPort`), and that merging and deploying wait for their approval.
+   results, before/after screenshots, how to preview (`npm run ocean:preview` in the project folder; it opens Ocean
+   Preview at http://localhost:5181), and that merging and deploying wait for their approval.
 4. Shut the teammates down. After the owner merges, `git worktree remove .claude/worktrees/ocean-<id>`.
