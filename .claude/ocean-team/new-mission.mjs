@@ -8,7 +8,7 @@
 //   npm run ocean -- --list                  list mission worktrees
 //
 // Creates .claude/worktrees/ocean-<name>/ on branch ocean/<name>, links node_modules from the main
-// checkout (a directory junction on Windows), opens .claude/ocean-team/runs/<name>/ for the plan and
+// checkout (a directory junction on Windows), opens .ocean/runs/<name>/ for the plan and
 // reports (worktree.json there keeps a unique internal id), and makes it the current mission that
 // `npm run ocean:preview` shows. The main checkout and its uncommitted files are never touched;
 // main itself only changes through a Pull Request the owner merges.

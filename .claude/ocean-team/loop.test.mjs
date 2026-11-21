@@ -87,11 +87,11 @@ function fixture(units) {
   const put = (root, f, s) => { mkdirSync(path.dirname(path.join(root, f)), { recursive: true }); writeFileSync(path.join(root, f), s); };
   g(dir, 'init', '-q', '-b', 'main');
   for (const f of ['a.ts', 'b.ts', 'c.ts', 'magneticCV.ts', 'a.test.mjs', 'b.test.mjs']) put(dir, f, `// ${f}\n`);
-  put(dir, '.gitignore', '.claude/worktrees/\n.claude/ocean-team/runs/\n');
+  put(dir, '.gitignore', '.claude/worktrees/\n.ocean/\n');
   g(dir, 'add', '-A'); g(dir, 'commit', '-q', '-m', 'init');
   g(dir, 'worktree', 'add', '-q', '.claude/worktrees/ocean-t', '-b', 'ocean/t');
   const wt = path.join(dir, '.claude/worktrees/ocean-t');
-  const runs = path.join(dir, '.claude/ocean-team/runs/t');
+  const runs = path.join(dir, '.ocean/runs/t');
   mkdirSync(runs, { recursive: true });
   writeFileSync(path.join(runs, 'worktree.json'), JSON.stringify({ worktree: '.claude/worktrees/ocean-t' }));
   const writeUnits = (u) => writeFileSync(path.join(runs, 'units.json'), JSON.stringify({ units: u }, null, 2));

@@ -31,7 +31,8 @@ the independent QA (`guardian`) and the Team Lead.
 
 # How you work
 
-1. Read the plan (`.claude/ocean-team/runs/<id>/plan.md` in the main checkout) and the code it
+1. Read the plan (`.ocean/runs/<id>/plan.md` in the main checkout; older missions:
+   `.claude/ocean-team/runs/<id>/plan.md`) and the code it
    touches. Keep the aesthetic rules from `visual-director` and the performance rules from
    `motion-engineer` (no per-frame writes to `<html>` custom properties, compositor-only animation
    where possible, one rAF owner per renderer, `document.hidden` handled).

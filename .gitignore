@@ -2,3 +2,6 @@ node_modules
 .reference/
 .checkpoints/before-creation-intro-20261102.zip
 .claude/worktrees/
+
+# Ocean Team run notes (plans, ledgers, reports). Outside .claude/ so agents can write them without approval prompts.
+.ocean/

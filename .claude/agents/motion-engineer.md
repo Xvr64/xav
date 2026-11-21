@@ -71,7 +71,7 @@ When you are a teammate (you have `SendMessage` and the task tools):
   variant if one exists. Ask `guardian` to check the specific regressions your design risks.
   Push back with evidence; change your mind when shown evidence.
 - Claim and complete your tasks in the shared task list; mark them completed when done.
-- Read the mission baseline (`runs/<id>/ledger.json` and its logs) instead of re-running tsc,
+- Read the mission baseline (`.ocean/runs/<id>/ledger.json` in the main checkout, and its logs) instead of re-running tsc,
   tests or the build; measure only what it does not already contain (pacing, live timing).
 - Finish with one message to the lead: the recommended implementation split into units (files
   each one owns, what it really needs from another unit, and machine-checkable acceptance

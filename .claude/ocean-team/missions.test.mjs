@@ -1,7 +1,19 @@
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import test from 'node:test';
-import { newInternalId, parseWorktrees, pickMission, slugify } from './missions.mjs';
+import { mkdirSync, mkdtempSync } from 'node:fs';
+import os from 'node:os';
+import { newInternalId, parseWorktrees, pickMission, runsDir, slugify } from './missions.mjs';
+
+test('run notes live outside .claude/ (a protected path); older missions keep their folder', () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), 'ocean-runs-'));
+  assert.equal(runsDir(root, 'new-one'), path.join(root, '.ocean', 'runs', 'new-one'));
+  assert.ok(!runsDir(root, 'new-one').includes(`${path.sep}.claude${path.sep}`));
+  mkdirSync(path.join(root, '.claude', 'ocean-team', 'runs', 'old-one'), { recursive: true });
+  assert.equal(runsDir(root, 'old-one'), path.join(root, '.claude', 'ocean-team', 'runs', 'old-one'), 'legacy folder is found, not moved');
+  mkdirSync(path.join(root, '.ocean', 'runs', 'old-one'), { recursive: true });
+  assert.equal(runsDir(root, 'old-one'), path.join(root, '.ocean', 'runs', 'old-one'), 'once moved by the owner, the new folder wins');
+});
 
 test('slugify turns free text into readable branch names', () => {
   assert.equal(slugify('Portfolio v2'), 'portfolio-v2');

@@ -39,3 +39,9 @@ Performance rules already in the agent definitions (root restyles, rAF ownership
 - Evidence: mission 2026-11-21-a3451d findings.md "Gate defect": the old ocean-gate denied the write to Claude Code's plan file, so ExitPlanMode saw an empty plan and refused it.
 - Verified: 2026-11-21, the gate was retired (archive/approval-gate-2026-11-21) and plans now present normally.
 - Applies to: .claude/, team
+
+## L-006 Files agents write during a mission live outside `.claude/`
+- Rule: Claude Code asks before every Write/Edit under `.claude/` (except `.claude/worktrees/`), even in acceptEdits, and no allow rule lifts it. Mission notes go in `.ocean/runs/<id>/`; never route around the prompt with shell redirects.
+- Evidence: 2026-11-21 fresh `claude -p` sessions: Write to `.claude/ocean-team/runs/...` refused as "a sensitive file", also with `--allowedTools`; Write and Edit in `.ocean/runs/...` and `.claude/worktrees/...` succeeded. Docs: permission-modes, "Protected paths".
+- Verified: 2026-11-21, reproduced in the project before and after moving the run folder.
+- Applies to: .claude/, team

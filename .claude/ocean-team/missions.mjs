@@ -2,7 +2,7 @@
 // (preview.mjs).
 //
 // A mission has a readable name (`scroll-improvements`) that is its branch (`ocean/<name>`), its
-// worktree (`.claude/worktrees/ocean-<name>/`) and its run folder (`.claude/ocean-team/runs/<name>/`).
+// worktree (`.claude/worktrees/ocean-<name>/`) and its run folder (`.ocean/runs/<name>/`).
 // A unique internal id (`2026-11-21-a3451d`) is still recorded in `runs/<name>/worktree.json`.
 // Missions created before readable names used the internal id as their name; they keep working.
 //
@@ -42,7 +42,17 @@ export function newInternalId(now = new Date()) {
 }
 
 export const stateDir = (root) => path.join(root, '.claude', 'ocean-team', 'state');
-export const runsDir = (root, name) => path.join(root, '.claude', 'ocean-team', 'runs', name);
+/**
+ * A mission's run folder (plan, findings, units, ledger, reports): `.ocean/runs/<name>/`, git-ignored.
+ * It is outside `.claude/` on purpose: Claude Code treats `.claude/` as a protected path, so every
+ * Write/Edit there asks for approval (allow rules cannot pre-approve it), which stalls the lead.
+ * Missions started before the move keep `.claude/ocean-team/runs/<name>/`; it is found here, never moved.
+ */
+export const runsDir = (root, name) => {
+  const current = path.join(root, '.ocean', 'runs', name);
+  const legacy = path.join(root, '.claude', 'ocean-team', 'runs', name);
+  return !existsSync(current) && existsSync(legacy) ? legacy : current;
+};
 
 const readJson = (file) => { try { return JSON.parse(readFileSync(file, 'utf8')); } catch { return null; } };
 
