@@ -50,8 +50,12 @@ async function journeys() {
       assert.equal(state.active, false, `${id} did not finish: ${JSON.stringify(state)}`);
       const seconds = (Date.now() - t0) / 1000;
       await sleep(1200);
-      const hero = await c.evaluate(`({ y: scrollY, scrollable: getComputedStyle(document.documentElement).overflowY, whales: !!document.querySelector('canvas[data-whale-renderer]'), cover: document.querySelector('.cover-title .sr-only').textContent, playback: ${JSON.stringify([...playback])} })`);
-      assert.equal(hero.y, 0, 'the visitor arrives at the top of the cover');
+      const hero = await c.evaluate(`({ y: scrollY, introTop: Math.round(document.querySelector('#introduction').getBoundingClientRect().top + scrollY), scrollable: getComputedStyle(document.documentElement).overflowY, whales: !!document.querySelector('canvas[data-whale-renderer]'), cover: document.querySelector('.cover-title .sr-only').textContent, playback: ${JSON.stringify([...playback])} })`);
+      if (id === 'direct') {
+        assert.ok(hero.y > 0 && Math.abs(hero.y - hero.introTop) < 80, `01 Direct lands straight on Profile (#introduction): y=${hero.y}, introTop=${hero.introTop}`);
+      } else {
+        assert.equal(hero.y, 0, 'the visitor arrives at the top of the cover');
+      }
       await jpg(c, `verify/journey-${id}-hero`);
       pass(`journey ${id} → Hero`, { seconds: Math.round(seconds * 10) / 10, nudged, hero, errors: c.errors });
     } finally { await c.close(); }
@@ -126,13 +130,13 @@ async function mobile() {
     const end = await c.evaluate(`(() => { const s = window.__globeDiagnostics?.at(-1); return { y: Math.round(scrollY), rp: s?.renderedProgress, ownership: s?.ownership, playing: s?.playing }; })()`);
     pass('Globe mobile-emulated touch: Doha → Shanghai → Doha', { forward, after, back, end });
 
-    // After the Globe the page scrolls freely and the corner still holds three controls only
+    // After the Globe the page scrolls freely and the corner holds sound, Index, Contact and CV
     await c.evaluate(`document.querySelector('#education').scrollIntoView()`); await sleep(900);
     const corner = await c.evaluate(`({ controls: [...document.querySelector('.fixed-top-controls').children].map(e => e.className.split(' ')[0]), lock: document.documentElement.dataset.globeScroll || null, gauge: getComputedStyle(document.querySelector('.depth-gauge')).display })`);
-    assert.deepEqual(corner.controls, ['decode-sound-toggle', 'fixed-cv-link', 'fixed-cv-link']);
+    assert.deepEqual(corner.controls, ['decode-sound-toggle', 'mobile-chapters-trigger', 'fixed-cv-link', 'fixed-cv-link']);
     assert.equal(corner.lock, null);
     assert.equal(corner.gauge, 'none', 'no gauge on a phone');
-    pass('Mobile corner: sound, Contact and CV only', { corner, errors: c.errors });
+    pass('Mobile corner: sound, Index, Contact and CV', { corner, errors: c.errors });
   } finally { await c.close(); }
 }
 

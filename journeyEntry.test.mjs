@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { JOURNEYS, RECOMMENDED_JOURNEY, arrival, enterJourney, isGatedKey } from './journeyEntry.ts';
+import { creation } from './creationTimeline.ts';
 
 test('three journeys in order, the passage recommended and the default', () => {
   assert.deepEqual(JOURNEYS.map(j => [j.index, j.id]), [['01', 'direct'], ['02', 'passage'], ['03', 'odyssey']]);
@@ -23,6 +24,17 @@ test('every journey enters the same way: it records the choice, closes the arriv
     assert.equal(arrival.selected, journey.id);
     assert.equal(launches, 1);
   }
+});
+
+test('01 Direct completes creation immediately when creation is active', () => {
+  arrival.open = true;
+  arrival.selected = null;
+  creation.active = true;
+  creation.state = 'PAUSED';
+  enterJourney('direct');
+  assert.equal(creation.active, false);
+  assert.equal(creation.state, 'COMPLETED');
+  assert.equal(creation.reason, 'direct');
 });
 
 test('the gate keeps the opening\'s keys from it, but a journey still answers Enter and Space', () => {

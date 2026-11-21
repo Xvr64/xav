@@ -1,10 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { lanternLook } from './lanternCursor.ts';
+import fs from 'node:fs';
+import { NATIVE_CURSOR_PRESERVED, lanternLook } from './lanternCursor.ts';
 
 const luminance = ([r, g, b]) => 0.2126 * r + 0.7152 * g + 0.0722 * b;
 const saturation = (c) => (Math.max(...c) - Math.min(...c)) / Math.max(1, Math.max(...c));
 const samples = Array.from({ length: 201 }, (_, i) => i / 200);
+
+test('native OS cursor is always preserved and lantern-active is never toggled', () => {
+  assert.equal(NATIVE_CURSOR_PRESERVED, true);
+  const src = fs.readFileSync(new URL('./lanternCursor.ts', import.meta.url), 'utf8');
+  assert.equal(src.includes('lantern-active'), false, 'lanternCursor must never add lantern-active to hide the OS cursor');
+});
 
 test('surface: a quiet slate mark with no light of its own', () => {
   const look = lanternLook(0);

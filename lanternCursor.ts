@@ -83,10 +83,12 @@ export function setLanternDepth(depth: number) {
 
 const INTERACTIVE = 'a[href], button, [role="button"], input, select, textarea, summary, label[for]';
 
+/** Native OS cursor is always preserved; only the sub-text ambient water halo (.lantern-light) is shown. */
+export const NATIVE_CURSOR_PRESERVED = true as const;
+
 /**
- * Mounts the cursor on fine-pointer, hover-capable devices and returns its cleanup. Elsewhere it
- * does nothing and the native cursor stays. The native cursor is only hidden once a real mouse
- * has moved over the page, and comes back as soon as touch or pen input is used.
+ * Mounts the sub-text ambient water halo on fine-pointer, hover-capable devices and returns its cleanup.
+ * The native OS cursor always remains visible and responsive at hardware refresh rate.
  */
 export function mountLanternCursor(): () => void {
   const fine = window.matchMedia('(hover: hover) and (pointer: fine)');
@@ -118,13 +120,14 @@ function start(reduced: MediaQueryList): () => void {
     return el;
   };
 
-  // Halo: under the content. Core, ring and ripple: over everything.
+  // Halo: under the content. The top-layer core/ring overlay is hidden so the native OS cursor leads.
   const light = make('lantern-light', document.body);
   light.setAttribute('aria-hidden', 'true');
   const halo = make('lantern-halo', light);
   make('lantern-halo-glow', halo);
   const cursor = make('lantern', document.body);
   cursor.setAttribute('aria-hidden', 'true');
+  cursor.style.display = 'none';
   const ring = make('lantern-ring', cursor);
   make('lantern-ring-shape', ring);
   const core = make('lantern-core', cursor);
@@ -193,7 +196,6 @@ function start(reduced: MediaQueryList): () => void {
     shown = on;
     cursor.classList.toggle('is-shown', on);
     light.classList.toggle('is-shown', on);
-    root.classList.toggle('lantern-active', on);
   };
 
   const onMove = (e: PointerEvent) => {
@@ -278,7 +280,6 @@ function start(reduced: MediaQueryList): () => void {
     window.removeEventListener('blur', onLeave);
     document.removeEventListener('pointerout', onOut);
     root.removeEventListener('pointerleave', onLeave);
-    root.classList.remove('lantern-active');
     if (applyDepth === paint) applyDepth = null;
     light.remove();
     cursor.remove();

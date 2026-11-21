@@ -6,7 +6,7 @@ import { createDissolve, measureLetters } from './arrivalDissolve';
 import { HANDOFF, endHandoff, handoff, handoffRunning } from './journeyHandoff';
 import { creation, triggerCreationGesture } from './creationTimeline';
 import { charGlyph, isDecodable } from './terminalMotion';
-import { CV_DATA, CV_PDF_URL } from './cvData';
+import { CV_PDF_URL } from './cvData';
 import './journeyArrival.css';
 
 type Phase = 'choosing' | 'leaving' | 'gone';
@@ -18,7 +18,7 @@ const reducedMotion = () => typeof matchMedia !== 'undefined' && matchMedia('(pr
 /** The arrival's faces. On a first visit they are still loading when the page mounts. */
 const ARRIVAL_FACES = ['300 1em Newsreader', 'italic 300 1em Newsreader', '400 1em "IBM Plex Mono"'];
 /** The longest the type waits for its fonts before rising in whatever is there. */
-const FONT_WAIT_MS = 1500;
+const FONT_WAIT_MS = 450;
 const facesLoaded = () => {
   try { return typeof document === 'undefined' || !document.fonts || ARRIVAL_FACES.every(face => document.fonts.check(face)); } catch { return true; }
 };
@@ -76,15 +76,20 @@ export function JourneyArrival() {
   const list = useRef<HTMLOListElement>(null);
   /** Where the page had put focus before the arrival took it: the opening's own controls */
   const returnFocus = useRef<HTMLElement | null>(null);
+  /** Target chapter when leaving directly without the 3D opening ('introduction' for 01 Direct, 'contact' for Contact shortcut). */
+  const directTarget = useRef<'introduction' | 'contact'>('introduction');
   const present = phase !== 'gone';
 
   useEffect(() => {
     if (typeReady) return;
     let settled = false;
     const settle = () => { if (!settled) { settled = true; setTypeReady(true); } };
+    if (facesLoaded()) { settle(); return; }
     Promise.all(ARRIVAL_FACES.map(face => document.fonts.load(face))).then(settle, settle);
+    document.fonts?.ready?.then(settle, settle);
+    const raf = requestAnimationFrame(() => { if (facesLoaded()) settle(); });
     const cap = window.setTimeout(settle, FONT_WAIT_MS);
-    return () => { settled = true; window.clearTimeout(cap); };
+    return () => { settled = true; cancelAnimationFrame(raf); window.clearTimeout(cap); };
   }, [typeReady]);
 
   // Follow the choice, whichever way it was made
@@ -186,14 +191,38 @@ export function JourneyArrival() {
     return () => window.clearTimeout(fallback);
   }, [phase]);
 
-  // Leaving without an opening to enter (reduced motion, no WebGL): the sky dissolves and the veil
-  // lifts onto the page exactly as it was
+  // Leaving without an opening to enter (01 Direct, reduced motion, no WebGL): the sky dissolves and
+  // the veil lifts onto the page. For 01 Direct (or Contact shortcut), land straight on the target chapter in <500ms.
   useEffect(() => {
     if (phase !== 'leaving' || handoffRunning()) return;
     field.current?.leave();
-    const fallback = window.setTimeout(() => setPhase('gone'), 1800);
-    return () => window.clearTimeout(fallback);
-  }, [phase]);
+    let raf = 0;
+    if (chosen === 'direct') {
+      const targetId = directTarget.current;
+      const hash = `#${targetId}`;
+      const land = () => {
+        if (location.hash !== hash) {
+          location.hash = hash;
+        } else {
+          window.dispatchEvent(new HashChangeEvent('hashchange'));
+        }
+        const el = document.getElementById(targetId);
+        if (el) {
+          const top = Math.round(el.getBoundingClientRect().top + window.scrollY);
+          window.scrollTo({ top, behavior: 'instant' as ScrollBehavior });
+          el.setAttribute('tabindex', '-1');
+          el.focus({ preventScroll: true });
+        }
+      };
+      land();
+      raf = requestAnimationFrame(land);
+    }
+    const fallback = window.setTimeout(() => setPhase('gone'), chosen === 'direct' ? 380 : 1800);
+    return () => {
+      if (raf) cancelAnimationFrame(raf);
+      window.clearTimeout(fallback);
+    };
+  }, [phase, chosen]);
 
   if (!present) return null;
   return createPortal(
@@ -206,7 +235,7 @@ export function JourneyArrival() {
       data-keyboard={keyboard ? '' : undefined}
       data-ready={typeReady ? '' : undefined}
       role="dialog"
-      aria-modal="true"
+      aria-modal={phase === 'choosing' ? 'true' : undefined}
       aria-labelledby="journey-title"
       aria-describedby="journey-dek"
       aria-hidden={phase === 'leaving' ? true : undefined}
@@ -217,8 +246,18 @@ export function JourneyArrival() {
       <canvas ref={canvas} className="journey-field" aria-hidden="true" />
       <div ref={stage} className="journey-stage">
         <p ref={masthead} className="journey-masthead">
-          <span>International Business · ESSCA</span>
-          <a className="journey-masthead-cv" href={CV_DATA.emailHref}>Contact</a>
+          <span>International Business <span className="journey-masthead-nowrap">· ESSCA</span></span>
+          <a
+            className="journey-masthead-cv"
+            href="#contact"
+            onClick={event => {
+              event.preventDefault();
+              directTarget.current = 'contact';
+              enterJourney('direct');
+            }}
+          >
+            Contact
+          </a>
           <a className="journey-masthead-cv" href={CV_PDF_URL} target="_blank" rel="noopener noreferrer">
             CV <span aria-hidden="true">↗</span>
             <span className="journey-sr"> (PDF, opens in a new tab)</span>

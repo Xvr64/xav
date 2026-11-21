@@ -98,6 +98,7 @@ html[data-arrival='open'] { overflow: hidden !important; }
   transition: text-decoration-color 160ms;
 }
 .journey-masthead > :first-child { margin-right: auto; }
+.journey-masthead-nowrap { white-space: nowrap; }
 .journey-masthead-cv:hover { text-decoration-color: currentColor; }
 .journey-masthead-cv:focus-visible { outline: 1px solid currentColor; outline-offset: 5px; }
 .journey-sr {
@@ -323,25 +324,23 @@ html[data-arrival='open'] { overflow: hidden !important; }
 .journey[data-active] .journey-arrow { opacity: 1; transform: none; }
 
 /* ---------------------------------------------------------------- arrival and departure */
-.journey-stage > *,
-.journey-item {
+/* The type waits for its faces (JourneyArrival sets data-ready, 450 ms at most): held invisible until
+   ready so it never rises in a fallback serif or stalls mid-animation in headless Chromium. */
+.journey-arrival:not([data-ready]) .journey-stage { opacity: 0; }
+.journey-arrival[data-ready] .journey-stage > *,
+.journey-arrival[data-ready] .journey-item {
   animation: journey-rise 1.1s var(--arrival-ease) both;
 }
-.journey-title { animation-delay: 0.22s; }
-.journey-dek { animation-delay: 0.5s; }
-.journey-list { animation: none; }
-.journey-item:nth-child(1) { animation-delay: 0.62s; }
-.journey-item:nth-child(2) { animation-delay: 0.74s; }
-.journey-item:nth-child(3) { animation-delay: 0.86s; }
+.journey-arrival[data-ready] .journey-title { animation-delay: 0.22s; }
+.journey-arrival[data-ready] .journey-dek { animation-delay: 0.5s; }
+.journey-arrival[data-ready] .journey-list { animation: none; }
+.journey-arrival[data-ready] .journey-item:nth-child(1) { animation-delay: 0.62s; }
+.journey-arrival[data-ready] .journey-item:nth-child(2) { animation-delay: 0.74s; }
+.journey-arrival[data-ready] .journey-item:nth-child(3) { animation-delay: 0.86s; }
 @keyframes journey-rise {
   from { opacity: 0; transform: translateY(14px); }
   to { opacity: 1; transform: none; }
 }
-/* The type waits for its faces (JourneyArrival sets data-ready, 1.5 s at most): held on its first
-   frame, it never rises in a fallback serif that then swaps and reflows. The sky is already there. */
-.journey-arrival:not([data-ready]) .journey-stage { opacity: 0; }
-.journey-arrival:not([data-ready]) .journey-stage > *,
-.journey-arrival:not([data-ready]) .journey-item { animation-play-state: paused; }
 
 .journey-arrival[data-phase='leaving'] {
   pointer-events: none;
@@ -353,6 +352,15 @@ html[data-arrival='open'] { overflow: hidden !important; }
 }
 .journey-arrival[data-phase='leaving'] .journey-item:has(.journey[data-active]) { animation-delay: 0.3s; }
 .journey-arrival[data-phase='leaving'] .journey-list[data-any-active] .journey:not([data-active]) { opacity: 0.62; }
+/* 01 DIRECT ("Straight to the profile.") exits in <500ms and lands directly on #introduction */
+.journey-arrival[data-phase='leaving'][data-chosen='direct'] {
+  animation: journey-arrival-out 0.34s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.journey-arrival[data-phase='leaving'][data-chosen='direct'] .journey-stage > *:not(.journey-list),
+.journey-arrival[data-phase='leaving'][data-chosen='direct'] .journey-item {
+  animation: journey-recede 0.26s cubic-bezier(0.4, 0, 1, 1) both;
+  animation-delay: 0s;
+}
 @keyframes journey-recede {
   from { opacity: 1; transform: none; }
   to { opacity: 0; transform: translateY(-10px); }
@@ -438,4 +446,145 @@ html[data-handoff] .creation-scroll-hint { opacity: 0 !important; }
   .journey::before { transition: none; }
   .journey[data-active] .journey-name,
   .journey[data-active] .journey-line { transform: none; }
+}
+
+/* ============================================================================
+   FIXED CORNER & MOBILE CHAPTER NAVIGATION (<=1100px)
+   Touch targets >=44×44px across all corner controls; zero-chrome Index trigger
+   and translucent abyss chapter overlay when the desktop depth gauge is hidden.
+   ============================================================================ */
+.fixed-top-controls > .decode-sound-toggle,
+.fixed-top-controls > .fixed-cv-link,
+.fixed-top-controls > .mobile-chapters-trigger {
+  min-height: 44px;
+  min-width: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+}
+
+.mobile-chapters-trigger {
+  margin: 0;
+  padding: 0 4px;
+  border: 0;
+  background: none;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.5;
+  letter-spacing: 0.01em;
+  color: var(--ink-secondary);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: color 160ms ease;
+}
+.mobile-chapters-trigger:hover,
+.mobile-chapters-trigger[aria-expanded='true'] {
+  color: var(--ink-primary);
+}
+.mobile-chapters-trigger:focus-visible {
+  outline: 1px solid currentColor;
+  outline-offset: 4px;
+}
+@media (min-width: 1101px) {
+  .mobile-chapters-trigger {
+    display: none !important;
+  }
+}
+
+.mobile-chapters-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1500;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: max(22px, env(safe-area-inset-top)) var(--page-margin, 24px) max(36px, env(safe-area-inset-bottom));
+  background: rgba(1, 5, 14, 0.88);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  color: #e8f0f4;
+  animation: mobile-chapters-in 240ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes mobile-chapters-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.mobile-chapters-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.mobile-chapters-kicker {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  color: rgba(232, 240, 244, 0.58);
+}
+.mobile-chapters-close {
+  min-height: 44px;
+  min-width: 44px;
+  margin: 0;
+  padding: 0 6px;
+  border: 0;
+  background: none;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  letter-spacing: 0.01em;
+  color: rgba(232, 240, 244, 0.78);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.mobile-chapters-close:hover {
+  color: #ffffff;
+}
+.mobile-chapters-close:focus-visible {
+  outline: 1px solid currentColor;
+  outline-offset: 4px;
+}
+.mobile-chapters-list {
+  list-style: none;
+  margin: auto 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.mobile-chapters-link {
+  min-height: 48px;
+  display: flex;
+  align-items: baseline;
+  gap: 18px;
+  padding: 6px 0;
+  text-decoration: none;
+  color: rgba(232, 240, 244, 0.72);
+  font-family: var(--font-display);
+  font-weight: 300;
+  font-variation-settings: 'opsz' 48;
+  font-size: clamp(28px, 7.2vw, 38px);
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  transition: color 160ms ease, transform 220ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.mobile-chapters-link:hover,
+.mobile-chapters-link[aria-current='location'] {
+  color: #ffffff;
+  transform: translateX(6px);
+}
+.mobile-chapters-link:focus-visible {
+  outline: 1px solid currentColor;
+  outline-offset: 4px;
+}
+.mobile-chapters-num {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  color: rgba(150, 214, 204, 0.72);
+  min-width: 28px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .mobile-chapters-overlay { animation: none; }
+  .mobile-chapters-link { transition: none; }
+  .mobile-chapters-link:hover,
+  .mobile-chapters-link[aria-current='location'] { transform: none; }
 }

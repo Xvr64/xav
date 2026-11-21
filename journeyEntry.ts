@@ -1,4 +1,4 @@
-import { INTRO_STORAGE_KEY, JOURNEY_STORAGE_KEY, creation, setCreationJourney, type JourneyId } from './creationTimeline.ts';
+import { INTRO_STORAGE_KEY, JOURNEY_STORAGE_KEY, creation, finishCreation, setCreationJourney, type JourneyId } from './creationTimeline.ts';
 import { beginHandoff } from './journeyHandoff.ts';
 
 /**
@@ -106,9 +106,15 @@ export function enterJourney(id: JourneyId) {
   arrival.selected = id;
   // The opening takes the journey's route (and records it, so Skip intro can reverse back into it)
   setCreationJourney(id);
-  // The arrival becomes the opening (journeyHandoff.ts); without one to enter, or with reduced
-  // motion, the arrival simply lifts away as before
-  if (creation.active && !prefersReducedMotion()) beginHandoff(id);
+  if (id === 'direct') {
+    // 01 DIRECT ("Straight to the profile.") bypasses the 3D Eye of Creation opening
+    // and lands directly on the #introduction Profile chapter in <500ms.
+    if (creation.active) finishCreation('direct');
+  } else if (creation.active && !prefersReducedMotion()) {
+    // The arrival becomes the opening (journeyHandoff.ts); without one to enter, or with reduced
+    // motion, the arrival simply lifts away as before
+    beginHandoff(id);
+  }
   launchJourney();
 }
 
