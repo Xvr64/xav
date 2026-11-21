@@ -20,7 +20,7 @@ export const ABYSS_TEXT: { hex: string; light: AbyssRGB; dark: AbyssRGB }[] = [
   { hex: '3E4C52', light: [34, 56, 80], dark: [200, 214, 234] },
   { hex: '3E5666', light: [36, 62, 90], dark: [196, 214, 236] },
   { hex: '49606E', light: [40, 68, 96], dark: [192, 210, 232] },
-  { hex: '52595E', light: [38, 62, 88], dark: [196, 210, 230] },
+  { hex: '52595E', light: [38, 62, 88], dark: [174, 192, 216] },
   { hex: '77766F', light: [58, 84, 112], dark: [180, 198, 224] }
 ];
 export const ABYSS_TEXT_ALPHA_VARIANTS = [
@@ -88,7 +88,7 @@ export function applyAbyssPalette(t: number) {
     const al = a / 100;
     root.setProperty(
       `--rule-${a}`,
-      `rgba(${Math.round(lerpN(23, 214, t))}, ${Math.round(lerpN(23, 226, t))}, ${Math.round(lerpN(23, 242, t))}, ${lerpN(al, al * 1.1, t).toFixed(3)})`
+      `rgba(${Math.round(lerpN(23, 184, t))}, ${Math.round(lerpN(23, 206, t))}, ${Math.round(lerpN(23, 232, t))}, ${lerpN(al, al * 0.80, t).toFixed(3)})`
     );
   }
   for (const f of ABYSS_FILLS) {
