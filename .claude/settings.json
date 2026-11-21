@@ -3,7 +3,6 @@
     "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
   },
   "permissions": {
-    "defaultMode": "acceptEdits",
     "allow": [
       "Bash(npm run dev*)",
       "Bash(npm run build*)",
@@ -43,7 +42,46 @@
       "Bash(gh pr view*)",
       "Bash(gh pr list*)",
       "Bash(gh pr diff*)",
-      "Bash(gh pr checks*)"
+      "Bash(gh pr checks*)",
+      "PowerShell(npm run dev*)",
+      "PowerShell(npm run build*)",
+      "PowerShell(npm run preview*)",
+      "PowerShell(npm run ocean*)",
+      "PowerShell(npm test*)",
+      "PowerShell(npm ls*)",
+      "PowerShell(npx tsc*)",
+      "PowerShell(npx vite*)",
+      "PowerShell(node --test*)",
+      "PowerShell(node dev/*)",
+      "PowerShell(node .claude/*)",
+      "PowerShell(git status*)",
+      "PowerShell(git diff*)",
+      "PowerShell(git log*)",
+      "PowerShell(git show*)",
+      "PowerShell(git blame*)",
+      "PowerShell(git grep*)",
+      "PowerShell(git branch*)",
+      "PowerShell(git rev-parse*)",
+      "PowerShell(git ls-files*)",
+      "PowerShell(git merge-base*)",
+      "PowerShell(git fetch*)",
+      "PowerShell(git add*)",
+      "PowerShell(git commit*)",
+      "PowerShell(git stash*)",
+      "PowerShell(git switch*)",
+      "PowerShell(git checkout*)",
+      "PowerShell(git worktree add*)",
+      "PowerShell(git worktree list*)",
+      "PowerShell(git worktree prune*)",
+      "PowerShell(git push -u origin ocean/*)",
+      "PowerShell(git push origin ocean/*)",
+      "PowerShell(git push -u origin feature/*)",
+      "PowerShell(git push origin feature/*)",
+      "PowerShell(gh pr create*)",
+      "PowerShell(gh pr view*)",
+      "PowerShell(gh pr list*)",
+      "PowerShell(gh pr diff*)",
+      "PowerShell(gh pr checks*)"
     ],
     "ask": [
       "Bash(rm -rf*)",
@@ -54,7 +92,14 @@
       "Bash(git worktree remove --force*)",
       "Bash(git checkout -- *)",
       "Bash(git checkout .)",
-      "PowerShell(Remove-Item*-Recurse*)"
+      "PowerShell(Remove-Item*-Recurse*)",
+      "PowerShell(rm -r*)",
+      "PowerShell(git reset --hard*)",
+      "PowerShell(git clean*)",
+      "PowerShell(git branch -D*)",
+      "PowerShell(git worktree remove --force*)",
+      "PowerShell(git checkout -- *)",
+      "PowerShell(git checkout .)"
     ],
     "deny": [
       "Bash(git push --force*)",
@@ -77,8 +122,15 @@
       "PowerShell(git push*--force*)",
       "PowerShell(git push* -f*)",
       "PowerShell(git push* main*)",
+      "PowerShell(git push*:main*)",
+      "PowerShell(git push* master*)",
+      "PowerShell(git push*--mirror*)",
       "PowerShell(*wrangler deploy*)",
-      "PowerShell(gh pr merge*)"
+      "PowerShell(*wrangler publish*)",
+      "PowerShell(gh pr merge*)",
+      "PowerShell(gh repo delete*)",
+      "PowerShell(npm publish*)",
+      "PowerShell(git filter-branch*)"
     ]
   },
   "hooks": {
