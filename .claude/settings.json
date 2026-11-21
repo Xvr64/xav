@@ -16,7 +16,6 @@
       "Bash(node --test*)",
       "Bash(node dev/*)",
       "Bash(node .claude/*)",
-      "Bash(PHASE2_OUT=* node dev/*)",
       "Bash(git status*)",
       "Bash(git diff*)",
       "Bash(git log*)",
