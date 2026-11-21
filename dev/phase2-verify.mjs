@@ -102,7 +102,7 @@ async function globe() {
     await c.evaluate(`scrollTo(0, 0)`); await sleep(900);
     const cover = await c.evaluate(`({ stage: [...document.querySelector('[data-hero-stage]').children].map(e => e.className.split(' ')[0]), corner: document.querySelector('.fixed-top-controls').children.length })`);
     assert.deepEqual(cover.stage, ['minimal-hero', 'hero-name']);
-    assert.equal(cover.corner, 2, 'the corner holds sound and CV only');
+    assert.equal(cover.corner, 3, 'the corner holds sound, Contact and CV only');
     await jpg(c, 'verify/cover');
     pass('Cover: headline only', { cover, errors: c.errors });
   } finally { await c.close(); }
@@ -126,13 +126,13 @@ async function mobile() {
     const end = await c.evaluate(`(() => { const s = window.__globeDiagnostics?.at(-1); return { y: Math.round(scrollY), rp: s?.renderedProgress, ownership: s?.ownership, playing: s?.playing }; })()`);
     pass('Globe mobile-emulated touch: Doha → Shanghai → Doha', { forward, after, back, end });
 
-    // After the Globe the page scrolls freely and the corner still holds two controls only
+    // After the Globe the page scrolls freely and the corner still holds three controls only
     await c.evaluate(`document.querySelector('#education').scrollIntoView()`); await sleep(900);
     const corner = await c.evaluate(`({ controls: [...document.querySelector('.fixed-top-controls').children].map(e => e.className.split(' ')[0]), lock: document.documentElement.dataset.globeScroll || null, gauge: getComputedStyle(document.querySelector('.depth-gauge')).display })`);
-    assert.deepEqual(corner.controls, ['decode-sound-toggle', 'fixed-cv-link']);
+    assert.deepEqual(corner.controls, ['decode-sound-toggle', 'fixed-cv-link', 'fixed-cv-link']);
     assert.equal(corner.lock, null);
     assert.equal(corner.gauge, 'none', 'no gauge on a phone');
-    pass('Mobile corner: sound and CV only', { corner, errors: c.errors });
+    pass('Mobile corner: sound, Contact and CV only', { corner, errors: c.errors });
   } finally { await c.close(); }
 }
 
