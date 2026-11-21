@@ -584,7 +584,9 @@ export function final(ctx) {
   event(ledger, null, 'final-fail', failed.map((f) => f.id).join(', '));
   saveLedger(ctx, ledger);
   out.unshift(`FINAL FAIL: ${failed.map((f) => f.id).join(', ')}${skipped.length ? ` (not run: ${skipped.join(', ')})` : ''}`,
-    routed.length ? `Returned to their owners: ${routed.join(', ')}. Every other unit stays passed.` : 'No unit\'s own checks fail on their own: the failure is in how units combine. The lead owns it (replan or add a unit).',
+    routed.length ? `Returned to their owners: ${routed.join(', ')}. Every other unit stays passed.`
+      : failed.every((f) => f.check === 'scope' || f.check === 'main') ? 'The lead owns this: assign or remove the unowned files, or restore main and the owner\'s checkout. Every unit stays passed.'
+      : 'No unit\'s own checks fail on their own: the failure is in how units combine. The lead owns it (replan or add a unit).',
     ...failed.flatMap((f) => [`  - [${f.id}] ${f.criterion}`, ...(f.evidence?.lines || []).map((l) => `      ${l}`), `      log: ${f.log}`]), '');
   return { code: 1, text: out.join('\n') };
 }
