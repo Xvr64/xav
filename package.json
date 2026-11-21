@@ -6,7 +6,10 @@
   "scripts": {
     "dev": "vite --port 5173 --host",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "ocean": "node .claude/ocean-team/new-mission.mjs",
+    "ocean:preview": "node .claude/ocean-team/preview.mjs",
+    "ocean:status": "node .claude/ocean-team/loop.mjs status"
   },
   "dependencies": {
     "@glyphcss/maps": "^0.3.1",

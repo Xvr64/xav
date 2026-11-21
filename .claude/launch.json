@@ -10,7 +10,13 @@
     {
       "name": "whales-3d",
       "runtimeExecutable": "npx",
-      "runtimeArgs": ["vite", "--port", "5181", "--strictPort"],
+      "runtimeArgs": ["vite", "--port", "5182", "--strictPort"],
+      "port": 5182
+    },
+    {
+      "name": "Ocean Preview",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [".claude/ocean-team/preview.mjs", "--no-open"],
       "port": 5181
     }
   ]

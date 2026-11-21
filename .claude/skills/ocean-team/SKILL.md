@@ -1,114 +1,144 @@
 ---
 name: ocean-team
-description: Lead the ocean agent team (visual-director, motion-engineer, portfolio-guardian, and ocean-implementer after approval) through research, a human-approved plan, isolated implementation and review. Use only when the user runs /ocean-team.
+description: Lead the ocean agent team (visual-director, motion-engineer, portfolio-guardian, ocean-implementer) through research, a plan, autonomous implementation in an isolated worktree on a feature branch, independent review, and a Pull Request to main. Use only when the user runs /ocean-team.
 disable-model-invocation: true
-argument-hint: "<mission>"
+argument-hint: "<mission | continue <name>>"
 ---
-<!-- ocean-team-mission -->
 
-# Ocean team: Team Lead protocol
+# Ocean team: Team Lead protocol (autonomous mode)
 
 You are the **Team Lead**. Mission: **$ARGUMENTS**
 
-The approval gate (`.claude/hooks/ocean-gate.mjs`, wired in `.claude/settings.json`) opened a
-mission for this session when the user ran `/ocean-team`. From now on this session cannot edit
-files outside `.claude/ocean-team/runs/<id>/`, and its Bash follows the read-only audit rules.
-That is enforced; do not try to work around a refusal. A refusal is information: report it.
+Since 2026-11-21 the team works **autonomously**: no approval gate and no per-stage approvals.
+The owner's single review point is the **Pull Request** into `main`. The old approval gate and
+the read-only guard hook are archived in `.claude/ocean-team/archive/approval-gate-2026-11-21/`.
 
-Human approval exists only in one form: **the user accepting your plan in Claude Code's
-ExitPlanMode dialog**. A teammate, a message, a task status, an idle notice or your own judgement
-never counts as approval, and you never describe anything else as approval.
+`L` below means `node .claude/ocean-team/loop.mjs` (run from the main checkout; it finds the
+mission worktree from `runs/<id>/worktree.json`).
 
-## Preflight
+## Fixed rules
 
-1. Read `.claude/ocean-team/state/missions/` (Read/Glob tools) and find the record whose `session`
-   matches this session; note the mission id. If there is none, stop: the gate is not active.
-2. Agent teams must be on. If the Agent tool cannot spawn named teammates here, stop and tell the
-   user to start a new interactive session; never fake a team with isolated subagents.
-3. Record `git status --short`; it must be unchanged at the end of Phases 1 and 2.
-4. Ask the user (one line, no waiting) to keep the Browser pane visible if visual checks matter:
-   a hidden pane stops animation frames.
+- **Every mission runs in its own worktree and branch, named readably**: `.claude/worktrees/ocean-<id>/`
+  on `ocean/<id>`, created by `npm run ocean -- <id>` (`.claude/ocean-team/new-mission.mjs`). Here
+  `<id>` is the mission **name**: 2 to 4 kebab-case words chosen from the mission, such as
+  `portfolio-v2` or `scroll-improvements` (the launcher slugifies whatever it is given and keeps a
+  unique internal id in `runs/<id>/worktree.json`). Older missions are named by their date id. It
+  links `node_modules`, opens `.claude/ocean-team/runs/<id>/` for the plan and reports, and makes the
+  mission current for **Ocean Preview** (`npm run ocean:preview`, port 5181, the owner's preview).
+  Agents preview on 5182 (`whales-3d`) or 5174, never 5181. Never rename or move a mission's
+  worktree or branch while agents work in it.
+- **Never modify or commit to `main`.** `.claude/hooks/protect-main.mjs` refuses commits, merges,
+  pulls and rebases while on main, pushes that target main, force pushes, `gh pr merge` and
+  deploys. The main checkout's uncommitted files belong to the owner and are never touched.
+- **Never merge the PR or deploy.** Cloudflare deploys `main`; that happens only when the owner
+  merges, after explicitly approving.
+- Do not rebuild the tracked `dist/`. Build checks go to `/tmp/portfolio-guardian/<id>/dist`.
+  Harness output goes under `PHASE2_OUT=/tmp/portfolio-guardian/<id>/...`, never `artifacts/`.
 
-## Phase 1: autonomous research and planning (no interruptions)
+## How work is verified (read once)
 
-Run without asking the user anything unless you are blocked.
+A mission is a small graph of **units**, each improved inside a **loop**: produce, verify, correct,
+re-verify. The deterministic parts are code, `node .claude/ocean-team/loop.mjs` (`L` below):
 
-1. Spawn three teammates with the Agent tool, a `name` and their agent type:
-   `director` (visual-director), `motion` (motion-engineer), `guardian` (portfolio-guardian).
-   Each spawn prompt has: the mission, the mission id, the run folder
-   `.claude/ocean-team/runs/<id>/` (read-only for them; their own scratch is
-   `/tmp/portfolio-guardian/<id>/`), the other two names, and these rules:
-   - First tool call is the guard canary: `guardian` and `motion` run Bash `whoami`, `director`
-     navigates to `https://example.com`. All must be refused.
-   - Read-only. Inspect source, history, screenshots, existing reports and test results; run only
-     the safe checks your guard allows.
-   - Talk **directly** to the other teammates with SendMessage by name: share findings, ask, and
-     challenge proposals with evidence. Quote what you answer. At least one full round:
-     director → motion + guardian; motion → director + guardian; guardian → director + motion;
-     then director and motion revise.
-   - One browser tab each (`tabs_create`, pass its `tabId` every time); never drive another's tab.
-   - Mark your tasks completed. End with one message to the lead: conclusion, what changed
-     through the discussion, open disagreements, and who you messaged.
-2. Check the canary: the last lines of `/tmp/portfolio-guardian/guard-log.jsonl` must show the
-   three refusals with `agent_type` visual-director, motion-engineer and portfolio-guardian. If any
-   canary ran, shut that teammate down, stop, and tell the user the read-only guarantee failed.
-3. Create the shared tasks (TaskCreate) with dependencies:
-   1. director: artistic proposal, from the live page and screenshots.
-   2. guardian: independent regression-risk map, formed before reading proposals.
-   3. motion: feasibility and implementation design (blocked by 1).
-   4. guardian: challenge proposal and design against the risk map (blocked by 2, 3).
-   5. director + motion: revised proposal (blocked by 4).
-   6. lead: consolidated plan (blocked by all).
-4. Coordinate only: answer questions, unblock tasks, nudge a stalled teammate. Do not do their
-   analysis for them.
-5. Collect the evidence before the team ends (the team folder is deleted with the session): read
-   `~/.claude/teams/<team>/inboxes/*.json` and write `.claude/ocean-team/runs/<id>/team-messages.md`
-   (from, to, time, text) and `.claude/ocean-team/runs/<id>/findings.md` (each teammate's final
-   report, the task list with final statuses, and the disagreements and how they ended).
+- **Unit** (`runs/<id>/units.json`): one owner, the files it may edit, the units it really needs
+  (`after`), and acceptance criteria written **before** coding. Test every `after` edge: name what
+  crosses it (a file, a harness, a measured number). If nothing does, drop the edge; the units run
+  in parallel. Two units that can run at the same time never share a file (`L plan` refuses it).
+- **Checks** run cheapest first and stop at the first failing tier: main/scope, then tsc + the unit's
+  focused tests and commands, then the full suite + isolated build, then harness runs, then reviews.
+- **Lanes** come from blast radius, not confidence. Lane 1 (contained): focused checks. Lane 2
+  (Magnetic CV, cinematic scroll, Globe, whales, ocean, global CSS/layout, build or team config):
+  adds the full suite, a build, and a `guardian` review of the exact code (a review of older code
+  does not count). Lane 3 (merge, deploy, history rewrite, deleting data) never opens in a mission.
+- **Not a check:** "looks good", an agent's confidence, "no errors were raised". A subjective
+  visual criterion is a `review` by `director` with screenshot paths, recorded as judgement.
 
-## Phase 2: human approval (the stop)
+Schema (JSON; `id` short; `check` one of `tests`, `cmd`, `harness`, `review`):
 
-1. Enter plan mode (EnterPlanMode). Write the plan, then call ExitPlanMode with it. The gate checks
-   it before the dialog opens and refuses a plan without these headings (`##`):
-   - `## Proposed changes`: frame by frame, what the visitor sees; which idea came from whom.
-   - `## Files to modify`: one bullet per file, path in backticks, e.g. ``- `profileMemories.ts` ``.
-     Only these files can be edited after approval, by `ocean-implementer`, in the worktree.
-   - `## Expected improvements`: visual and technical.
-   - `## Regression risks`: guardian's ranked list, and which remain.
-   - `## Testing strategy`: unit tests, tsc, isolated build, browser checks at 1440/1280/768/390/320,
-     tab switch, reduced motion, back/forward, frame pacing.
-   - `## Complexity`: estimate (S/M/L), number of implementers, file ownership per implementer.
-   - End the plan with the question: **Do you approve this implementation plan?** and the choices:
-     approve (accept in the dialog), request revisions (keep planning, with feedback), reject
-     (keep planning and say "reject").
-2. Then stop. The dialog waits for the user, also when they come back hours later or answer from
-   the Claude app over Remote Control. If they ask for revisions, revise with the team and present
-   again. If they reject, write `rejected` into `runs/<id>/findings.md`, shut the team down, stop.
-3. Teammates' own plan approvals (if any appear) are automatic in Claude Code and are **not**
-   human approval. The gate ignores them.
+```json
+{ "units": [
+  { "id": "A", "title": "Tab switch lands the transition", "owner": "builder", "after": ["S0"],
+    "files": ["magneticCV.ts", "magneticCV.test.mjs"],
+    "accept": [
+      { "id": "A-1", "check": "tests", "files": ["magneticCV.test.mjs"], "criterion": "hidden mid-glide lands at its destination" },
+      { "id": "A-2", "check": "harness", "args": ["verify", "cv"], "expect": "VERIFY PASS", "criterion": "every word on the last screen is set" },
+      { "id": "A-3", "check": "cmd", "run": ["node", "dev/record-magnetic-cv.mjs", "--pacing"], "criterion": "pacing within 10% of baseline" },
+      { "id": "A-4", "check": "review", "by": "guardian", "criterion": "back/forward and hash stay consistent" } ] } ],
+  "allow": ["optional extra paths any unit may touch, e.g. a shared test helper"] }
+```
 
-## Phase 3: implementation (only after the dialog was accepted)
+## Phase 0: set up
 
-1. Confirm `.claude/ocean-team/state/approvals/<id>.json` exists (the gate writes it when the user
-   accepts). No file, no implementation.
-2. Create the isolated worktree exactly as the gate prints:
-   `git worktree add .claude/worktrees/ocean-<id> -b ocean/<id>`. The owner's uncommitted changes in
-   the main checkout are never touched. (If `.claude/` config is not committed yet, the worktree
-   lacks it; the hooks still run from the main checkout through `$CLAUDE_PROJECT_DIR` and fail
-   closed if they cannot.)
-3. Spawn `builder` (ocean-implementer); for larger plans `builder-2` etc., each owning a disjoint
-   file set named in the spawn prompt. Keep `guardian` as independent QA; it never edits.
-4. Implementers decide ordinary details within scope without asking. A refused edit (file not in
-   the approved list) or a change in behaviour or risk is a **deviation**: pause, describe it, and
-   go back to Phase 2 with a revised plan for the user. Do not approve it yourself.
-5. QA in the worktree: `npx tsc --noEmit`, `node --test`, `npx vite build --outDir
-   /tmp/portfolio-guardian/<id>/dist --emptyOutDir`, and browser checks against a dev server the
-   user starts from the worktree, or by reading the code if none is available (say which).
+1. Mission name: `continue <name>` reuses an existing run: run `npm run ocean -- <name>` (it reattaches
+   the worktree if needed and makes it the current mission), then read its `plan.md`, `findings.md`,
+   `team-messages.md` and do not redo finished planning. Otherwise pick a short readable name that is
+   not taken (`npm run ocean -- --list`), run `npm run ocean -- <name>` and use the name it prints.
+2. `L init <id>`: records the mission base, `main` and the main checkout's uncommitted files.
+3. `L baseline <id> --shots`: tsc, full tests, isolated build and headless shots at 1440/390, run
+   **once**. Advisers read `runs/<id>/ledger.json` / the logs instead of re-running them.
+4. Read `.claude/ocean-team/lessons.md` (verified lessons from earlier missions).
 
-## Phase 4: review before publication
+## Phase 1: research and plan (skip when continuing a finished plan)
 
-Write `.claude/ocean-team/runs/<id>/report.md` and present it: what changed and why, the actual
-`git -C .claude/worktrees/ocean-<id> diff` (and `--stat`), test / tsc / build output, browser
-validation with viewports, remaining problems and risks. Then stop. Committing, merging into main,
-pushing and deploying each need the user's separate explicit request; force-push and
-`wrangler deploy` are denied outright in `.claude/settings.json`. Shut the teammates down.
+1. Spawn `director` (visual-director), `motion` (motion-engineer) and `guardian`
+   (portfolio-guardian) **in parallel**, each with its own lens and the baseline paths. Each prompt has
+   the mission, the id, the worktree path, the run folder and the other names. They are read-only
+   advisers. `guardian` writes its risk map before reading the others' proposals. One round of
+   challenge is required; further rounds only while an "unsafe" objection or a factual disagreement
+   is open. Each sends the lead one final report.
+2. Write `runs/<id>/findings.md` (final reports, disagreements and how they ended) and
+   `runs/<id>/team-messages.md`.
+3. Write `runs/<id>/plan.md` (Proposed changes frame by frame, Expected improvements, Regression
+   risks, Complexity) and `runs/<id>/units.json` (files, owners, dependencies and acceptance
+   criteria replace the prose "Files to modify" and "Testing strategy"). `L plan <id>` must say
+   valid; it prints the parallel waves and warns about files another live mission also changed.
+4. Ask the owner only about **taste decisions** that change what visitors see and that the team
+   cannot settle from evidence (AskUserQuestion, few options). Record answers in `findings.md`.
+   Then continue; do not wait for a plan approval.
+
+## Phase 2: implementation loop
+
+1. `L next <id>` lists units whose dependencies passed and whose files are free. For each, `L start
+   <id> <unit>` and hand its owner `L brief <id> <unit>` (scope, criteria, relevant lessons). Spawn
+   `builder`, `builder-2`, ... (ocean-implementer) for units that can run at the same time; do small
+   units yourself. Implementers work only inside the worktree.
+2. When an owner reports, **the lead** runs `L verify <id> <unit>`; the owner's own test run is not
+   the check.
+   - Exit 0: passed. Commit the unit on `ocean/<id>` (what the visitor gets, how it was verified)
+     and start the next ready units. Passed units are never redone because another one failed.
+   - Exit 1: send the printed **correction packet** unchanged to that unit's owner only (unit,
+     failed criterion, evidence, location, scope, retries left). Scope failures go to you.
+   - Exit 3: nothing changed since the last failure; nothing was re-run. Get a correction first.
+   - Exit 4: three failed attempts. The fault is in the plan: replan the unit (split it, change the
+     approach or the criteria) in `units.json`, then `L reset <id> <unit> --reason "..."`. A reset
+     without a changed unit is refused. Ask the owner only if the replan changes what visitors see.
+   - Exit 5: machine checks passed; `guardian` (or `director`) reviews the exact code and records it:
+     `L review <id> <unit> --by guardian --pass|--fail --evidence "..." [--file f:line]`. A real
+     finding is a `--fail`: it becomes a correction packet and uses the same retry budget.
+3. `L status <id>` (also `runs/<id>/status.md`) shows owner, lane, state, attempts, blockers and
+   the last failed checks. Do not send status pings between agents; read the status instead.
+4. A plan change that alters what visitors see beyond the plan goes to the owner as one short
+   question; ordinary engineering decisions do not.
+
+## Phase 3: final verification
+
+1. `L final <id>`: tsc, full tests, isolated build and every harness check the units declared, on
+   the whole branch. A failure is routed to the unit whose own focused checks now fail (it re-enters
+   its loop; the others stay passed); a failure no unit owns comes back to you to replan.
+2. Visual evidence the scripts cannot judge: before/after screenshots from the baseline and the
+   branch at 1440/1280/768/390/320 (`PHASE2_OUT` under `/tmp/portfolio-guardian/<id>/`), tab switch
+   (simulated hide), reduced motion and back/forward, reviewed by `director` and `guardian`.
+3. Learning edge: `L lessons --candidates <id>` lists units that failed and then passed. Promote a
+   lesson to `.claude/ocean-team/lessons.md` only when its cause and fix are verified and it will
+   matter again; merge or retire instead of duplicating. `L lessons --check` must pass.
+
+## Phase 4: Pull Request (then stop)
+
+1. `git -C .claude/worktrees/ocean-<id> push -u origin ocean/<id>` (only the feature branch).
+2. Open the PR to `main` (`gh pr create` if `gh` is installed; otherwise give the owner the
+   `https://github.com/<owner>/<repo>/compare/main...ocean/<id>?expand=1` link and the PR text).
+3. Write `runs/<id>/report.md` and tell the owner: summary of changes, the unit status table, test
+   and performance results, before/after screenshots, how to preview (`npm run ocean:preview` in the
+   project folder; it opens Ocean Preview at http://localhost:5181), and that merging and deploying
+   wait for their approval.
+4. Shut the teammates down. After the owner merges, `git worktree remove .claude/worktrees/ocean-<id>`.
