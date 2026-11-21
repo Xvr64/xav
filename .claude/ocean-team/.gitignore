@@ -1,3 +1,4 @@
-# Ocean team runtime data: plans, reports and the approval state written by the gate.
+# Ocean team runtime data: mission plans and reports, and archived gate state.
 runs/
 state/
+archive/*/state/

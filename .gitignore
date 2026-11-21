@@ -1,3 +1,4 @@
 node_modules
 .reference/
 .checkpoints/before-creation-intro-20261102.zip
+.claude/worktrees/

@@ -3,36 +3,91 @@
     "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
   },
   "permissions": {
+    "defaultMode": "acceptEdits",
+    "allow": [
+      "Bash(npm run dev*)",
+      "Bash(npm run build*)",
+      "Bash(npm run preview*)",
+      "Bash(npm run ocean*)",
+      "Bash(npm test*)",
+      "Bash(npm ls*)",
+      "Bash(npx tsc*)",
+      "Bash(npx vite*)",
+      "Bash(node --test*)",
+      "Bash(node dev/*)",
+      "Bash(node .claude/*)",
+      "Bash(PHASE2_OUT=* node dev/*)",
+      "Bash(git status*)",
+      "Bash(git diff*)",
+      "Bash(git log*)",
+      "Bash(git show*)",
+      "Bash(git blame*)",
+      "Bash(git grep*)",
+      "Bash(git branch*)",
+      "Bash(git rev-parse*)",
+      "Bash(git ls-files*)",
+      "Bash(git merge-base*)",
+      "Bash(git fetch*)",
+      "Bash(git add*)",
+      "Bash(git commit*)",
+      "Bash(git stash*)",
+      "Bash(git switch*)",
+      "Bash(git checkout*)",
+      "Bash(git worktree add*)",
+      "Bash(git worktree list*)",
+      "Bash(git worktree prune*)",
+      "Bash(git push -u origin ocean/*)",
+      "Bash(git push origin ocean/*)",
+      "Bash(git push -u origin feature/*)",
+      "Bash(git push origin feature/*)",
+      "Bash(gh pr create*)",
+      "Bash(gh pr view*)",
+      "Bash(gh pr list*)",
+      "Bash(gh pr diff*)",
+      "Bash(gh pr checks*)"
+    ],
+    "ask": [
+      "Bash(rm -rf*)",
+      "Bash(rm -r *)",
+      "Bash(git reset --hard*)",
+      "Bash(git clean*)",
+      "Bash(git branch -D*)",
+      "Bash(git worktree remove --force*)",
+      "Bash(git checkout -- *)",
+      "Bash(git checkout .)",
+      "PowerShell(Remove-Item*-Recurse*)"
+    ],
     "deny": [
       "Bash(git push --force*)",
       "Bash(git push -f*)",
       "Bash(git push * --force*)",
       "Bash(git push * -f*)",
+      "Bash(git push * --force-with-lease*)",
+      "Bash(git push * --mirror*)",
+      "Bash(git push * main*)",
+      "Bash(git push * HEAD:main*)",
+      "Bash(git push * master*)",
+      "Bash(gh pr merge*)",
+      "Bash(gh repo delete*)",
       "Bash(wrangler deploy*)",
-      "Bash(npx wrangler deploy*)"
+      "Bash(wrangler publish*)",
+      "Bash(npx wrangler deploy*)",
+      "Bash(npx wrangler publish*)",
+      "Bash(npm publish*)",
+      "Bash(git filter-branch*)",
+      "PowerShell(git push*--force*)",
+      "PowerShell(git push* -f*)",
+      "PowerShell(git push* main*)",
+      "PowerShell(*wrangler deploy*)",
+      "PowerShell(gh pr merge*)"
     ]
   },
   "hooks": {
-    "UserPromptSubmit": [
-      {
-        "hooks": [
-          { "type": "command", "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/ocean-gate.mjs\"" }
-        ]
-      }
-    ],
     "PreToolUse": [
       {
-        "matcher": "Edit|Write|MultiEdit|NotebookEdit|Bash|ExitPlanMode|mcp__Claude_Browser__navigate|mcp__Claude_Browser__preview_start",
+        "matcher": "Bash|PowerShell",
         "hooks": [
-          { "type": "command", "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/ocean-gate.mjs\"", "onFailure": "block" }
-        ]
-      }
-    ],
-    "PostToolUse": [
-      {
-        "matcher": "ExitPlanMode",
-        "hooks": [
-          { "type": "command", "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/ocean-gate.mjs\"" }
+          { "type": "command", "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/protect-main.mjs\"" }
         ]
       }
     ]
