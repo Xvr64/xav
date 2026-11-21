@@ -5,7 +5,8 @@
   `main` changes only when the owner merges a Pull Request; Cloudflare deploys `main`.
 - Ocean Team missions have readable names: `npm run ocean -- <name>` (e.g. `scroll-improvements`)
   creates `.claude/worktrees/ocean-<name>/` on branch `ocean/<name>` (with `node_modules` linked) and
-  makes it the current mission; a unique internal id stays in `runs/<name>/worktree.json`. Run
+  makes it the current mission; a unique internal id stays in `.ocean/runs/<name>/worktree.json`
+  (run notes are outside `.claude/`, which Claude Code protects with an approval prompt per write). Run
   `/ocean-team <mission>` or `/ocean-team continue <name>` from the main checkout; the playbook is
   `.claude/skills/ocean-team/SKILL.md`. Never rename or move a mission worktree while agents work in it.
 - **Ocean Preview**: the owner types `npm run ocean:preview` in the main checkout to see the active

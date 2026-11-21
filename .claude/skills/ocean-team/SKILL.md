@@ -16,6 +16,12 @@ the read-only guard hook are archived in `.claude/ocean-team/archive/approval-ga
 `L` below means `node .claude/ocean-team/loop.mjs` (run from the main checkout; it finds the
 mission worktree from `runs/<id>/worktree.json`).
 
+`runs/<id>/` below is the mission's run folder **`.ocean/runs/<id>/`** in the main checkout
+(git-ignored). It sits outside `.claude/` because Claude Code asks before every Write or Edit
+under `.claude/` (a protected path that no allow rule lifts). Missions started before this move
+keep `.claude/ocean-team/runs/<id>/`; the scripts find it there. Write run notes with the Write
+and Edit tools, never through shell redirects.
+
 ## Fixed rules
 
 - **Every mission runs in its own worktree and branch, named readably**: `.claude/worktrees/ocean-<id>/`
@@ -23,7 +29,7 @@ mission worktree from `runs/<id>/worktree.json`).
   `<id>` is the mission **name**: 2 to 4 kebab-case words chosen from the mission, such as
   `portfolio-v2` or `scroll-improvements` (the launcher slugifies whatever it is given and keeps a
   unique internal id in `runs/<id>/worktree.json`). Older missions are named by their date id. It
-  links `node_modules`, opens `.claude/ocean-team/runs/<id>/` for the plan and reports, and makes the
+  links `node_modules`, opens `.ocean/runs/<id>/` for the plan and reports, and makes the
   mission current for **Ocean Preview** (`npm run ocean:preview`, port 5181, the owner's preview).
   Agents preview on 5182 (`whales-3d`) or 5174, never 5181. Never rename or move a mission's
   worktree or branch while agents work in it.

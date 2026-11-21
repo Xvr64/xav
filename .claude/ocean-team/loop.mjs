@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Ocean Team loop runner: the deterministic part of a mission (no model reasoning, no framework).
 //
-// A mission's plan is split into *units* in `runs/<mission>/units.json`. Each unit has one owner, the
+// A mission's plan is split into *units* in `.ocean/runs/<mission>/units.json`. Each unit has one owner, the
 // files it may edit, the units it really depends on (`after`), and acceptance criteria written
 // before any code. This script is the check that can fail: it runs those criteria, keeps a ledger,
 // returns only the failing unit to its owner with evidence, stops after three failed attempts, and
@@ -18,7 +18,7 @@
 //                                              [--criterion <id>] --evidence "<text>" [--file f:12]
 //   node .claude/ocean-team/loop.mjs reset     <mission> <unit> --reason "<replan>"
 //   node .claude/ocean-team/loop.mjs final     <mission>                  whole-branch verification
-//   node .claude/ocean-team/loop.mjs status    <mission>                  table (also runs/<m>/status.md)
+//   node .claude/ocean-team/loop.mjs status    <mission>                  table (also .ocean/runs/<m>/status.md)
 //   node .claude/ocean-team/loop.mjs lessons   [--check] [--for <file> ...] [--candidates <mission>]
 //
 // Exit codes: 0 passed / ok, 1 failed (correction packet printed), 2 blocked or invalid,

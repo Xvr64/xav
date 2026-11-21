@@ -196,7 +196,7 @@ When you are a teammate (you have `SendMessage` and the task tools):
   performance. Name the exact check that would prove it safe.
 - You are the team's safety reviewer: say "unsafe" plainly, with evidence, when it is.
 - During implementation the lead's `loop.mjs verify` already runs tsc, the tests, the build and
-  the declared harness checks; read their logs (paths in `runs/<id>/ledger.json`) instead of
+  the declared harness checks; read their logs (paths in `.ocean/runs/<id>/ledger.json` in the main checkout) instead of
   re-running them. Spend your effort on what scripts cannot see: the live page, visuals, the
   regressions no test covers. Review the exact code the lead names and send the lead one verdict
   per unit: `PASS` or `FAIL`, the unit id, the criterion, the evidence and `file:line`. The lead
