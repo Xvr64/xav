@@ -16,7 +16,7 @@ import { randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, symlinkSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
-const git = (args, opts = {}) => execFileSync('git', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], ...opts }).trim();
+const git = (args, opts = {}) => String(execFileSync('git', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], ...opts }) ?? '').trim();
 const tryGit = (args) => { try { return git(args); } catch { return null; } };
 
 // Always resolve the main checkout, also when run from inside a worktree.
@@ -30,7 +30,7 @@ if (argv.includes('--list')) {
 }
 const baseIdx = argv.indexOf('--base');
 const explicitBase = baseIdx >= 0 ? argv[baseIdx + 1] : null;
-const idArg = argv.find((a, i) => !a.startsWith('-') && i !== baseIdx + 1);
+const idArg = argv.find((a, i) => !a.startsWith('-') && (baseIdx < 0 || i !== baseIdx + 1));
 const id = idArg || `${new Date().toISOString().slice(0, 10)}-${randomBytes(3).toString('hex')}`;
 if (!/^[A-Za-z0-9-]+$/.test(id)) { console.error(`Invalid mission id "${id}".`); process.exit(1); }
 
