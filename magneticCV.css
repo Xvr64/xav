@@ -18,6 +18,46 @@
     justify-content: center;
   }
 
+  /* Composed single-screen fit for Languages in Magnetic CV: all 6 rows fit cleanly
+     at 1440×900 and 1280×800 without bottom cropping. */
+  .terminal-portfolio.magnetic-cv #languages .section-head {
+    padding-bottom: clamp(24px, 3.6vh, 44px);
+  }
+  .terminal-portfolio.magnetic-cv #languages .lang-list {
+    row-gap: clamp(4px, 0.7vw, 10px);
+  }
+  .terminal-portfolio.magnetic-cv #languages .lang-row {
+    row-gap: 4px;
+  }
+  .terminal-portfolio.magnetic-cv #languages .lang-name {
+    font-size: clamp(32px, min(4.6vw, 6.8svh), 72px);
+    line-height: 1.06;
+  }
+
+  /* Mobile optical top-biased framing: eliminates top-third dead voids and bottom clipping
+     in Magnetic CV chapters while leaving #introduction / .profile-itinerary and ?magneticCV=0
+     untouched. Explicitly includes section#contact to beat terminal.css's #contact ID rule. */
+  @media (max-width: 767px) {
+    .terminal-portfolio.magnetic-cv .cv-arch > section,
+    .terminal-portfolio.magnetic-cv .cv-arch > section#contact {
+      justify-content: flex-start;
+      padding-block: clamp(72px, 11svh, 112px) clamp(36px, 5svh, 56px);
+    }
+    .terminal-portfolio.magnetic-cv #languages .section-head {
+      padding-bottom: clamp(20px, 3svh, 32px);
+    }
+    .terminal-portfolio.magnetic-cv #languages .lang-list {
+      row-gap: 12px;
+    }
+    .terminal-portfolio.magnetic-cv #languages .lang-row:nth-child(even) {
+      margin-left: clamp(16px, 6vw, 32px);
+    }
+    .terminal-portfolio.magnetic-cv #languages .lang-name {
+      font-size: clamp(28px, 8vw, 38px);
+      line-height: 1.08;
+    }
+  }
+
   /* At rest in composed magnetic scenes, architectural datum hairlines sit complete and crisp;
      during arrival they unfurl left-to-right synchronized with their staggered row. */
   .terminal-portfolio.magnetic-cv :is(.exp-entry, .skill-row, .edu-entry--school, .contact-foot)::before {
