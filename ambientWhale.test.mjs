@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { AMBIENT_SIZE, ambientCamera, ambientPath, newTravel, noteScrollIntent, projectedBounds, rollAt, sampleAmbientWhale, socialAt, stepTravel } from './ambientWhaleScene.ts';
+import { readFileSync } from 'node:fs';
+import { AMBIENT_SIZE, LANE_PROBES, LANE_SHIFT_MAX, LANE_SHIFT_RATE, NARROW_LAYOUT_MAX, ambientCamera, ambientPath, laneShiftRate, newTravel, noteScrollIntent, projectedBounds, rollAt, sampleAmbientWhale, sideLanesFit, socialAt, stepTravel } from './ambientWhaleScene.ts';
 import { qRotate, vLen, vSub } from './whale3dPose.ts';
 
 const composition = (width = 1280, height = 720) => ({ width, height, scroll: 0, weight: 0, lanes: [{ x: 0.79, y: 0.8 }, { x: 0.15, y: 0.9 }], surfaceY: -Infinity });
@@ -301,4 +302,135 @@ test('tiny scroll noise is ignored; rapid genuine reversals keep continuous, bou
     }
     previous=poses;
   }
+});
+
+// ---- Deep-CV side lanes (composeAround → laneShiftRate → the wander's centre) ------------------
+const probes = (byOffset) => LANE_PROBES.map((p) => (p in byOffset ? byOffset[p] : 0.2));
+
+test('a lane only moves while the torso lies over copy, toward the nearest clearly clearer water', () => {
+  // Open water: the lane holds wherever it is, whatever lies beside it
+  assert.equal(laneShiftRate(probes({ 0: 0, [-0.12]: 0, 0.12: 0 })), 0);
+  // Copy here, clear water a step to the right: move right at the full rate
+  assert.equal(laneShiftRate(probes({ 0: 0.2, 0.12: 0 })), LANE_SHIFT_RATE);
+  // … and to the left, the same
+  assert.equal(laneShiftRate(probes({ 0: 0.2, [-0.12]: 0 })), -LANE_SHIFT_RATE);
+  // Equally clear on both sides further out, nearer on the left: the nearer one wins
+  assert.ok(laneShiftRate(probes({ 0: 0.2, [-0.12]: 0.01, 0.36: 0 })) < 0);
+  // A marginally clearer place is not worth leaving for (no fidgeting)
+  assert.equal(laneShiftRate(probes({ 0: 0.2, [-0.36]: 0.15, [-0.24]: 0.2, [-0.12]: 0.2, 0.12: 0.2, 0.24: 0.2, 0.36: 0.2 })), 0);
+  // A place the box would mostly leave the screen for is not open water
+  assert.equal(laneShiftRate(LANE_PROBES.map((p) => (p === 0 ? 0.2 : p > 0 ? NaN : 0.2))), 0);
+  // A torso only brushing the copy moves its lane gently
+  const brushing = laneShiftRate(probes({ 0: 0.03, 0.12: 0 }));
+  assert.ok(brushing > 0 && brushing < LANE_SHIFT_RATE / 2, `${brushing}`);
+});
+
+test('the side lanes run on the desktop layout only: off at the 1100 px breakpoint itself, on beyond it', () => {
+  assert.equal(NARROW_LAYOUT_MAX, 1100);
+  for (const w of [320, 390, 768, 1024, 1099, 1100]) assert.equal(sideLanesFit(w), false, `${w}`);
+  for (const w of [1101, 1280, 1440, 1920]) assert.equal(sideLanesFit(w), true, `${w}`);
+  // The same edge as the CSS: the narrow layout is `max-width: 1100px`, inclusive
+  assert.ok(/@media \(max-width: 1100px\)/.test(readFileSync(new URL('./terminal.css', import.meta.url), 'utf8')));
+  const runtime = readFileSync(new URL('./ambientWhaleRuntime.ts', import.meta.url), 'utf8');
+  const deep = runtime.slice(runtime.indexOf('const deepCopyLanes'), runtime.indexOf('const composeAround'));
+  assert.ok(/!sideLanesFit\(vw\(\)\)/.test(deep), 'composeAround asks the shared predicate');
+  assert.ok(!/vw\(\) <\s*\d/.test(deep), 'no second, off-by-one width test');
+});
+
+test('the memory current is linked ahead of the Profile and warmed after the composite, only once linked', () => {
+  const read = (f) => readFileSync(new URL(f, import.meta.url), 'utf8');
+  const current = read('./whaleMemoryCurrent.ts');
+  // prepare(): a link started without waiting; prepared(): a status query, no timer, no compileAsync
+  const prepare = current.slice(current.indexOf('  prepare('), current.indexOf('  warm('));
+  assert.ok(/renderer\.compile\(this\.scene, camera\)/.test(prepare));
+  assert.ok(/\.currentProgram;/.test(prepare) && /program\?\.isReady\(\) === true/.test(prepare));
+  assert.ok(!/\.compileAsync\(|setTimeout\(|setInterval\(/.test(current));
+  // warm() itself is as it was: one zero-strength instance drawn into the bound target
+  const warm = current.slice(current.indexOf('  warm('), current.indexOf('  draw('));
+  assert.ok(/u\.uStrength\.value = 0;/.test(warm) && /instanceCount = 1;/.test(warm) && /renderer\.render\(this\.scene, camera\);/.test(warm));
+
+  const renderer = read('./whale3dRenderer.ts');
+  const ahead = renderer.slice(renderer.indexOf('  prepareMemoryCurrent() {'), renderer.indexOf('  dispose() {'));
+  assert.ok(/if \(this\.lost \|\| this\.current \|\| !memoryWater\.landings\) return;/.test(ahead), 'once, and only with landings');
+  assert.ok(ahead.indexOf('setRenderTarget(null)') < ahead.indexOf('.prepare(this.renderer, this.quadCamera)'), 'linked for the canvas, as drawn');
+  const body = renderer.slice(renderer.indexOf('  render(drawOverlay'), renderer.indexOf('  clear() {'));
+  const composite = body.indexOf('this.quad.material = this.compositeMaterial;');
+  const framed = body.slice(body.indexOf('} else if (profileMemories && memoryWater.framed'));
+  // The warm stays after the composite, in the framed branch; prepare, then the readiness check, then warm
+  assert.ok(composite > 0 && body.indexOf('this.current.warm(') > composite);
+  assert.equal((renderer.match(/\.warm\(/g) ?? []).length, 1, 'one warm call site');
+  const order = ['this.prepareMemoryCurrent();', 'this.current?.prepared(r)', 'this.current.warm(', 'this.currentWarm = true;'].map((s) => framed.indexOf(s));
+  assert.ok(order.every((i, k) => i >= 0 && (k === 0 || i > order[k - 1])), `order ${order}`);
+  // A flight that draws the current first also counts as its first use
+  const flight = body.slice(body.indexOf('if (flying && memoryWater.phase'), body.indexOf('} else if (profileMemories && memoryWater.framed'));
+  assert.ok(/this\.current\.draw\([\s\S]*this\.currentWarm = true;/.test(flight));
+
+  // The runtime starts the link from the Globe on, never earlier
+  const runtime = read('./ambientWhaleRuntime.ts');
+  assert.ok(/if \(scrollY >= globeScrollGeometry\.start\) ascii\.prepareMemoryCurrent\(\);/.test(runtime));
+});
+
+test('a restored WebGL context lets the memory current go, so it is prepared and warmed again', () => {
+  const renderer = readFileSync(new URL('./whale3dRenderer.ts', import.meta.url), 'utf8');
+  const restored = renderer.slice(renderer.indexOf('private readonly onRestored = () => {'), renderer.indexOf('private readonly canvas: HTMLCanvasElement;'));
+  assert.ok(restored.length > 0);
+  // three replaces its renderer state on restore: the old program (and prepared()) cannot come back
+  assert.ok(/this\.current = null;\s*this\.currentWarm = false;/.test(restored));
+  // Its GL objects died with the old context: deleting them on the new one would only warn
+  assert.ok(!/\.dispose\(\)/.test(restored));
+  // ... and with no current, the next frame past the Globe or on the Profile links it again
+  const ahead = renderer.slice(renderer.indexOf('  prepareMemoryCurrent() {'), renderer.indexOf('  dispose() {'));
+  assert.ok(/if \(this\.lost \|\| this\.current \|\| !memoryWater\.landings\) return;/.test(ahead));
+  const framed = renderer.slice(renderer.indexOf('} else if (profileMemories && memoryWater.framed'));
+  assert.ok(/!this\.currentWarm\) \{[\s\S]*?this\.prepareMemoryCurrent\(\);/.test(framed), 'on the Profile too, if the restore came after the Globe');
+});
+
+test('a lane shift moves the habitat sideways only, and none leaves the paths exactly as before', () => {
+  const c = { ...composition(1440, 900), weight: 0.9, lanes: [{ x: 0.85, y: 0.6 }, { x: 0.15, y: 0.95 }] };
+  const cam = ambientCamera(1440, 900);
+  for (const t of [0, 13.7, 41, 88.2, 140, 230]) {
+    for (const i of [0, 1]) {
+      const plain = ambientPath(i, t, c);
+      assert.deepEqual(ambientPath(i, t, { ...c, laneShift: [0, 0] }), plain, 'no shift, the same path to the bit');
+    }
+    // Whale A's habitat moves by the shift across the frame (B follows A's path and keeps its own)
+    const shifted = ambientPath(0, t, { ...c, laneShift: [0.2, 0] });
+    const plain = ambientPath(0, t, c);
+    assert.ok(Math.abs(shifted[0] - plain[0] - 0.2 * 2 * cam.halfW) < 1e-9, 'across');
+    assert.ok(Math.abs(shifted[1] - plain[1]) < 1e-12 && Math.abs(shifted[2] - plain[2]) < 1e-12, 'never up, down or in depth');
+    // Clamped: a runaway shift cannot carry a habitat off the screen
+    const far = ambientPath(0, t, { ...c, laneShift: [5, 0] });
+    assert.ok(Math.abs(far[0] - plain[0] - LANE_SHIFT_MAX * 2 * cam.halfW) < 1e-9);
+  }
+});
+
+test('with its lane shifted the whale swims there: smoothly, heading continuous, nothing slides', () => {
+  const swim = (shifting) => {
+    const c = { ...composition(1440, 900), weight: 0.9, lanes: [{ x: 0.5, y: 0.6 }, { x: 0.15, y: 0.95 }], laneShift: [0, 0] };
+    const st = newTravel(0);
+    let previous = null;
+    let maxStep = 0;
+    let leftmost = Infinity;
+    // Ninety seconds: more than one whole circuit of A's wander (70 s) once the lane has moved
+    for (let k = 0; k < 30 * 100; k++) {
+      // The lane eases across at the rate composeAround allows, as it would over copy
+      if (shifting) c.laneShift = [Math.min(LANE_SHIFT_MAX, k * DT * LANE_SHIFT_RATE), 0];
+      stepTravel(st, 0, DT, k * DT, c);
+      const pose = sampleAmbientWhale(0, k * DT, c, st);
+      if (previous) {
+        assert.ok(angle(previous.quaternion, pose.quaternion) < 0.05, 'the heading turns, it never snaps');
+        maxStep = Math.max(maxStep, vLen(vSub(pose.position, previous.position)));
+      }
+      if (k >= 30 * 10) leftmost = Math.min(leftmost, pose.position[0]);
+      previous = pose;
+    }
+    return { maxStep, leftmost };
+  };
+  const shifted = swim(true);
+  const plain = swim(false);
+  assert.ok(shifted.maxStep < 0.02, `no frame jumps: ${shifted.maxStep}`);
+  // The far side of its circuit, where the copy is, is where the habitat has moved away from
+  // (the near side is held by the frame, as before)
+  const lane = LANE_SHIFT_MAX * 2 * ambientCamera(1440, 900).halfW;
+  assert.ok(shifted.leftmost - plain.leftmost > 0.5 * lane, `swam ${(shifted.leftmost - plain.leftmost).toFixed(3)} of ${lane.toFixed(3)} clear`);
 });

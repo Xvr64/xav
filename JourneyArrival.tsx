@@ -1,12 +1,12 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { JOURNEYS, RECOMMENDED_JOURNEY, arrival, enterJourney, type JourneyId } from './journeyEntry';
+import { JOURNEYS, RECOMMENDED_JOURNEY, arrival, enterContact, enterJourney, type JourneyId } from './journeyEntry';
 import { mountArrivalField, type ArrivalField } from './arrivalField';
 import { createDissolve, measureLetters } from './arrivalDissolve';
 import { HANDOFF, endHandoff, handoff, handoffRunning } from './journeyHandoff';
 import { creation, triggerCreationGesture } from './creationTimeline';
 import { charGlyph, isDecodable } from './terminalMotion';
-import { CV_DATA, CV_PDF_URL } from './cvData';
+import { CV_PDF_URL } from './cvData';
 import './journeyArrival.css';
 
 type Phase = 'choosing' | 'leaving' | 'gone';
@@ -18,7 +18,7 @@ const reducedMotion = () => typeof matchMedia !== 'undefined' && matchMedia('(pr
 /** The arrival's faces. On a first visit they are still loading when the page mounts. */
 const ARRIVAL_FACES = ['300 1em Newsreader', 'italic 300 1em Newsreader', '400 1em "IBM Plex Mono"'];
 /** The longest the type waits for its fonts before rising in whatever is there. */
-const FONT_WAIT_MS = 1500;
+const FONT_WAIT_MS = 450;
 const facesLoaded = () => {
   try { return typeof document === 'undefined' || !document.fonts || ARRIVAL_FACES.every(face => document.fonts.check(face)); } catch { return true; }
 };
@@ -76,15 +76,20 @@ export function JourneyArrival() {
   const list = useRef<HTMLOListElement>(null);
   /** Where the page had put focus before the arrival took it: the opening's own controls */
   const returnFocus = useRef<HTMLElement | null>(null);
+  /** True only when leaving via the Arrival masthead's Contact shortcut (skips opening and jumps to #contact). */
+  const [contactJump, setContactJump] = useState(false);
   const present = phase !== 'gone';
 
   useEffect(() => {
     if (typeReady) return;
     let settled = false;
     const settle = () => { if (!settled) { settled = true; setTypeReady(true); } };
+    if (facesLoaded()) { settle(); return; }
     Promise.all(ARRIVAL_FACES.map(face => document.fonts.load(face))).then(settle, settle);
+    document.fonts?.ready?.then(settle, settle);
+    const raf = requestAnimationFrame(() => { if (facesLoaded()) settle(); });
     const cap = window.setTimeout(settle, FONT_WAIT_MS);
-    return () => { settled = true; window.clearTimeout(cap); };
+    return () => { settled = true; cancelAnimationFrame(raf); window.clearTimeout(cap); };
   }, [typeReady]);
 
   // Follow the choice, whichever way it was made
@@ -186,14 +191,37 @@ export function JourneyArrival() {
     return () => window.clearTimeout(fallback);
   }, [phase]);
 
-  // Leaving without an opening to enter (reduced motion, no WebGL): the sky dissolves and the veil
-  // lifts onto the page exactly as it was
+  // Leaving without an opening to enter (Contact shortcut, reduced motion, no WebGL): the sky dissolves and
+  // the veil lifts onto the page. For the Arrival Contact shortcut, land cleanly on #contact in ~340–380ms.
   useEffect(() => {
     if (phase !== 'leaving' || handoffRunning()) return;
     field.current?.leave();
-    const fallback = window.setTimeout(() => setPhase('gone'), 1800);
-    return () => window.clearTimeout(fallback);
-  }, [phase]);
+    let raf = 0;
+    if (contactJump) {
+      const hash = '#contact';
+      const land = () => {
+        if (location.hash !== hash) {
+          location.hash = hash;
+        } else {
+          window.dispatchEvent(new HashChangeEvent('hashchange'));
+        }
+        const el = document.getElementById('contact');
+        if (el) {
+          const top = Math.round(el.getBoundingClientRect().top + window.scrollY);
+          window.scrollTo({ top, behavior: 'instant' as ScrollBehavior });
+          el.setAttribute('tabindex', '-1');
+          el.focus({ preventScroll: true });
+        }
+      };
+      land();
+      raf = requestAnimationFrame(land);
+    }
+    const fallback = window.setTimeout(() => setPhase('gone'), contactJump ? 380 : 1800);
+    return () => {
+      if (raf) cancelAnimationFrame(raf);
+      window.clearTimeout(fallback);
+    };
+  }, [phase, contactJump]);
 
   if (!present) return null;
   return createPortal(
@@ -203,10 +231,11 @@ export function JourneyArrival() {
       data-phase={phase}
       data-handoff={phase === 'leaving' && handoffRunning() && !plainExit ? '' : undefined}
       data-chosen={chosen ?? undefined}
+      data-contact-jump={contactJump ? '' : undefined}
       data-keyboard={keyboard ? '' : undefined}
       data-ready={typeReady ? '' : undefined}
       role="dialog"
-      aria-modal="true"
+      aria-modal={phase === 'choosing' ? 'true' : undefined}
       aria-labelledby="journey-title"
       aria-describedby="journey-dek"
       aria-hidden={phase === 'leaving' ? true : undefined}
@@ -217,8 +246,19 @@ export function JourneyArrival() {
       <canvas ref={canvas} className="journey-field" aria-hidden="true" />
       <div ref={stage} className="journey-stage">
         <p ref={masthead} className="journey-masthead">
-          <span>International Business · ESSCA</span>
-          <a className="journey-masthead-cv" href={CV_DATA.emailHref}>Contact</a>
+          <span>International Business <span className="journey-masthead-nowrap">· ESSCA</span></span>
+          <a
+            className="journey-masthead-cv"
+            href="#contact"
+            onClick={event => {
+              event.preventDefault();
+              if (phase !== 'choosing') return;
+              setContactJump(true);
+              enterContact();
+            }}
+          >
+            Contact
+          </a>
           <a className="journey-masthead-cv" href={CV_PDF_URL} target="_blank" rel="noopener noreferrer">
             CV <span aria-hidden="true">↗</span>
             <span className="journey-sr"> (PDF, opens in a new tab)</span>
@@ -239,7 +279,7 @@ export function JourneyArrival() {
                 data-journey={journey.id}
                 data-active={lit === journey.id ? '' : undefined}
                 data-recommended={journey.recommended ? '' : undefined}
-                onClick={() => enterJourney(journey.id)}
+                onClick={() => { if (phase === 'choosing') enterJourney(journey.id); }}
                 onPointerEnter={event => { if (event.pointerType === 'mouse') setHovered(journey.id); }}
                 onPointerLeave={() => setHovered(h => (h === journey.id ? null : h))}
                 onFocus={() => setFocused(journey.id)}

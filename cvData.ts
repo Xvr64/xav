@@ -382,8 +382,7 @@ export const CV_DATA = {
       index: '01',
       title: 'SPORTS & MUSIC',
       bullets: [
-        'Calisthenics and athletic training.',
-        'Bodyweight workouts and personal discipline.',
+        'Calisthenics and athletic training: bodyweight workouts and personal discipline.',
         'Music production, beatmaking, sampling, music history, and sound design.'
       ],
       verbatimNote:
@@ -403,7 +402,7 @@ export const CV_DATA = {
       bullets: [
         'Luxury retail positioning.',
         'Flagship concepts and brand activations across Europe and Asia.',
-        'Celine, Louis Vuitton, and Hermès'
+        'Celine, Louis Vuitton, and Hermès.'
       ],
       verbatimNote:
         'Monitoring luxury retail positioning, flagship concepts, and brand activations across Europe and Asia (Celine, Louis Vuitton, Hermès).',

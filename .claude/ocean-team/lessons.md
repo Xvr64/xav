@@ -45,3 +45,21 @@ Performance rules already in the agent definitions (root restyles, rAF ownership
 - Evidence: 2026-11-21 fresh `claude -p` sessions: Write to `.claude/ocean-team/runs/...` refused as "a sensitive file", also with `--allowedTools`; Write and Edit in `.ocean/runs/...` and `.claude/worktrees/...` succeeded. Docs: permission-modes, "Protected paths".
 - Verified: 2026-11-21, reproduced in the project before and after moving the run folder.
 - Applies to: .claude/, team
+
+## L-007 Run one loop.mjs command at a time
+- Rule: Never start `start`, `review`, `reset` or another `verify` while a `verify` or `final` is running. verify loads the ledger at its start and rewrites the whole file at its end, so anything recorded meanwhile is silently lost. Queue reviews and record them when the run ends.
+- Evidence: mission stabilize-baseline findings.md: `start S5` was erased by a concurrent S2 verify (2026-11-21); reviews were deferred while later verify chains ran.
+- Verified: 2026-11-22, reproduced once and avoided for every later unit.
+- Applies to: team
+
+## L-008 Each Vite server gets its own cacheDir and runs from its own tree
+- Rule: When several agents serve trees that share `node_modules` through a junction, give every server a separate `cacheDir` (a `--config` file in the agent's output folder), `--strictPort`, and `hmr: false` for scripted runs; start it in its tree's folder (Tailwind globs resolve from the cwd).
+- Evidence: mission stabilize-baseline: a shared `node_modules/.vite` mixed two React copies ("Invalid hook call", blank page); builder-s2's pages full-reloaded mid-scenario when other builders edited the worktree.
+- Verified: 2026-11-22, later reviewers then ran in parallel without blank pages.
+- Applies to: dev/, team
+
+## L-009 Wall-clock budgets in unit tests take the best of several batches
+- Rule: A test asserting "X runs in under N ms" times several short batches and asserts on the fastest, never a single mean: reviewers' headless browsers share the CPU during loop verify.
+- Evidence: mission stabilize-baseline, S7 attempt 1: whaleVeil.test.mjs failed at 2.009 ms against 2 ms while three headless Chromes ran; real cost ~0.28 ms; passed 5/5 alone.
+- Verified: 2026-11-22, best of five batches passed under the same load; a real regression still fails every batch.
+- Applies to: *.test.mjs

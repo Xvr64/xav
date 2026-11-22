@@ -1,4 +1,4 @@
-import { INTRO_STORAGE_KEY, JOURNEY_STORAGE_KEY, creation, setCreationJourney, type JourneyId } from './creationTimeline.ts';
+import { INTRO_STORAGE_KEY, JOURNEY_STORAGE_KEY, creation, finishCreation, setCreationJourney, type JourneyId } from './creationTimeline.ts';
 import { beginHandoff } from './journeyHandoff.ts';
 
 /**
@@ -109,6 +109,14 @@ export function enterJourney(id: JourneyId) {
   // The arrival becomes the opening (journeyHandoff.ts); without one to enter, or with reduced
   // motion, the arrival simply lifts away as before
   if (creation.active && !prefersReducedMotion()) beginHandoff(id);
+  launchJourney();
+}
+
+/** Dedicated exit for the Arrival masthead's Contact shortcut: closes the arrival and skips the opening. */
+export function enterContact() {
+  if (!arrival.open) return;
+  arrival.selected = null;
+  if (creation.active) finishCreation('contact');
   launchJourney();
 }
 

@@ -73,36 +73,153 @@ export const inkMixFromAbyss = (abyss: number) => {
   return t * t * (3 - 2 * t);
 };
 
-export function applyAbyssPalette(t: number) {
-  const root = document.documentElement.style;
+/** Every custom property of the palette at ink mix `t`, as [name, value] (pure). */
+export function abyssPaletteEntries(t: number): [string, string][] {
+  const out: [string, string][] = [];
   // How far the page's ink has turned light (0 on white water, 1 on black): read by CSS to set
   // light type a little thinner and more open on dark water, where it reads heavier
-  root.setProperty('--ink-light', t.toFixed(3));
+  out.push(['--ink-light', t.toFixed(3)]);
   for (const c of ABYSS_TEXT) {
-    root.setProperty(
+    out.push([
       `--ink-${c.hex}`,
       `rgb(${Math.round(lerpN(c.light[0], c.dark[0], t))}, ${Math.round(lerpN(c.light[1], c.dark[1], t))}, ${Math.round(lerpN(c.light[2], c.dark[2], t))})`
-    );
+    ]);
   }
   for (const a of ABYSS_RULE_ALPHAS) {
     const al = a / 100;
-    root.setProperty(
+    out.push([
       `--rule-${a}`,
       `rgba(${Math.round(lerpN(23, 184, t))}, ${Math.round(lerpN(23, 206, t))}, ${Math.round(lerpN(23, 232, t))}, ${lerpN(al, al * 0.80, t).toFixed(3)})`
-    );
+    ]);
   }
   for (const f of ABYSS_FILLS) {
-    root.setProperty(
+    out.push([
       `--fill-${f.name}`,
       `rgba(${Math.round(lerpN(f.light[0], f.dark[0], t))}, ${Math.round(lerpN(f.light[1], f.dark[1], t))}, ${Math.round(lerpN(f.light[2], f.dark[2], t))}, ${lerpN(f.light[3], f.dark[3], t).toFixed(3)})`
-    );
+    ]);
   }
-  root.setProperty('--glass-bg', `rgba(255, 255, 255, ${lerpN(0.28, 0.06, t).toFixed(3)})`);
-  root.setProperty('--glass-chip-bg', `rgba(255, 255, 255, ${lerpN(0.2, 0.04, t).toFixed(3)})`);
-  root.setProperty(
+  out.push(['--glass-bg', `rgba(255, 255, 255, ${lerpN(0.28, 0.06, t).toFixed(3)})`]);
+  out.push(['--glass-chip-bg', `rgba(255, 255, 255, ${lerpN(0.2, 0.04, t).toFixed(3)})`]);
+  out.push([
     '--glass-border',
     `rgba(${Math.round(lerpN(0, 255, t))}, ${Math.round(lerpN(0, 255, t))}, ${Math.round(lerpN(0, 255, t))}, ${lerpN(0.1, 0.18, t).toFixed(3)})`
-  );
+  ]);
+  return out;
+}
+
+/**
+ * WHO IS READING THE PALETTE — the same answer as the water's (oceanWorld.ts): while the Globe's
+ * stage is the whole screen, only the stage and the fixed chrome above it show any of this ink.
+ * A custom property on <html> restyles the whole document (~30 ms measured here), and the ink
+ * flips in the middle of the film, so while the stage owns the screen the palette is written on
+ * those few elements instead (nearer than the root's, so they win inside), and the root is
+ * brought up to date in the same call the moment the stage lets go. What is skipped is only the
+ * restyling of copy that is not on screen.
+ */
+export const PALETTE_SCOPE_SELECTORS = ['[data-journey-runway]', '.fixed-top-controls', '.depth-gauge'];
+/** :root properties computed from the palette (`--display-weight: calc(… var(--ink-light) …)`). */
+const PALETTE_REFERENCE = /var\(\s*--(?:ink|rule|fill|glass)-/;
+
+/**
+ * The ink a scoped target inherits. Copy inside `.ocean-legible` (buildAbyssCss) inherits
+ * `color: var(--ink-171717)` computed where that rule matches, against the root's (stale) ink, so
+ * a target inside it re-declares the same colour to resolve against its own palette; the fixed
+ * chrome outside it keeps whatever colour it already had.
+ */
+export const PALETTE_SCOPE_INK = 'var(--ink-171717)';
+const INK_SCOPE = '.ocean-legible';
+
+interface PaletteTarget { style: CSSStyleDeclaration; saved: Map<string, string>; inheritsInk: boolean }
+let paletteTargets: PaletteTarget[] | null = null;
+let derivedProperties: [string, string][] | null = null;
+/** The ink mix last written on the scoped targets (what the screen shows while they hold it). */
+let scopedMix = 0;
+
+/**
+ * Custom properties declared on :root whose value reads the palette. A custom property is
+ * resolved where it is declared, so a scoped --ink-light alone would not reach a :root
+ * `--display-weight`; each target re-declares them (the same text) to resolve against its own.
+ */
+function rootDerivedProperties(): [string, string][] {
+  if (derivedProperties) return derivedProperties;
+  const found: [string, string][] = [];
+  type Rule = { selectorText?: string; style?: CSSStyleDeclaration; cssRules?: ArrayLike<Rule> };
+  const visit = (rules: ArrayLike<Rule> | undefined) => {
+    if (!rules) return;
+    for (let r = 0; r < rules.length; r++) {
+      const rule = rules[r];
+      if (rule.cssRules) visit(rule.cssRules);
+      if (rule.selectorText !== ':root' || !rule.style) continue;
+      for (let i = 0; i < rule.style.length; i++) {
+        const name = rule.style.item(i);
+        if (!name.startsWith('--') || found.some(([n]) => n === name)) continue;
+        const value = rule.style.getPropertyValue(name).trim();
+        if (PALETTE_REFERENCE.test(value)) found.push([name, value]);
+      }
+    }
+  };
+  for (const sheet of Array.from(document.styleSheets ?? [])) {
+    try { visit(sheet.cssRules as unknown as ArrayLike<Rule>); } catch { /* another origin's sheet */ }
+  }
+  return (derivedProperties = found);
+}
+
+function findPaletteTargets(): PaletteTarget[] | null {
+  const els = PALETTE_SCOPE_SELECTORS.map((s) => document.querySelector<HTMLElement>(s));
+  // Without the runway there is no stage to scope to: the root takes it, as always
+  if (!els[0]) return null;
+  return els
+    .filter((el): el is HTMLElement => !!el)
+    .map((el) => ({ style: el.style, saved: new Map(), inheritsInk: !!el.closest?.(INK_SCOPE) }));
+}
+
+function releasePaletteTargets() {
+  if (!paletteTargets) return;
+  for (const t of paletteTargets) {
+    for (const [name, value] of t.saved) {
+      if (value) t.style.setProperty(name, value);
+      else t.style.removeProperty(name);
+    }
+  }
+  paletteTargets = null;
+}
+
+/** Whether the palette is currently held on the stage (the root is behind it). */
+export const abyssPaletteScoped = () => paletteTargets !== null;
+
+/**
+ * Write the palette at ink mix `t`. `scoped`: the Globe's stage is all of the page on screen
+ * (see above): the stage and the fixed chrome take it, the root keeps what it had. Any call
+ * with `scoped` false takes the overrides off and writes the root in the same task.
+ */
+export function applyAbyssPalette(t: number, scoped = false) {
+  const entries = abyssPaletteEntries(t);
+  if (scoped) {
+    paletteTargets ??= findPaletteTargets();
+    if (paletteTargets) {
+      const all = [...entries, ...rootDerivedProperties()];
+      for (const target of paletteTargets) {
+        const own: [string, string][] = target.inheritsInk ? [...all, ['color', PALETTE_SCOPE_INK]] : all;
+        for (const [name, value] of own) {
+          if (!target.saved.has(name)) target.saved.set(name, target.style.getPropertyValue(name));
+          target.style.setProperty(name, value);
+        }
+      }
+      scopedMix = t;
+      return;
+    }
+  }
+  releasePaletteTargets();
+  const root = document.documentElement.style;
+  for (const [name, value] of entries) root.setProperty(name, value);
+}
+
+/**
+ * Give the scoped targets back (the ocean layer unmounting): if the stage held the palette, the
+ * root takes the ink it showed, in the same call, so nothing is left reading a stale root.
+ */
+export function releaseAbyssPalette() {
+  if (paletteTargets) applyAbyssPalette(scopedMix, false);
 }
 
 /**

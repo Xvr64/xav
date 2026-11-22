@@ -267,16 +267,46 @@ const writeWater = (now: number) => {
   lastLow = wantLow;
 };
 /**
+ * A Magnetic CV passage in flight (magneticCV.ts marks the arriving chapter, or the Globe's stage,
+ * for exactly the length of the passage). Its clip-path wipe runs at display rate, and a root
+ * write in the middle of it (a whole-document restyle, ~30 ms) is the passage's dropped frame. So
+ * for that second the water is held as on the Globe's stage: the page behind the canvas and the
+ * fixed chrome stay current, the copy's halo keeps the colour it had, and the root is brought up
+ * to date as the passage lands (on the next call, or by `PASSAGE_SETTLE_MS` at the latest).
+ */
+export const CV_PASSAGE_SELECTOR = '[data-cv-arrive], [data-globe-arrive]';
+export const cvPassageInFlight = () => typeof document !== 'undefined' && !!document.querySelector?.(CV_PASSAGE_SELECTOR);
+export const PASSAGE_SETTLE_MS = WATER_CSS_INTERVAL_MS;
+/** The caller's own stage flag at the last call: the settle check must not undo it. */
+let callerStageOnly = false;
+let settleTimer: ReturnType<typeof setTimeout> | 0 = 0;
+const settleAfterPassage = () => {
+  settleTimer = 0;
+  if (!stageTargets || callerStageOnly) return;
+  if (cvPassageInFlight()) { settleTimer = setTimeout(settleAfterPassage, PASSAGE_SETTLE_MS); return; }
+  if (waterTimer) { clearTimeout(waterTimer); waterTimer = 0; }
+  wantStageOnly = false;
+  writeWater(performance.now());
+};
+
+/**
  * The page's own water (body background, text halos, caption veils, the phone menu) takes the
  * colour of the ocean at the screen's centre, so nothing drawn on it reads as a grey patch.
  * The water deepens down the screen, so washes that sit low (the phone Globe caption's veil)
  * take `--abyss-wash-low`, the colour four fifths of the way down, `lowDepth`.
  * Called every drawn frame; the document is only restyled every WATER_CSS_INTERVAL_MS.
- * `stageOnly`: the Globe's pinned stage is all of the page that is on screen (see above).
+ * `stageOnly`: the Globe's pinned stage is all of the page that is on screen (see above). A
+ * Magnetic CV passage in flight is treated the same way (see cvPassageInFlight).
  */
 export function applyWaterColor(depth: number, lowDepth = depth, stageOnly = false) {
   wantWater = css(waterAt(depth));
   wantLow = css(waterAt(lowDepth));
+  callerStageOnly = stageOnly;
+  // The passage is only looked for when it matters: a write is due, or the root is being held
+  if (!stageOnly && (stageTargets || wantWater !== lastWater || wantLow !== lastLow) && cvPassageInFlight()) {
+    stageOnly = true;
+    if (!settleTimer) settleTimer = setTimeout(settleAfterPassage, PASSAGE_SETTLE_MS);
+  }
   wantStageOnly = stageOnly;
   const now = performance.now();
   if (stageTargets && !stageOnly) {

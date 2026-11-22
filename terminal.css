@@ -649,6 +649,21 @@ body {
 .contact-foot .contact-elsewhere { grid-column: c / end; }
 .contact-elsewhere li + li { margin-top: var(--space-xs); }
 .contact-elsewhere .contact-sign { margin-top: var(--space-l); }
+/* Touch targets of at least 44px: an inline link's vertical padding widens what a finger can hit
+   without moving a single line (inline padding never enters the line box) */
+.terminal-portfolio #contact .contact-address { padding-block: 5px; }
+.terminal-portfolio .contact-elsewhere a { padding-block: 11px; }
+/* The same for compact controls whose look must not change: an invisible 44px hit area */
+.hit-44 { position: relative; }
+.hit-44::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: max(100%, 44px);
+  height: max(100%, 44px);
+  transform: translate(-50%, -50%);
+}
 
 /* Text-weight controls: quiet outlines, never filled panels */
 .text-control {
@@ -753,7 +768,10 @@ body {
   .lang-row:nth-child(even) { margin-left: var(--space-l); }
   .contact-foot { margin-top: var(--space-xl); }
   .edu-entry--school::before { left: 0; }
-  .edu-tier-label { padding-left: 0; margin-top: var(--space-xl); }
+  /* A phone's first Education screen holds the degree and the schools down to Moscow: the schools
+     sit a little closer, so Moscow never ends under the bottom edge */
+  .edu-tier-label { padding-left: 0; margin-top: var(--space-l); }
+  .edu-entry--school { padding-block: 12px; }
 }
 
 /* ---------------------------------------------------------------------------
@@ -809,7 +827,6 @@ body {
   align-items: center;
   gap: clamp(24px, 2.5vw, 36px);
   pointer-events: auto;
-  text-shadow: 0 0 2px var(--abyss-halo), 0 0 9px var(--abyss-halo);
 }
 @media (max-width: 767px) {
   .fixed-top-controls { gap: 14px; }
@@ -885,7 +902,6 @@ body {
   opacity: 0;
   visibility: hidden;
   transition: opacity 0.6s ease, visibility 0.6s;
-  text-shadow: 0 0 2px var(--abyss-halo), 0 0 9px var(--abyss-halo);
 }
 .depth-gauge[data-shown] { opacity: 1; visibility: visible; }
 .depth-gauge ol { list-style: none; margin: 0; padding: 0; }
@@ -954,7 +970,6 @@ body {
   height: 5px;
   border-radius: 50%;
   background: var(--gauge-strong);
-  box-shadow: 0 0 0 3px var(--abyss-halo);
   will-change: transform;
   pointer-events: none;
 }
@@ -985,12 +1000,9 @@ body {
 
 /* ---------------------------------------------------------------------------
    Lantern cursor (lanternCursor.ts). Only ever active on fine, hover-capable pointers after a
-   real mouse move; touch, pen and unsupported browsers keep the native cursor.
+   real mouse move; touch, pen and unsupported browsers never see it. The native cursor always
+   stays visible: the lantern only accompanies it.
    --------------------------------------------------------------------------- */
-@media (hover: hover) and (pointer: fine) {
-  html.lantern-active,
-  html.lantern-active * { cursor: none !important; }
-}
 .lantern,
 .lantern-light {
   position: fixed;

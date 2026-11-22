@@ -1,5 +1,6 @@
-/** Pure scroll mappings: the same position always produces the same glyphs. */
-export const ASCII_GLYPHS = '0123456789#%&@/\\|+-=*:' + ';';
+/** Pure scroll mappings: the same position always produces the same glyphs.
+ * Advance-width-safe oceanic character set (12 glyphs, coprime with step 7). */
+export const ASCII_GLYPHS = '·:-~/\\|+*=;_';
 export const clamp01 = (value: number) => Math.max(0, Math.min(1, value));
 export const progressBetween = (position: number, start: number, length: number) =>
   clamp01((position - start) / Math.max(1, length));

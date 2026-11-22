@@ -846,3 +846,212 @@ export function createMagneticGestureMachine(): MagneticGestureMachine {
     }
   };
 }
+
+/**
+ * Resolve the exact chapter boundary scrollY when an active transition is interrupted
+ * (e.g. tab backgrounding visibilitychange or pagehide). Before t = 0.35 it snaps back
+ * cleanly to startY; from t = 0.35 onward it completes to endY.
+ */
+export function resolveInterruptedScrollY(
+  startY: number,
+  endY: number,
+  t: number
+): { targetY: number; landedOnDestination: boolean } {
+  const landedOnDestination = clamp01(t) >= 0.35;
+  return {
+    targetY: landedOnDestination ? endY : startY,
+    landedOnDestination
+  };
+}
+
+/**
+ * Where an interrupted Profile transfer settles. Both transfer steps share one scrollY, so the
+ * step cannot be read back from the scroll position: progress toward the step the transfer is
+ * currently heading for (p for a forward transfer, 1 − p for a reverse one) decides it with the
+ * same 0.35 rule as resolveInterruptedScrollY.
+ */
+export function resolveInterruptedTransfer(
+  dir: GestureDirection,
+  p: number
+): { landedOnDestination: boolean; step: 0 | 1 } {
+  const { landedOnDestination } = resolveInterruptedScrollY(0, 1, dir > 0 ? p : 1 - p);
+  return { landedOnDestination, step: landedOnDestination === (dir > 0) ? 1 : 0 };
+}
+
+export interface ProfileTransferStepResult {
+  readonly p: number;
+  readonly rate: number;
+  readonly targetRate: number;
+  readonly dir: GestureDirection;
+  readonly done: boolean;
+  readonly landedStep: 0 | 1;
+}
+
+export interface ProfileTransferPlayhead {
+  readonly p: number;
+  readonly rate: number;
+  readonly targetRate: number;
+  readonly dir: GestureDirection;
+  /** Feed travel (px, signed) from the physical gesture `gesture` (an id from createInputGestureIds). */
+  feedInput(deltaPx: number, gesture: number): void;
+  step(dtMs: number): ProfileTransferStepResult;
+}
+
+/** Longest frame (ms) the transfer playhead integrates at once: a janky phone frame still
+ * advances by its real duration, while a stale timestamp cannot jump the whole transfer. */
+export const PROFILE_TRANSFER_MAX_DT_MS = 250;
+
+/**
+ * Integrated progress playhead p ∈ [0, 1] for Profile's two-wave whale-to-photograph memory transfer.
+ * - Normal playback advances at 1.0× over forwardDurationMs (or -1.0× over reverseDurationMs).
+ * - A FRESH same-direction gesture (>=36px) smoothly accelerates to 2.4×. The gesture that started
+ *   the transfer, or that last reversed it, never boosts it: its own continuation (trackpad momentum,
+ *   a finger still sliding, key auto-repeat) is the same gesture.
+ * - A deliberate opposite-direction gesture (>=28px) smoothly reverses direction at 1.6×; that
+ *   gesture then owns the transfer.
+ */
+export function createProfileTransferPlayhead(
+  initialDir: GestureDirection,
+  forwardDurationMs: number,
+  reverseDurationMs: number,
+  startGesture = 0
+): ProfileTransferPlayhead {
+  let p = initialDir > 0 ? 0 : 1;
+  let dir: GestureDirection = initialDir;
+  let targetSpeed = 1;
+  let rate = initialDir * 1;
+  let sameAccum = 0;
+  let oppAccum = 0;
+  let owner = startGesture;
+  let lastGesture = NaN;
+
+  return {
+    get p() { return p; },
+    get rate() { return rate; },
+    get targetRate() { return dir * targetSpeed; },
+    get dir() { return dir; },
+
+    feedInput(deltaPx: number, gesture: number) {
+      if (!Number.isFinite(deltaPx) || deltaPx === 0) return;
+      if (gesture !== lastGesture) {
+        lastGesture = gesture;
+        sameAccum = 0;
+        oppAccum = 0;
+      }
+      const inputDir = Math.sign(deltaPx) as GestureDirection;
+      const mag = Math.abs(deltaPx);
+      if (inputDir !== dir) {
+        // A gesture older than the one that set the current direction (e.g. a trackpad tail still
+        // flowing after a PageUp reversed the transfer) cannot flip it back.
+        if (gesture < owner) return;
+        sameAccum = 0;
+        oppAccum += mag;
+        if (oppAccum >= 28) {
+          dir = inputDir;
+          targetSpeed = 1.6;
+          oppAccum = 0;
+          owner = gesture;
+        }
+      } else {
+        oppAccum = 0;
+        if (gesture !== owner) {
+          sameAccum += mag;
+          if (sameAccum >= 36) {
+            targetSpeed = 2.4;
+          }
+        }
+      }
+    },
+
+    step(dtMs: number): ProfileTransferStepResult {
+      const dt = Math.max(0, Math.min(PROFILE_TRANSFER_MAX_DT_MS, Number.isFinite(dtMs) ? dtMs : 16));
+      const wantedRate = dir * targetSpeed;
+      const alpha = dt > 0 ? 1 - Math.exp(-dt / 110) : 0;
+      rate += (wantedRate - rate) * alpha;
+      const baseDur = Math.max(1, rate >= 0 ? forwardDurationMs : reverseDurationMs);
+      p = clamp01(p + (rate * dt) / baseDur);
+      const done = (dir > 0 && p >= 0.9995) || (dir < 0 && p <= 0.0005);
+      if (done) p = dir > 0 ? 1 : 0;
+      return {
+        p,
+        rate,
+        targetRate: wantedRate,
+        dir,
+        done,
+        landedStep: dir > 0 ? 1 : 0
+      };
+    }
+  };
+}
+
+export interface InputGestureIds {
+  /** A new discrete physical gesture (touchstart, non-repeat keydown). */
+  next(): number;
+  /** The id of the wheel gesture this packet belongs to: a stream keeps one id until it ends. */
+  wheel(magnitude: number, now: number): number;
+}
+
+/**
+ * Identify physical gestures so a transfer can tell its own starting gesture from a fresh one.
+ * A wheel stream (trackpad momentum, a spun mouse wheel) keeps its id until a quiet gap
+ * (>= MAGNETIC_DRAIN_IDLE_MS) or a short pause followed by a clearly bolder packet
+ * (>= MAGNETIC_FRESH_PAUSE_MS and >= 2.5× the stream's recent magnitude), as when fingers
+ * land again on a trackpad and cut its momentum.
+ */
+export function createInputGestureIds(): InputGestureIds {
+  let seq = 0;
+  let wheelId = 0;
+  let lastWheel = -Infinity;
+  let ema = 0;
+  return {
+    next() { return ++seq; },
+    wheel(magnitude: number, now: number) {
+      const mag = Math.abs(magnitude);
+      const gap = now - lastWheel;
+      const fresh =
+        !wheelId ||
+        gap >= MAGNETIC_DRAIN_IDLE_MS ||
+        (gap >= MAGNETIC_FRESH_PAUSE_MS && mag >= Math.max(ema * 2.5, 10));
+      if (fresh) {
+        wheelId = ++seq;
+        ema = mag;
+      } else {
+        ema = ema * 0.6 + mag * 0.4;
+      }
+      lastWheel = now;
+      return wheelId;
+    }
+  };
+}
+
+export interface CvReadingEntry {
+  readonly id: string;
+  readonly offset: number;
+  readonly step?: number;
+}
+export type CvHistoryOp =
+  | { readonly kind: 'replace'; readonly reading: CvReadingEntry }
+  | { readonly kind: 'push'; readonly reading: CvReadingEntry; readonly url: string };
+
+/**
+ * History writes for a move that has landed (finish() or an interrupt() that lands on the
+ * destination), so the hash and Back/Forward state always name the chapter on screen.
+ */
+export function planHistoryCommit(o: {
+  from: CvReadingEntry;
+  to: CvReadingEntry;
+  toIsCv: boolean;
+  toIsProfile: boolean;
+  hash: string;
+  clearUrl: string;
+}): CvHistoryOp[] {
+  if (o.toIsCv) {
+    const targetHash = '#' + o.to.id;
+    if (o.hash !== targetHash) {
+      return [{ kind: 'replace', reading: o.from }, { kind: 'push', reading: o.to, url: targetHash }];
+    }
+    return o.toIsProfile ? [{ kind: 'replace', reading: o.to }] : [];
+  }
+  if (!o.hash) return [];
+  return [{ kind: 'replace', reading: o.from }, { kind: 'push', reading: { id: o.to.id, offset: 0 }, url: o.clearUrl }];
+}

@@ -25,9 +25,14 @@ export interface VeilRect {
   field?: boolean;
 }
 
-/** What survives right behind copy: the body's tone cells, and the line work that holds the form. */
+/**
+ * What survives right behind copy: the body's tone cells, and the line work that holds the form.
+ * The line work keeps no more than the tone there: on night water a pale contour stroke behind a
+ * 300-weight italic competed with it at 0.22. Only the line box and its padding are affected; the
+ * contour is whole across the reading water around the copy and in open water (FIELD_DEPTH).
+ */
 export const VEIL_KEEP_TONE = 0.1;
-export const VEIL_KEEP_LINE = 0.22;
+export const VEIL_KEEP_LINE = 0.1;
 /** Clear water kept around each line box (CSS px), before the feather. */
 export const VEIL_PAD_X = 16;
 export const VEIL_PAD_Y = 9;

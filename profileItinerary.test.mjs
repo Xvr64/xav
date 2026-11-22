@@ -5,9 +5,12 @@ import { profileCityStops } from './profileCityStops.ts';
 import {
   ASCII_HOLD_DURATION,
   MEMORY_DURATION,
+  MEMORY_INSPECT_QUERY,
   MEMORY_RETURN_DURATION,
   WAVE1_DURATION,
   WAVE2_DURATION,
+  canInspectMemory,
+  nextMemoryInspection,
   sampleMemory
 } from './profileMemoryTimeline.ts';
 import {
@@ -183,4 +186,85 @@ test('Profile eight-city editorial spread enforces exact cities, zero frames/con
   for (const forbidden of ['#experience', '#education', '#skills', '#languages', '#interests', '#contact']) {
     assert.equal(cssSrc.includes(forbidden), false, `profileItinerary.css must not target ${forbidden}`);
   }
+});
+
+test('step-0 cue follows the reveal state: shown only while the plates wait, never under reduced motion, no timer', () => {
+  const itinerarySrc = readFileSync(new URL('./ProfileItinerary.tsx', import.meta.url), 'utf8');
+  const cssSrc = readFileSync(new URL('./profileItinerary.css', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
+
+  // One quiet mono line with the approved wording, kept out of the accessibility tree
+  assert.match(itinerarySrc, /<p className="profile-memory-cue meta" aria-hidden="true">Scroll once to surface memories<\/p>/);
+  assert.equal((itinerarySrc.match(/Scroll once to surface memories/g) ?? []).length, 1);
+  // State-driven, never time-driven
+  assert.doesNotMatch(itinerarySrc, /setTimeout|setInterval/);
+
+  const rule = (selector) => {
+    const at = cssSrc.indexOf(selector + ' {');
+    assert.ok(at >= 0, `missing rule ${selector}`);
+    return cssSrc.slice(at, cssSrc.indexOf('}', at));
+  };
+  // Hidden by default (revealing, restoring, revealed, or no Magnetic CV at all)
+  const base = rule('.terminal-portfolio #introduction .profile-memory-cue');
+  assert.match(base, /opacity: 0;/);
+  assert.match(base, /visibility: hidden;/);
+  assert.match(base, /pointer-events: none;/);
+  // Shown only on the active Profile while data-plates="waiting"
+  const shown = rule('html[data-profile-steps] .terminal-portfolio #introduction .profile-itinerary[data-plates="waiting"] ~ .profile-memory-cue');
+  assert.match(shown, /visibility: visible;/);
+  assert.equal((cssSrc.match(/~ \.profile-memory-cue/g) ?? []).length, 1, 'no other state shows the cue');
+  // Never under reduced motion (the photographs are already there)
+  const reduced = cssSrc.slice(cssSrc.indexOf('@media (prefers-reduced-motion: reduce)'));
+  assert.match(reduced, /\.terminal-portfolio #introduction \.profile-memory-cue \{\s*display: none;/);
+});
+
+test('mobile photo inspection opens only after the reveal, only on narrow screens, and always closes', () => {
+  assert.equal(MEMORY_INSPECT_QUERY, '(max-width: 850px)');
+
+  for (const plates of [undefined, 'waiting', 'revealing', 'restoring']) {
+    assert.equal(canInspectMemory(plates, true), false, `no inspection while ${plates}`);
+    assert.equal(nextMemoryInspection(null, { type: 'open', id: 'moscow', plates, narrow: true }), null);
+  }
+  assert.equal(canInspectMemory('revealed', false), false, 'never on wide screens');
+  assert.equal(nextMemoryInspection(null, { type: 'open', id: 'moscow', plates: 'revealed', narrow: false }), null);
+
+  assert.equal(canInspectMemory('revealed', true), true);
+  assert.equal(nextMemoryInspection(null, { type: 'open', id: 'moscow', plates: 'revealed', narrow: true }), 'moscow');
+  assert.equal(nextMemoryInspection('moscow', { type: 'open', id: 'doha', plates: 'revealed', narrow: true }), 'doha');
+  // A refused open leaves the current photograph as it is
+  assert.equal(nextMemoryInspection('doha', { type: 'open', id: 'pau', plates: 'restoring', narrow: true }), 'doha');
+  assert.equal(nextMemoryInspection('doha', { type: 'close' }), null);
+  assert.equal(nextMemoryInspection(null, { type: 'close' }), null);
+});
+
+test('inspection markup: invisible row targets on narrow screens only, a borderless modal plate the Magnetic CV ignores', () => {
+  const itinerarySrc = readFileSync(new URL('./ProfileItinerary.tsx', import.meta.url), 'utf8');
+  const cssSrc = readFileSync(new URL('./profileItinerary.css', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
+  const magneticSrc = readFileSync(new URL('./magneticCV.ts', import.meta.url), 'utf8');
+
+  // Row targets do not exist on wide screens or before the reveal
+  assert.match(cssSrc, /\.profile-city-inspect \{\s*display: none;\s*\}/);
+  assert.match(cssSrc, /@media \(max-width: 850px\) \{\s*\.profile-itinerary\[data-plates="revealed"\] \.profile-city-inspect \{/);
+  // The open plate is an aria-modal dialog: magneticCV's ignoreTarget() drops wheel, key and touch
+  // input while one is shown, and the layer stops its touches from bubbling any further
+  assert.match(itinerarySrc, /role="dialog"\s+aria-modal="true"/);
+  assert.match(magneticSrc, /\[aria-modal="true"\]/);
+  assert.match(itinerarySrc, /addEventListener\('touchmove', still, \{ passive: false \}\)/);
+  assert.match(itinerarySrc, /focus\(\{ preventScroll: true \}\)/);
+  // Uncropped photograph with its city and years, no frame or panel
+  const plate = cssSrc.slice(cssSrc.indexOf('.profile-memory-inspect-plate img {'));
+  assert.match(plate, /max-width: 100%;/);
+  assert.doesNotMatch(cssSrc.slice(cssSrc.indexOf('.profile-memory-inspect {')), /border: 1px|border-radius: [1-9]|object-fit: cover/);
+  assert.match(itinerarySrc, /CV_DATA\.locations\.map\(\(location\) => \[location\.id, location\.period\]\)/);
+});
+
+test('history navigation closes the photo plate without pulling focus (and the page) back to Profile', () => {
+  const itinerarySrc = readFileSync(new URL('./ProfileItinerary.tsx', import.meta.url), 'utf8');
+  // Back/forward or a hash change moves the Magnetic CV under the dialog: it must close
+  assert.match(itinerarySrc, /addEventListener\('popstate', onHistory\)/);
+  assert.match(itinerarySrc, /addEventListener\('hashchange', onHistory\)/);
+  assert.match(itinerarySrc, /removeEventListener\('popstate', onHistory\)/);
+  assert.match(itinerarySrc, /removeEventListener\('hashchange', onHistory\)/);
+  // ...without handing focus back to the Profile row (magneticCV follows focus to its chapter)
+  assert.match(itinerarySrc, /const onHistory = \(\) => onClose\(false\)/);
+  assert.match(itinerarySrc, /if \(restoreFocus && trigger\?\.isConnected\)/);
 });

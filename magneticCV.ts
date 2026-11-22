@@ -3,7 +3,9 @@ import { SETTLE_MS } from './cinematicScroll';
 import {
   chapterBounds,
   copyArrivePhase,
+  createInputGestureIds,
   createMagneticGestureMachine,
+  createProfileTransferPlayhead,
   depthGlideEase,
   depthPassagePhase,
   inSweepPhase,
@@ -13,10 +15,14 @@ import {
   oceanWaveY,
   outSweepPhase,
   passage,
+  planHistoryCommit,
+  resolveInterruptedScrollY,
+  resolveInterruptedTransfer,
   titleArrivePhase,
   TRANSITION_DURATION_MS,
   transitionPresetFor,
-  type GestureDirection
+  type GestureDirection,
+  type ProfileTransferPlayhead
 } from './magneticCVState';
 import { createAbyssalCipher } from './abyssalCipher';
 import { profileCityStops } from './profileCityStops';
@@ -84,6 +90,11 @@ export function mountMagneticCV() {
   const cipher = createAbyssalCipher();
 
   const gesture = createMagneticGestureMachine();
+  const gestureIds = createInputGestureIds();
+  let keyGesture = 0;
+  let lastWheelGesture = 0;
+  /** A wheel stream whose transfer direction a newer key press or touch reversed (see feedTransfer). */
+  let staleWheelGesture = 0;
   const profile = cvElements.find(el => el.id === 'introduction');
   const itinerary = profile?.querySelector<HTMLElement>('.profile-itinerary');
   const memories = itinerary && mountProfileMemories(itinerary);
@@ -108,6 +119,7 @@ export function mountMagneticCV() {
     began: number;
     startY: number;
     endY: number;
+    transferPlayhead?: ProfileTransferPlayhead | null;
   } | null = null;
 
   let frame = 0;
@@ -122,6 +134,7 @@ export function mountMagneticCV() {
     startY: number;
     taken: boolean;
     reading: boolean;
+    gesture: number;
   } | null = null;
   let readingBounds: Chapter | null = null;
   let boundsTimer = 0;
@@ -279,6 +292,9 @@ export function mountMagneticCV() {
       globeStage.toggleAttribute('data-globe-muted', muteGlobe);
     }
     visibleChapter = active;
+    if (!animation && active?.kind === 'cv') {
+      passage.requestDecode?.();
+    }
   }
 
   function releaseBounds() {
@@ -379,27 +395,34 @@ export function mountMagneticCV() {
       });
     }
 
-    // Update URL hash and save reading state for Browser Back / Forward.
+    commitHistory(from, to, offset, endY);
     if (to.kind === 'cv') {
-      const targetHash = '#' + to.id;
-      if (location.hash !== targetHash) {
-        history.replaceState({ ...history.state, cvReading: { id: from.id, offset, step: isProfile(from) ? cityStep : undefined } }, '');
-        history.pushState({ ...history.state, cvReading: { id: to.id, offset: endY - to.top, step: isProfile(to) ? cityStep : undefined } }, '', targetHash);
-      } else if (isProfile(to)) {
-        history.replaceState({ ...history.state, cvReading: { id: to.id, offset: endY - to.top, step: cityStep } }, '');
-      }
       if (focus) to.el.focus({ preventScroll: true });
     } else {
-      // Returning to Shanghai: clear CV hash cleanly while preserving Back/Forward state.
-      if (location.hash) {
-        history.replaceState({ ...history.state, cvReading: { id: from.id, offset, step: isProfile(from) ? cityStep : undefined } }, '');
-        history.pushState({ ...history.state, cvReading: { id: to.id, offset: 0 } }, '', location.pathname + location.search);
-      }
       globeScrollGeometry.requestRender?.();
     }
   }
 
-  function start(from: Chapter, to: Chapter, dir: GestureDirection, keyboard = false, now = performance.now()) {
+  /** Update the URL hash and save reading state for Browser Back / Forward once a move has landed
+   * on `to` (returning to Shanghai clears the CV hash while preserving Back/Forward state). */
+  function commitHistory(from: Chapter, to: Chapter, offset: number, endY: number) {
+    const ops = planHistoryCommit({
+      from: { id: from.id, offset, step: isProfile(from) ? cityStep : undefined },
+      to: { id: to.id, offset: endY - to.top, step: isProfile(to) ? cityStep : undefined },
+      toIsCv: to.kind === 'cv',
+      toIsProfile: isProfile(to),
+      hash: location.hash,
+      clearUrl: location.pathname + location.search
+    });
+    for (const op of ops) {
+      if (op.kind === 'replace') history.replaceState({ ...history.state, cvReading: op.reading }, '');
+      else history.pushState({ ...history.state, cvReading: op.reading }, '', op.url);
+    }
+  }
+
+  /** `gestureId` names the physical gesture that starts the move (createInputGestureIds), so a
+   * Profile transfer can tell that gesture's own continuation from a fresh one. */
+  function start(from: Chapter, to: Chapter, dir: GestureDirection, keyboard = false, now = performance.now(), gestureId = 0) {
     userInteracted = true;
     const startY = scrollY;
     const cityMove = from === to;
@@ -431,6 +454,10 @@ export function mountMagneticCV() {
 
     const focus = keyboard || (from.kind === 'cv' && from.el.contains(document.activeElement));
 
+    const transferPlayhead = transfer
+      ? createProfileTransferPlayhead(dir, MEMORY_DURATION, MEMORY_RETURN_DURATION, gestureId)
+      : null;
+
     lastDurationTargetMs = duration;
     animation = {
       from,
@@ -443,7 +470,8 @@ export function mountMagneticCV() {
       landingAtBottom,
       began: now,
       startY,
-      endY
+      endY,
+      transferPlayhead
     };
     if (isProfile(from) || isProfile(to)) root.setAttribute('data-profile-steps', '');
 
@@ -456,9 +484,25 @@ export function mountMagneticCV() {
       return;
     }
     if (cityMove) {
+      let prevTime = now;
       const glide = (time: number) => {
+        if (!animation) return;
+        if (transferPlayhead) {
+          const dt = Math.max(0, time - prevTime);
+          prevTime = time;
+          const st = transferPlayhead.step(dt);
+          memories?.draw(st.p);
+          relockTransfer(time);
+          cityStep = st.landedStep;
+          animation.endY = cityStops[cityStep];
+          const eased = depthGlideEase(st.p);
+          expected = Math.round(cityStops[0] + (cityStops[1] - cityStops[0]) * eased);
+          if (scrollY !== expected) jump(expected);
+          if (st.done) finish();
+          else frame = requestAnimationFrame(glide);
+          return;
+        }
         const progress = Math.min(1, Math.max(0, (time - now) / duration));
-        if (transfer) memories?.draw(dir > 0 ? progress : 1 - progress);
         const eased = depthGlideEase(progress);
         expected = Math.round(startY + (endY - startY) * eased);
         if (scrollY !== expected) jump(expected);
@@ -468,6 +512,33 @@ export function mountMagneticCV() {
       glide(now);
       return;
     }
+
+    // Pre-settle `.ascii-visual` words on the arriving CV chapter before `cipher.begin()` so
+    // `abyssalCipher` is the single decode owner during arrival (zero mid-frame prepareCells() layout thrash or double-scramble).
+    if (to.kind === 'cv') {
+      to.el.removeAttribute('data-cv-muted');
+      passage.destination = to.el;
+      passage.direction = dir;
+      passage.landing = endY;
+      passage.progress = 1;
+      passage.titleProgress = 1;
+      passage.bodyProgress = 1;
+      passage.depthSurge = 0;
+      passage.landingAtBottom = landingAtBottom;
+      passage.settleAll = true;
+      passage.requestDecode?.();
+      passage.settleAll = false;
+    } else {
+      passage.destination = null;
+      passage.direction = dir;
+      passage.landing = endY;
+      passage.landingAtBottom = landingAtBottom;
+      passage.settleAll = false;
+    }
+    passage.progress = 0;
+    passage.titleProgress = 0;
+    passage.bodyProgress = 0;
+    passage.depthSurge = 0;
 
     // Sample typography, lines & Globe geometry ONCE while departing chapter sits cleanly at rest.
     lastVeilFragments = cipher.begin({
@@ -481,16 +552,6 @@ export function mountMagneticCV() {
       landingAtBottom,
       preset
     });
-
-    passage.destination = to.kind === 'cv' ? to.el : null;
-    passage.direction = dir;
-    passage.landing = endY;
-    passage.progress = 0;
-    passage.titleProgress = 0;
-    passage.bodyProgress = 0;
-    passage.depthSurge = 0;
-    passage.landingAtBottom = landingAtBottom;
-    passage.settleAll = false;
 
     const height = innerHeight;
     const width = innerWidth;
@@ -593,13 +654,12 @@ export function mountMagneticCV() {
         toIsGlobe: to.kind === 'globe'
       });
 
-      // Drive permanent first-visit ASCII decryption on incoming CV chapters (completed lines untouched).
+      // Track arrival progress for consumers; abyssalCipher owns the live glyph reconstruction
+      // on pre-settled DOM text so no mid-frame prepareCells() layout reads occur during tick().
       if (to.kind === 'cv') {
         passage.progress = t;
         passage.titleProgress = titleArrivePhase(t);
         passage.bodyProgress = copyArrivePhase(t);
-        if (t >= 0.93) passage.settleAll = true;
-        passage.requestDecode?.();
       }
 
       if (t >= 1) finish();
@@ -607,6 +667,28 @@ export function mountMagneticCV() {
     };
 
     tick(now);
+  }
+
+  /** A reversed transfer now travels the other way: re-lock the gesture machine to that direction
+   * so the reversing gesture's own trailing momentum drains after finish() instead of reading as
+   * a second, opposite gesture that starts another move. */
+  function relockTransfer(now: number) {
+    const playhead = animation?.transferPlayhead;
+    if (!animation || !playhead || playhead.dir === animation.dir) return;
+    animation.dir = playhead.dir;
+    gesture.beginTransition(playhead.dir, now);
+  }
+
+  function feedTransfer(delta: number, gestureId: number, now: number) {
+    const playhead = animation?.transferPlayhead;
+    if (!playhead) return;
+    const before = playhead.dir;
+    playhead.feedInput(delta, gestureId);
+    // A key press or touch reversed the transfer while a wheel stream still flows: the rest of
+    // that stream points the way the user just turned away from, so it must drive nothing (neither
+    // flip the transfer back nor start a new move once the transfer lands).
+    if (playhead.dir !== before && lastWheelGesture && gestureId !== lastWheelGesture) staleWheelGesture = lastWheelGesture;
+    relockTransfer(now);
   }
 
   function onWheel(e: WheelEvent) {
@@ -640,12 +722,21 @@ export function mountMagneticCV() {
 
     const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? innerHeight : 1;
     const delta = e.deltaY * unit;
+    const wheelGesture = delta ? gestureIds.wheel(delta, now) : 0;
+    if (wheelGesture) lastWheelGesture = wheelGesture;
+    if (wheelGesture && wheelGesture === staleWheelGesture) {
+      consumeWheel(e);
+      return;
+    }
 
     // While Profile is mid-transition or running the whale-to-photograph transfer, feed the
-    // gesture state machine so momentum tails remain tracked cleanly for post-finish draining
-    // while strictly blocking any queued or competing gestures.
+    // transfer playhead (a fresh gesture accelerates it to 2.4x, an opposite one reverses it at
+    // 1.6x) and the gesture state machine so momentum tails remain tracked for post-finish draining.
     if (animation && (isProfile(animation.from) || isProfile(animation.to))) {
-      if (delta) gesture.feedWheel(delta, now, () => ({ room: 0, hasTarget: false }));
+      if (delta) {
+        feedTransfer(delta, wheelGesture, now);
+        gesture.feedWheel(delta, now, () => ({ room: 0, hasTarget: false }));
+      }
       consumeWheel(e);
       return;
     }
@@ -829,7 +920,7 @@ export function mountMagneticCV() {
       });
     }
     if (from.kind === 'globe') globeScrollGeometry.release?.();
-    start(from, to, action.dir, false, perfNow);
+    start(from, to, action.dir, false, perfNow, wheelGesture);
   }
 
   function onKey(e: KeyboardEvent) {
@@ -851,7 +942,10 @@ export function mountMagneticCV() {
             : 0;
     if (!dir) return;
     if (!animation && !owns()) return;
+    // Each fresh key press is its own gesture; auto-repeat continues the one that is held.
+    if (!e.repeat || !keyGesture) keyGesture = gestureIds.next();
     if (animation) {
+      feedTransfer(dir * 60, keyGesture, performance.now());
       e.preventDefault();
       return;
     }
@@ -873,7 +967,7 @@ export function mountMagneticCV() {
     }
     if (e.repeat) return;
     if (from.kind === 'globe') globeScrollGeometry.release?.();
-    start(from, to, dir as GestureDirection, true);
+    start(from, to, dir as GestureDirection, true, performance.now(), keyGesture);
   }
 
   function onTouchStart(e: TouchEvent) {
@@ -903,7 +997,8 @@ export function mountMagneticCV() {
       x: finger.clientX,
       y: finger.clientY,
       taken,
-      reading: false
+      reading: false,
+      gesture: gestureIds.next()
     };
   }
 
@@ -918,6 +1013,13 @@ export function mountMagneticCV() {
       return;
     }
     if (touch.taken) {
+      if (animation?.transferPlayhead && e.touches.length === 1) {
+        const dy = touch.y - e.touches[0].clientY;
+        if (Math.abs(dy) >= 28) {
+          feedTransfer(dy, touch.gesture, performance.now());
+          touch.y = e.touches[0].clientY;
+        }
+      }
       e.stopImmediatePropagation();
       if (e.cancelable) e.preventDefault();
       return;
@@ -967,7 +1069,7 @@ export function mountMagneticCV() {
     if (Math.abs(dy) >= 28) {
       touch.taken = true;
       if (from.kind === 'globe') globeScrollGeometry.release?.();
-      start(from, to, dir);
+      start(from, to, dir, false, performance.now(), touch.gesture);
     }
   }
 
@@ -1137,7 +1239,46 @@ export function mountMagneticCV() {
   function interrupt() {
     clearTimeout(rearmTimer);
     rearmTimer = 0;
-    clearAnimation();
+    if (animation) {
+      const { from, to, offset, transferPlayhead } = animation;
+      let targetY: number;
+      let landedOnDestination: boolean;
+      let transferStep = -1;
+      if (transferPlayhead) {
+        // Both transfer steps share one scrollY: the playhead's progress picks the step.
+        const settled = resolveInterruptedTransfer(transferPlayhead.dir, transferPlayhead.p);
+        landedOnDestination = settled.landedOnDestination;
+        transferStep = settled.step;
+        targetY = cityStops[transferStep] ?? animation.endY;
+      } else {
+        const elapsed = Math.max(0, performance.now() - animation.began);
+        const t = animation.duration > 0 ? elapsed / animation.duration : 1;
+        ({ targetY, landedOnDestination } = resolveInterruptedScrollY(animation.startY, animation.endY, t));
+      }
+      const landing = landedOnDestination ? to : from;
+      if (isProfile(landing) && from === to) {
+        const targetStep = transferStep >= 0
+          ? transferStep
+          : cityStops.reduce((best, y, i) =>
+            Math.abs(y - targetY) < Math.abs(cityStops[best] - targetY) ? i : best, 0);
+        selectStep(targetStep, true);
+      }
+      expected = targetY;
+      jump(targetY);
+      lastY = scrollY;
+      if (landing.kind === 'cv') {
+        passage.destination = landing.el;
+        passage.landing = targetY;
+        passage.settleAll = true;
+        passage.requestDecode?.();
+        passage.settleAll = false;
+      }
+      clearAnimation(landing);
+      // Landing on the destination is a completed move: the hash and Back/Forward state follow it.
+      if (landedOnDestination) commitHistory(from, to, offset, targetY);
+    } else {
+      clearAnimation();
+    }
     touch = null;
     releaseBounds();
     touchFromOutside = false;

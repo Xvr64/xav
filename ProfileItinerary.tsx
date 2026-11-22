@@ -1,5 +1,8 @@
-import React, { useCallback, useEffect, useRef, type CSSProperties, type ReactNode } from 'react';
+import React, { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
+import { CV_DATA } from './cvData';
 import { syncProfilePhotoSizes } from './profileMemoryPlate';
+import { MEMORY_INSPECT_QUERY, nextMemoryInspection } from './profileMemoryTimeline';
 import './profileItinerary.css';
 
 export type ProfileCityId =
@@ -254,6 +257,105 @@ export interface ProfileItineraryProps {
   slots?: ProfileCitySlotOverrides;
 }
 
+/** The years each city was lived in, read straight from the CV data. */
+const CITY_PERIOD: Readonly<Record<string, string>> = Object.fromEntries(
+  CV_DATA.locations.map((location) => [location.id, location.period])
+);
+
+interface MemoryInspectionProps {
+  slot: ProfileCitySlot;
+  /** restoreFocus=false when the page moved under the dialog (history) or the row is hidden (widening) */
+  onClose: (restoreFocus?: boolean) => void;
+}
+
+/**
+ * Narrow screens, after the reveal: one photograph read uncropped at full width, centred in
+ * deeper water with its city and years beneath it. No frame and no controls: a tap anywhere,
+ * Escape, or the screen widening closes it. Its touches never reach the Magnetic CV (the
+ * controller ignores input while an aria-modal dialog is shown, and nothing bubbles past it).
+ */
+const MemoryInspection: React.FC<MemoryInspectionProps> = ({ slot, onClose }) => {
+  const layerRef = useRef<HTMLDivElement | null>(null);
+  const dismissRef = useRef<HTMLButtonElement | null>(null);
+  const period = CITY_PERIOD[slot.id];
+
+  useEffect(() => {
+    const layer = layerRef.current;
+    if (!layer) return;
+    dismissRef.current?.focus({ preventScroll: true });
+
+    const contain = (e: Event) => e.stopPropagation();
+    const still = (e: Event) => {
+      e.stopPropagation();
+      if (e.cancelable) e.preventDefault();
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onClose();
+      } else if (e.key === 'Tab') {
+        // The dismiss control is the only stop inside: focus stays with the photograph
+        e.preventDefault();
+        dismissRef.current?.focus({ preventScroll: true });
+      }
+    };
+    const narrow = matchMedia(MEMORY_INSPECT_QUERY);
+    // The row is display:none once wide, so there is nowhere to hand focus back
+    const onWiden = () => {
+      if (!narrow.matches) onClose(false);
+    };
+    // Back/forward or a hash change moves the Magnetic CV under the dialog: close it and leave
+    // focus alone, or focusing the Profile row would pull the page back and undo the navigation.
+    const onHistory = () => onClose(false);
+
+    layer.addEventListener('touchstart', contain, { passive: true });
+    layer.addEventListener('touchend', contain, { passive: true });
+    layer.addEventListener('touchcancel', contain, { passive: true });
+    layer.addEventListener('touchmove', still, { passive: false });
+    layer.addEventListener('wheel', still, { passive: false });
+    document.addEventListener('keydown', onKey);
+    narrow.addEventListener('change', onWiden);
+    window.addEventListener('popstate', onHistory);
+    window.addEventListener('hashchange', onHistory);
+    return () => {
+      window.removeEventListener('popstate', onHistory);
+      window.removeEventListener('hashchange', onHistory);
+      layer.removeEventListener('touchstart', contain);
+      layer.removeEventListener('touchend', contain);
+      layer.removeEventListener('touchcancel', contain);
+      layer.removeEventListener('touchmove', still);
+      layer.removeEventListener('wheel', still);
+      document.removeEventListener('keydown', onKey);
+      narrow.removeEventListener('change', onWiden);
+    };
+  }, [onClose]);
+
+  return (
+    <div
+      ref={layerRef}
+      className="profile-memory-inspect"
+      role="dialog"
+      aria-modal="true"
+      aria-label={period ? `${slot.city}, ${period}` : slot.city}
+    >
+      <button
+        ref={dismissRef}
+        type="button"
+        className="profile-memory-inspect-dismiss"
+        aria-label={`Close the ${slot.city} photograph`}
+        onClick={() => onClose()}
+      />
+      <figure className="profile-memory-inspect-plate">
+        <img src={slot.photoSrc} alt={slot.alt} decoding="async" />
+        <figcaption>
+          <span className="profile-memory-inspect-city">{slot.city}</span>
+          {period && <span className="meta">{period}</span>}
+        </figcaption>
+      </figure>
+    </div>
+  );
+};
+
 /**
  * Single-screen eight-city editorial photo composition for Profile (#introduction).
  * Left: organically placed city typography in an oceanic swell, free of connecting lines.
@@ -262,9 +364,31 @@ export interface ProfileItineraryProps {
  */
 export const ProfileItinerary: React.FC<ProfileItineraryProps> = React.memo(({ slots }) => {
   const itineraryRef = useRef<HTMLDivElement | null>(null);
+  const [inspecting, setInspecting] = useState<ProfileCityId | null>(null);
+  const returnFocusRef = useRef<HTMLElement | null>(null);
 
   const handleSizeSync = useCallback(() => {
     if (itineraryRef.current) syncProfilePhotoSizes(itineraryRef.current);
+  }, []);
+
+  const openInspection = useCallback((id: ProfileCityId, trigger: HTMLElement) => {
+    const next = nextMemoryInspection(null, {
+      type: 'open',
+      id,
+      plates: itineraryRef.current?.dataset.plates,
+      narrow: matchMedia(MEMORY_INSPECT_QUERY).matches
+    });
+    if (!next) return;
+    returnFocusRef.current = trigger;
+    setInspecting(next as ProfileCityId);
+  }, []);
+
+  const closeInspection = useCallback((restoreFocus = true) => {
+    setInspecting((current) => nextMemoryInspection(current, { type: 'close' }) as ProfileCityId | null);
+    const trigger = returnFocusRef.current;
+    returnFocusRef.current = null;
+    // Back to the city that was opened, without moving the pinned page
+    if (restoreFocus && trigger?.isConnected) requestAnimationFrame(() => trigger.focus({ preventScroll: true }));
   }, []);
 
   useEffect(() => {
@@ -281,7 +405,12 @@ export const ProfileItinerary: React.FC<ProfileItineraryProps> = React.memo(({ s
     };
   }, [handleSizeSync, slots]);
 
+  const inspected = inspecting ? PROFILE_ITINERARY_CITIES.find((slot) => slot.id === inspecting) : undefined;
+  const inspectedSlot = inspected && slots?.[inspected.id] ? { ...inspected, ...slots[inspected.id] } : inspected;
+  const portalHost = itineraryRef.current?.closest<HTMLElement>('.terminal-portfolio') ?? document.body;
+
   return (
+    <>
     <div className="profile-itinerary" ref={itineraryRef}>
       <div className="profile-itinerary-track" role="list" aria-label="Eight-city international itinerary">
         {PROFILE_ITINERARY_CITIES.map((baseSlot, index) => {
@@ -307,10 +436,26 @@ export const ProfileItinerary: React.FC<ProfileItineraryProps> = React.memo(({ s
                 <span>{slot.city}</span>
               </h3>
               <ProfileCityFrame slot={slot} onImageLoad={handleSizeSync} />
+              {slot.photoSrc && (
+                <button
+                  type="button"
+                  className="profile-city-inspect"
+                  aria-label={`View the ${slot.city} photograph`}
+                  aria-haspopup="dialog"
+                  onClick={(e) => openInspection(slot.id, e.currentTarget)}
+                />
+              )}
             </div>
           );
         })}
       </div>
     </div>
+    {/* The step-0 cue: shown by profileItinerary.css only while the plates wait for the first gesture */}
+    <p className="profile-memory-cue meta" aria-hidden="true">Scroll once to surface memories</p>
+    {inspectedSlot?.photoSrc && createPortal(
+      <MemoryInspection slot={inspectedSlot} onClose={closeInspection} />,
+      portalHost
+    )}
+    </>
   );
 });

@@ -34,15 +34,6 @@
       "tileLatSpan": 45,
       "tileCols": 180,
       "tileRows": 90
-    },
-    {
-      "z": 3,
-      "cols": 8,
-      "rows": 8,
-      "tileLonSpan": 45,
-      "tileLatSpan": 22.5,
-      "tileCols": 180,
-      "tileRows": 90
     }
   ],
   "source": "etopo1",

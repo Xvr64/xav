@@ -36,12 +36,12 @@
 
   /* Mobile optical top-biased framing: eliminates top-third dead voids and bottom clipping
      in Magnetic CV chapters while leaving #introduction / .profile-itinerary and ?magneticCV=0
-     untouched. Explicitly includes section#contact to beat terminal.css's #contact ID rule. */
+     untouched. `:is(section, #contact)` carries an ID's specificity (1,3,0) so it outranks both the
+     chapter rule above (1,2,0 through :is(#introduction, …)) and terminal.css's #contact rule. */
   @media (max-width: 767px) {
-    .terminal-portfolio.magnetic-cv .cv-arch > section,
-    .terminal-portfolio.magnetic-cv .cv-arch > section#contact {
+    .terminal-portfolio.magnetic-cv .cv-arch > :is(section, #contact) {
       justify-content: flex-start;
-      padding-block: clamp(72px, 11svh, 112px) clamp(36px, 5svh, 56px);
+      padding-block: clamp(52px, 7.5svh, 76px) clamp(28px, 4svh, 48px);
     }
     .terminal-portfolio.magnetic-cv #languages .section-head {
       padding-bottom: clamp(20px, 3svh, 32px);

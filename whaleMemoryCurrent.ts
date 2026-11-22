@@ -199,6 +199,25 @@ export class WhaleMemoryCurrent {
     this.scene.add(mesh);
   }
 
+  /**
+   * Start linking this current's program without waiting for it: with KHR_parallel_shader_compile
+   * the driver links it off the main thread. Call with the canvas bound (render target null), as
+   * where the current is drawn, so the program is the one warm() and draw() will look up. Draws nothing.
+   */
+  prepare(renderer: THREE.WebGLRenderer, camera: THREE.Camera) {
+    renderer.compile(this.scene, camera);
+  }
+
+  /**
+   * Whether the program prepare() started has linked: a status query that never waits (no timer
+   * either, unlike compileAsync, whose poll never ends on a lost context). Without the extension
+   * three reports every program ready at once, so warm() then links it on the spot, as before.
+   */
+  prepared(renderer: THREE.WebGLRenderer): boolean {
+    const program = (renderer.properties.get(this.material) as { currentProgram?: { isReady(): boolean } }).currentProgram;
+    return program?.isReady() === true;
+  }
+
   /** Pre-compile the instanced GLSL3 shader and upload the landing table with zero visible fragments. */
   warm(
     renderer: THREE.WebGLRenderer,

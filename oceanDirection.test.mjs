@@ -49,15 +49,15 @@ test('whales: unchanged on the surface, a step back in deep reading water, whole
   assert.equal(whaleStrength(0, 0), 1);
   // Open deep water (no section holding them): full strength
   assert.equal(whaleStrength(0, 1), 1);
-  // A section holding them on the abyss: quieter, but never faint
+  // A section holding them on the abyss: uniformly quieter for clean foreground separation, never faint
   const deep = whaleStrength(1, 1);
   assert.ok(Math.abs(deep - (1 - 0.06 - DEEP_READING_RECESSION)) < 1e-9);
-  assert.ok(deep >= 0.65 && deep < 0.94);
+  assert.ok(deep >= 0.45 && deep < 0.94);
   // Monotone and continuous through the descent, so the change is never seen as a step
   let last = whaleStrength(1, 0);
   for (let ink = 0.05; ink <= 1.0001; ink += 0.05) {
     const s = whaleStrength(1, ink);
-    assert.ok(s <= last && last - s < 0.02);
+    assert.ok(s <= last && last - s < 0.03);
     last = s;
   }
   // Bad frames never push it out of range

@@ -1,5 +1,7 @@
-/** One-way scroll decoding. Completed lines are an absorbing state for this visit. */
-export const ENCRYPTED_CHARSET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()_+-={}[];:,.<>/?';
+/** One-way scroll decoding. Completed lines are an absorbing state for this visit.
+ * Uses strictly narrow/medium advance-width oceanic characters so proportional Newsreader and
+ * Instrument Sans cells never suffer wide-glyph (M, W, @, %) horizontal collisions. */
+export const ENCRYPTED_CHARSET = '·:-~/\\|+*=;_';
 export const ENCRYPTED_ENTRY_START = 0.95;
 export const ENCRYPTED_ENTRY_END = 0.62;
 export type EncryptedLineState = {

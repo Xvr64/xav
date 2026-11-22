@@ -16,7 +16,7 @@ import './terminal.css';
  * only its aria-hidden visual duplicate changes. Completed lines leave the work queue forever. */
 const ELIGIBLE = '[data-editorial-section] [data-ascii-text]';
 const EXCLUDED = '[data-ascii-preserve]';
-const MAGNETIC_OCEAN_GLYPHS = '~/:·+#%=-|\\';
+const MAGNETIC_OCEAN_GLYPHS = '·:-~/\\|+*=;_';
 export const AsciiText = EncryptedText;
 
 type Word = {
@@ -76,6 +76,7 @@ export function useEditorialScroll() {
     let viewport = innerHeight;
     let lastY = NaN;
     let audited = false;
+    let decodeRequested = false;
 
     // Read geometry only on layout changes, never during ordinary scrolling. Keep per-word
     // progress across wrapping/font changes, so a completed word cannot become noise again.
@@ -111,6 +112,7 @@ export function useEditorialScroll() {
               cells: null, states: new Int16Array(chars.length).fill(-2) };
             cache.set(el, word);
           }
+          el.style.opacity = word.progress > 0 || media.matches ? '1' : '0';
           word.left = rect.left;
           word.centerX = rect.left + rect.width / 2;
           // Existing cells remain drawn until a single read/write pass replaces their geometry.
@@ -227,13 +229,15 @@ export function useEditorialScroll() {
           movement = 1; // First visits decode in either direction. Completed lines are out of the queue.
         } else if (magneticCV && passage.settleAll && line.chapter && !line.chapter.hasAttribute('data-cv-muted')) {
           const position = line.top - y;
-          if (position >= -40 && position < viewport) {
+          if (position >= -80 && position < viewport + 40) {
             zone = 1;
             forced = true;
           }
-        } else if (!forced && line.chapter?.hasAttribute('data-cv-muted')) {
+        } else if (!forced && passage.destination && line.chapter !== passage.destination) {
           zone = 0;
           movement = 0;
+        } else if (!forced && decodeRequested && zone > line.currentP && movement <= 0) {
+          movement = 1;
         }
         const next = advanceEncryptedLine(line, zone, movement, forced || (initial && zone > 0));
         const unchanged = next.currentP === line.currentP;
@@ -255,6 +259,8 @@ export function useEditorialScroll() {
       for (const { word, line, p } of updates) {
         word.progress = p;
         word.renderedP = p;
+        // Reveals are permanent (owner, 2026-11-18): a word once read stays set wherever it scrolls.
+        word.el.style.opacity = p > 0 ? '1' : '0';
         word.visual.style.visibility = p > 0 ? '' : 'hidden';
         if (p >= 1) {
           if (word.visual.textContent !== word.original || word.visual.children.length) word.visual.textContent = word.original;
@@ -318,8 +324,10 @@ export function useEditorialScroll() {
     document.fonts.ready.then(() => { if (!disposed) invalidate(); });
     if (magneticCV) passage.requestDecode = () => {
       // The snap already owns a frame. Paint its glyphs before that frame is presented.
+      decodeRequested = true;
       cancelAnimationFrame(frame);
       render();
+      decodeRequested = false;
     };
     render();
     return () => {
@@ -335,6 +343,7 @@ export function useEditorialScroll() {
       document.removeEventListener('visibilitychange', onVisibility);
       media.removeEventListener('change', invalidate);
       for (const word of words) {
+        word.el.style.removeProperty('opacity');
         word.visual.textContent = word.original;
         word.visual.style.removeProperty('--decode-lift');
         word.visual.style.removeProperty('visibility');

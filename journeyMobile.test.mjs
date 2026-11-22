@@ -4,6 +4,10 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import ts from 'typescript';
 import { CV_DATA } from './cvData.ts';
+import {
+  captionArrivingAt, captionInOpacity, captionInTime, captionLeavingAt, cubicBezierAt, globeZoneRects, inlineTranslateY, planCaptionHandoff, stageViewportTop,
+  CAPTION_BOTH_MAX, CAPTION_GONE, CAPTION_IN_MS, CAPTION_OUT_MS
+} from './globeSurface.ts';
 
 // Execute the real controller, camera/city state, canvas draw, renderer RAF and shared
 // progress module together. DOM/Canvas/React hooks are simulated, not WebKit or GPU pixels.
@@ -17,7 +21,8 @@ function globe({ staleReads = false, coarse = true, ascii = false } = {}) {
   let now = 0, nextFrame = 0, controller, geometry, pendingY = null, blits = 0;
   let width = 390, height = 844, start = 2500;
   const raf = new Map(), listeners = new Map(), refs = [], effects = [], io = [];
-  const cities = ['doha'], renders = [], samples = [], paintedLabels = new Set();
+  const cities = ['doha'], renders = [], samples = [], paintedLabels = new Set(), zones = [];
+  let layoutReads = 0;
   const events = {
     addEventListener(type, fn, options) {
       if (!listeners.has(type)) listeners.set(type, new Map());
@@ -64,12 +69,15 @@ function globe({ staleReads = false, coarse = true, ascii = false } = {}) {
   const canvas = new Element();
   canvas.getContext = () => ctx;
   const rect = () => ({ left: 16, top: 0, bottom: height, width: width - 32, height });
-  const pinned = new Element(); pinned.getBoundingClientRect = rect;
+  // Every layout read is counted: a film frame must not perform any
+  const read = fn => () => { layoutReads++; return fn(); };
+  const pinned = new Element(); pinned.getBoundingClientRect = read(rect);
   const runway = new Element(); runway.firstElementChild = pinned;
-  runway.getBoundingClientRect = () => ({ top: start - win.scrollY, height: 6 * height });
-  const stage = new Element(); stage.getBoundingClientRect = rect;
+  runway.getBoundingClientRect = read(() => ({ top: start - win.scrollY, height: 6 * height }));
+  const stage = new Element(); stage.getBoundingClientRect = read(rect);
   stage.closest = () => runway; stage.querySelectorAll = () => [];
-  const progress = new Element(), caption = new Element(); caption.getBoundingClientRect = rect;
+  const progress = new Element(), caption = new Element();
+  caption.getBoundingClientRect = read(() => ({ left: 24, top: height - 300, bottom: height - 96, width: width - 48, height: 204 }));
   let hintVisible = false;
   const hint = { classList: { toggle(_, value) { hintVisible = value; } } };
   const attrs = new Map();
@@ -86,14 +94,14 @@ function globe({ staleReads = false, coarse = true, ascii = false } = {}) {
     createElement: () => null,
     useState(initial) { return [typeof initial === 'function' ? initial() : initial, id => cities.push(id)]; },
     useRef(initial) { const ref = { current: initial }; refs.push(ref); return ref; },
-    useMemo: fn => fn(), useEffect: fn => effects.push(fn)
+    useMemo: fn => fn(), useEffect: fn => effects.push(fn), useLayoutEffect() {}
   };
   const deps = {
     react: { ...react, default: react },
     './portfolioExperiments': { portfolioExperiments: { asciiGlobe: ascii } },
     './glyphcssGlobe': { loadLandDots: () => new Promise(() => {}) },
     './lanternCursor': { setLanternDepth() {} },
-    './oceanDirection': { setGlobeZone() {} },
+    './oceanDirection': { setGlobeZone(rects) { zones.push(rects); } },
     './globeDiagnostics': { mountGlobeDiagnostics: () => ({
       controller: (s, p) => samples.push({ ...s, progress: p }),
       render: (p, city) => renders.push({ p, city, documentY: win.scrollY, at: now }), destroy() {}
@@ -145,7 +153,8 @@ function globe({ staleReads = false, coarse = true, ascii = false } = {}) {
   return {
     win, doc, controller, style, samples, renders, cities, paintedLabels, advance, emit, startTouch, move, endTouch,
     anchor() { const a = new Element(); a.closest = () => a; emit('click', { target: a }); },
-    get blits() { return blits; }, get hint() { return hintVisible; },
+    get blits() { return blits; }, get hint() { return hintVisible; }, get layoutReads() { return layoutReads; },
+    zones, pinned, globeFrame: deps['./JourneyGlobe'].globeFrame, get size() { return { width, height, start }; },
     get p() { return deps['./abyssPalette'].globeScrollProgress(); },
     get end() { return geometry.start + geometry.travel; },
     get controlledY() { return geometry.controlledY; },
@@ -353,4 +362,135 @@ test('production Globe: stale IntersectionObserver during ready state still prod
     b.advance(32);
     assert.ok(b.renders.length > before, 'synchronous stage visibility keeps rendering despite stale observer');
   } finally { b.cleanup(); }
+});
+test('production Globe: a film frame reads no layout; calm zones follow scroll from cached geometry', () => {
+  const b = globe();
+  try {
+    const { width, height } = b.size;
+    const W = width - 32, H = height;
+    const disc = zoom => { const { cx, cy, baseR } = b.globeFrame(W, H); const r = baseR * zoom; return { left: 16 + cx - r, top: cy - r, width: 2 * r, height: 2 * r }; };
+    const caption = top => ({ left: 24, top: top + height - 300, width: width - 48, height: 204 });
+    const shift = (r, dy) => ({ ...r, top: r.top + dy });
+    const zone = () => JSON.parse(JSON.stringify(b.zones.at(-1))); // vm realm -> plain objects
+    b.swipe(100);
+    const reads = b.layoutReads;
+    const zonesBefore = b.zones.length;
+    b.advance(13000);
+    assert.equal(b.cities.at(-1), 'shanghai');
+    assert.ok(b.zones.length - zonesBefore > 300, 'every film frame publishes its zones');
+    assert.equal(b.layoutReads, reads, 'no getBoundingClientRect during the whole Doha -> Shanghai film');
+    // Pinned at Shanghai (dwell zoom 1.08): disc + caption exactly where layout puts them
+    assert.deepEqual(zone(), [disc(1.08), caption(0)]);
+    // A Magnetic CV slide translates the pinned chapter inline: the zones move with it, still no layout read
+    for (const [translate, dy] of [['0px -300px', -300], ['0 412.5px', 412.5], ['', 0]]) {
+      b.pinned.style.translate = translate; b.forceNative(b.end); b.advance(32);
+      assert.deepEqual(zone(), [shift(disc(1.08), dy), caption(dy)], translate || 'no translate');
+    }
+    delete b.pinned.style.translate;
+    assert.equal(b.layoutReads, reads, 'slide offsets come from the inline style, not layout');
+    // Released: the stage scrolls away with the document, then leaves the viewport
+    b.forceNative(b.end + 300); b.advance(32);
+    assert.deepEqual(zone(), [shift(disc(1.08), -300), caption(-300)]);
+    b.forceNative(b.end + H + 5); b.advance(32);
+    assert.deepEqual(zone(), []);
+    assert.equal(b.layoutReads, reads, 'native scrolling after the film reads no layout either');
+    // Rotation / toolbar resize re-measures once, then frames are read-free again
+    b.forceNative(b.end); b.advance(32);
+    b.resize(844, 390, 2000);
+    const afterResize = b.layoutReads;
+    assert.ok(afterResize > reads, 'resize re-measures the stage');
+    b.forceNative(b.end); b.advance(32); // the released end of the new, shorter runway
+    assert.equal(b.layoutReads, afterResize);
+    const z = zone();
+    const f = b.globeFrame(844 - 32, 390);
+    assert.equal(z.length, 2);
+    assert.ok(Math.abs(z[0].width - 2 * f.baseR * 1.08) < 1e-6, 'disc follows the new stage size');
+    assert.deepEqual(z[1], { left: 24, top: 390 - 300, width: 844 - 48, height: 204 });
+  } finally { b.cleanup(); }
+});
+
+test('cached stage geometry: sticky stage top before, during and after the pin', () => {
+  const g = { runwayDocTop: 2500, travel: 4220, stickyTop: 0, stageInPinned: 0, stageLeft: 16, viewH: 844, caption: { dx: 8, dy: 544, width: 310, height: 204 } };
+  assert.equal(stageViewportTop(g, 2000), 500, 'before the pin the stage scrolls with the page');
+  assert.equal(stageViewportTop(g, 2500), 0);
+  assert.equal(stageViewportTop(g, 4600), 0, 'pinned anywhere along the runway');
+  assert.equal(stageViewportTop(g, 6720), 0);
+  assert.equal(stageViewportTop(g, 7020), -300, 'after release it scrolls away');
+  assert.equal(stageViewportTop({ ...g, stickyTop: 40, stageInPinned: 6 }, 3000), 46);
+  const disc = { cx: 179, cy: 287, r: 150 };
+  assert.deepEqual(globeZoneRects(g, 2000, 844, disc), [
+    { left: 45, top: 637, width: 300, height: 300 },
+    { left: 24, top: 1044, width: 310, height: 204 }
+  ]);
+  assert.deepEqual(globeZoneRects(g, 2500 - 844, 844, disc), [], 'stage top exactly at the viewport bottom: off screen');
+  assert.deepEqual(globeZoneRects(g, 6720 + 844, 844, disc), [], 'stage bottom exactly at the viewport top: off screen');
+  assert.equal(globeZoneRects(g, 6720 + 843, 844, disc).length, 2);
+  assert.equal(globeZoneRects({ ...g, caption: null }, 3000, 844, disc).length, 1, 'no caption box, disc only');
+});
+
+test('caption hand-off: two cities never overprint (both showing => each <= 0.25) and the caption is never blank', () => {
+  // Curve solver matches CSS: linear, and the standard `ease` at its midpoint
+  for (const x of [0, 0.25, 0.5, 0.9, 1]) assert.ok(Math.abs(cubicBezierAt(0, 0, 1, 1, x) - x) < 1e-6);
+  assert.ok(Math.abs(cubicBezierAt(0.25, 0.1, 0.25, 1, 0.5) - 0.8024) < 1e-3);
+  assert.equal(captionInOpacity(0), 0);
+  assert.equal(captionInOpacity(CAPTION_IN_MS), 1);
+  for (const v of [0.1, 0.25, 0.5, 0.9]) assert.ok(Math.abs(captionInOpacity(captionInTime(v)) - v) < 1e-6);
+  const sweep = (plan, step = 0.25) => {
+    let floor = 1, below = 0, both = 0, maxBoth = 0;
+    for (let t = 0; t <= CAPTION_IN_MS + 200; t += step) {
+      const l = captionLeavingAt(plan, t), a = captionArrivingAt(plan, t);
+      floor = Math.min(floor, Math.max(l, a));
+      if (Math.max(l, a) < 0.5) below += step;
+      if (l > CAPTION_GONE && a > CAPTION_GONE) { both += step; maxBoth = Math.max(maxBoth, l, a); }
+    }
+    return { floor, below, both, maxBoth };
+  };
+  // A full change (the leaving caption at rest, the arriving one hidden)
+  const plan = planCaptionHandoff(1, 0);
+  const r = sweep(plan);
+  assert.ok(r.maxBoth <= CAPTION_BOTH_MAX + 1e-9, `while both show neither exceeds 0.25 (got ${r.maxBoth.toFixed(3)})`);
+  assert.ok(r.both > 0 && r.both < 40, `the faint overlap is brief (${r.both} ms)`);
+  assert.ok(r.floor >= 0.19, `never blank: strongest caption floor ${r.floor.toFixed(3)}`);
+  assert.ok(r.below <= 90, `below 0.5 only around the cross-over (${r.below} ms)`);
+  assert.equal(captionLeavingAt(plan, CAPTION_OUT_MS), 0, 'the leaving caption is gone after CAPTION_OUT_MS');
+  // Sampled at 60 fps at any phase, no painted frame drops below ~0.2
+  for (let phase = 0; phase < 16.7; phase += 0.5) {
+    let f = 1;
+    for (let t = phase; t < CAPTION_IN_MS + 200; t += 1000 / 60) f = Math.min(f, Math.max(captionLeavingAt(plan, t), captionArrivingAt(plan, t)));
+    assert.ok(f >= 0.195, `frame floor ${f.toFixed(3)} at phase ${phase}`);
+  }
+  // The arriving entrance is the unchanged 600 ms curve, only started later
+  assert.ok(plan.arriveDelayMs > 100 && plan.arriveDelayMs < CAPTION_OUT_MS);
+  for (const t of [0, 50, 300, 600]) assert.equal(captionArrivingAt(plan, plan.arriveDelayMs + t), captionInOpacity(t));
+  // The old hard cut, for the record: the arriving entrance alone starts from 0
+  assert.equal(captionInOpacity(0), 0);
+  // Quick reversals and changes caught part-way: same rules from wherever both captions are
+  for (const leaving of [0, 0.01, 0.1, 0.25, 0.5, 0.8, 1]) {
+    for (const arriving of [0, 0.1, 0.2, 0.24]) {
+      const q = sweep(planCaptionHandoff(leaving, arriving));
+      assert.ok(q.maxBoth <= CAPTION_BOTH_MAX + 1e-9, `${leaving}->${arriving}: overprint ${q.maxBoth}`);
+      // (a caption already at or below CAPTION_GONE was effectively blank before the change)
+      if (Math.max(leaving, arriving) > CAPTION_GONE) assert.ok(q.floor >= Math.min(0.19, Math.max(leaving, arriving)) - 1e-9, `${leaving}->${arriving}: floor ${q.floor}`);
+    }
+  }
+  // Reversal onto a caption still clearly showing (it was mid-way out; the other is then at most faint):
+  // it continues from where it is and the faint one steps aside at once
+  const back = planCaptionHandoff(0.2, 0.7);
+  assert.ok(Math.abs(captionArrivingAt(back, 0) - 0.7) < 1e-6);
+  assert.equal(back.leave, null);
+  // Markup: inactive captions stay hidden and aria-hidden at rest, the entrance class is unchanged,
+  // reduced motion bypasses the hand-off (instant swap)
+  const src = fs.readFileSync(new URL('./JourneyGlobe.tsx', import.meta.url), 'utf8');
+  assert.match(src, /visibility: isCityActive \? 'visible' : 'hidden'/);
+  assert.match(src, /isCityActive \? 'globe-caption-in' : 'opacity-0'/);
+  assert.match(src, /prefers-reduced-motion: reduce\)'\)\.matches;\s*if \(prev < 0 \|\| prev === activeIdx \|\| reduced/);
+});
+
+test('inline translate parsing: only the vertical px offset Magnetic CV writes', () => {
+  for (const [v, y] of [[undefined, 0], [null, 0], ['', 0], ['none', 0], ['12px', 0], ['0 -300px', -300], ['0px 412.5px', 412.5], ['0px 0px', 0], ['3px -1e-3px', -0.001], ['0px 50%', 0], ['0px 4px 2px', 4]]) {
+    assert.equal(inlineTranslateY(v), y, String(v));
+  }
+  const g = { runwayDocTop: 0, travel: 1000, stickyTop: 0, stageInPinned: 0, stageLeft: 0, viewH: 800, caption: null };
+  assert.equal(globeZoneRects(g, 500, 800, { cx: 100, cy: 100, r: 50 }, -120)[0].top, -70);
+  assert.deepEqual(globeZoneRects(g, 500, 800, { cx: 100, cy: 100, r: 50 }, -800), [], 'slid fully out of view');
 });

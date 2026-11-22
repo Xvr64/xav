@@ -411,13 +411,17 @@ void main() {
     return;
   }
   vec2 px0 = cellIx * uCell;                         // cell's top-left, device px from the top-left
+  // Every G-buffer read below is textureLod(…, 0.0): the targets have no mipmaps, so this is the
+  // very sample texture() takes, without the implicit derivatives that are undefined after the
+  // early returns (ANGLE/D3D warning X3595, "gradient instruction used in a loop with varying
+  // iteration")
   // Most cells are open water: a 3 × 3 probe of coverage (one texel beyond the cell) skips them
   float probe = 0.0;
   for (int j = 0; j < 3; j++) {
     for (int i = 0; i < 3; i++) {
       vec2 sp = px0 + vec2(float(i), float(j)) * 0.5 * uCell;
       vec2 uv = vec2(sp.x / uCanvas.x, 1.0 - sp.y / uCanvas.y) + (vec2(float(i), float(j)) - 1.0) * uTexel * vec2(1.0, -1.0);
-      probe = max(probe, texture(uMask, uv).a);
+      probe = max(probe, textureLod(uMask, uv, 0.0).a);
     }
   }
   if (probe <= 0.0) { outCell = vec4(0.0); return; }
@@ -433,15 +437,15 @@ void main() {
     for (int i = 0; i < SX; i++) {
       vec2 sp = px0 + (vec2(float(i), float(j)) + 0.5) / vec2(float(SX), float(SY)) * uCell;
       vec2 uv = vec2(sp.x / uCanvas.x, 1.0 - sp.y / uCanvas.y);
-      vec4 a = texture(uInk, uv);
-      vec4 m = texture(uMask, uv);
+      vec4 a = textureLod(uInk, uv, 0.0);
+      vec4 m = textureLod(uMask, uv, 0.0);
       float c = m.a;
       covSum += c;
       inkSum += a.r * c;
       depthSum += a.g * c;
       eyeSum += m.g * c;
       mouthSum += m.r * c;
-      vec4 mk = texture(uMarks, uv);
+      vec4 mk = textureLod(uMarks, uv, 0.0);
       pleatSum += mk.r * c;
       grooveSum += mk.g * c;
       knobSum += mk.b * c;
@@ -453,14 +457,14 @@ void main() {
       covCentroid += (vec2(float(i), float(j)) + 0.5) / vec2(float(SX), float(SY)) * c;
       // Gradients (uv y up): silhouette from coverage, occluding contours from depth, creases
       // from normals, and the mouth line from its mask
-      vec4 ax1 = texture(uInk, uv + vec2(uTexel.x, 0.0));
-      vec4 ax0 = texture(uInk, uv - vec2(uTexel.x, 0.0));
-      vec4 ay1 = texture(uInk, uv + vec2(0.0, uTexel.y));
-      vec4 ay0 = texture(uInk, uv - vec2(0.0, uTexel.y));
-      vec4 mx1 = texture(uMask, uv + vec2(uTexel.x, 0.0));
-      vec4 mx0 = texture(uMask, uv - vec2(uTexel.x, 0.0));
-      vec4 my1 = texture(uMask, uv + vec2(0.0, uTexel.y));
-      vec4 my0 = texture(uMask, uv - vec2(0.0, uTexel.y));
+      vec4 ax1 = textureLod(uInk, uv + vec2(uTexel.x, 0.0), 0.0);
+      vec4 ax0 = textureLod(uInk, uv - vec2(uTexel.x, 0.0), 0.0);
+      vec4 ay1 = textureLod(uInk, uv + vec2(0.0, uTexel.y), 0.0);
+      vec4 ay0 = textureLod(uInk, uv - vec2(0.0, uTexel.y), 0.0);
+      vec4 mx1 = textureLod(uMask, uv + vec2(uTexel.x, 0.0), 0.0);
+      vec4 mx0 = textureLod(uMask, uv - vec2(uTexel.x, 0.0), 0.0);
+      vec4 my1 = textureLod(uMask, uv + vec2(0.0, uTexel.y), 0.0);
+      vec4 my0 = textureLod(uMask, uv - vec2(0.0, uTexel.y), 0.0);
       vec2 gc = vec2(mx1.a - mx0.a, my1.a - my0.a);
       float both = min(min(mx1.a, mx0.a), min(my1.a, my0.a));
       vec2 gd = vec2(ax1.g - ax0.g, ay1.g - ay0.g) * both;
@@ -666,6 +670,8 @@ export class WhaleAsciiRenderer {
   private previousCells: THREE.WebGLRenderTarget | null = null;
   private cellsValid = false;
   private current: WhaleMemoryCurrent | null = null;
+  /** The current's program has been used once (warmed or drawn): its link is behind us. */
+  private currentWarm = false;
   private readonly cellMaterial: THREE.ShaderMaterial;
   private readonly compositeMaterial: THREE.ShaderMaterial;
   private readonly rawMaterial: THREE.ShaderMaterial;
@@ -698,6 +704,13 @@ export class WhaleAsciiRenderer {
     this.atlasKey = '';
     this.skinTexture.needsUpdate = true;
     this.veilDirty = true;
+    // A restored context has a new renderer state: the memory current's program and its readiness
+    // went with the old one, so it is let go and prepared again (prepareMemoryCurrent, on the next
+    // frame past the Globe or on the Profile) and warmed once that link is done. Not disposed: its
+    // GL objects died with the lost context, and deleting them on the new one only raises
+    // INVALID_OPERATION warnings; the CPU side is collected with it
+    this.current = null;
+    this.currentWarm = false;
   };
   private readonly canvas: HTMLCanvasElement;
 
@@ -1080,10 +1093,18 @@ export class WhaleAsciiRenderer {
         this.current ??= new WhaleMemoryCurrent(memoryWater.landings!);
         this.current.draw(r, this.quadCamera, this.cells, this.atlasTexture!, cw / this.dpr, ch / this.dpr,
           pu.uInk.value, pu.uInkFar.value, this.style.opacity);
-      } else if (profileMemories && memoryWater.framed && memoryWater.landings && !this.current) {
+        this.currentWarm = true;
+      } else if (profileMemories && memoryWater.framed && memoryWater.landings && !this.currentWarm) {
+        // The current's program starts linking ahead of the Profile (prepareMemoryCurrent, from the
+        // Globe on) and is warmed here on the first framed frame it has linked: linked on the spot,
+        // the frame the Profile is framed waited 110-380 ms for it. Without the parallel-compile
+        // extension prepared() is true at once and this is the warm of before, on the same frame.
         this.previousCells ??= this.cells.clone();
-        this.current = new WhaleMemoryCurrent(memoryWater.landings);
-        this.current.warm(r, this.quadCamera, this.cells, this.atlasTexture!);
+        this.prepareMemoryCurrent();
+        if (this.current?.prepared(r)) {
+          this.current.warm(r, this.quadCamera, this.cells, this.atlasTexture!);
+          this.currentWarm = true;
+        }
       }
     }
 
@@ -1095,6 +1116,18 @@ export class WhaleAsciiRenderer {
     if (this.lost) return;
     this.renderer.setRenderTarget(null);
     this.renderer.clear(true, true, true);
+  }
+
+  /**
+   * Begin linking the Profile memory current's program ahead of the Profile (from the Globe on):
+   * with KHR_parallel_shader_compile its link runs off the main thread and has long finished when
+   * the Profile is framed. Once; nothing is drawn.
+   */
+  prepareMemoryCurrent() {
+    if (this.lost || this.current || !memoryWater.landings) return;
+    this.renderer.setRenderTarget(null);
+    this.current = new WhaleMemoryCurrent(memoryWater.landings);
+    this.current.prepare(this.renderer, this.quadCamera);
   }
 
   dispose() {
