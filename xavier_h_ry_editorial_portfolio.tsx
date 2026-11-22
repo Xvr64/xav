@@ -468,14 +468,14 @@ export default function App() {
                   href={ORIGINAL_CV_PDF_URL}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="px-3 py-1.5 bg-[#F5F3EE]/10 hover:bg-[#F5F3EE]/20 transition-colors text-[#F5F3EE] font-mono text-[13px]"
+                  className="hit-44 px-3 py-1.5 bg-[#F5F3EE]/10 hover:bg-[#F5F3EE]/20 transition-colors text-[#F5F3EE] font-mono text-[13px]"
                 >
                   Open Tab
                 </a>
                 <button
                   type="button"
                   onClick={handleDownloadOriginalCv}
-                  className="px-3 py-1.5 bg-[#B6C5B0] hover:bg-[#9BB4B5] transition-colors text-[#171717] font-mono text-[13px] font-semibold inline-flex items-center gap-1.5"
+                  className="hit-44 px-3 py-1.5 bg-[#B6C5B0] hover:bg-[#9BB4B5] transition-colors text-[#171717] font-mono text-[13px] font-semibold inline-flex items-center gap-1.5"
                 >
                   <Download className="w-3.5 h-3.5" aria-hidden="true" />
                   <span>Download</span>
@@ -485,7 +485,7 @@ export default function App() {
                   type="button"
                   onClick={closeCvModal}
                   aria-label="Close CV preview"
-                  className="p-1 text-[#F5F3EE] hover:text-[#9BB4B5] transition-colors"
+                  className="hit-44 p-1 text-[#F5F3EE] hover:text-[#9BB4B5] transition-colors"
                 >
                   <X className="w-5 h-5" aria-hidden="true" />
                 </button>

@@ -649,6 +649,21 @@ body {
 .contact-foot .contact-elsewhere { grid-column: c / end; }
 .contact-elsewhere li + li { margin-top: var(--space-xs); }
 .contact-elsewhere .contact-sign { margin-top: var(--space-l); }
+/* Touch targets of at least 44px: an inline link's vertical padding widens what a finger can hit
+   without moving a single line (inline padding never enters the line box) */
+.terminal-portfolio #contact .contact-address { padding-block: 5px; }
+.terminal-portfolio .contact-elsewhere a { padding-block: 11px; }
+/* The same for compact controls whose look must not change: an invisible 44px hit area */
+.hit-44 { position: relative; }
+.hit-44::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: max(100%, 44px);
+  height: max(100%, 44px);
+  transform: translate(-50%, -50%);
+}
 
 /* Text-weight controls: quiet outlines, never filled panels */
 .text-control {
@@ -753,7 +768,10 @@ body {
   .lang-row:nth-child(even) { margin-left: var(--space-l); }
   .contact-foot { margin-top: var(--space-xl); }
   .edu-entry--school::before { left: 0; }
-  .edu-tier-label { padding-left: 0; margin-top: var(--space-xl); }
+  /* A phone's first Education screen holds the degree and the schools down to Moscow: the schools
+     sit a little closer, so Moscow never ends under the bottom edge */
+  .edu-tier-label { padding-left: 0; margin-top: var(--space-l); }
+  .edu-entry--school { padding-block: 12px; }
 }
 
 /* ---------------------------------------------------------------------------
@@ -985,12 +1003,9 @@ body {
 
 /* ---------------------------------------------------------------------------
    Lantern cursor (lanternCursor.ts). Only ever active on fine, hover-capable pointers after a
-   real mouse move; touch, pen and unsupported browsers keep the native cursor.
+   real mouse move; touch, pen and unsupported browsers never see it. The native cursor always
+   stays visible: the lantern only accompanies it.
    --------------------------------------------------------------------------- */
-@media (hover: hover) and (pointer: fine) {
-  html.lantern-active,
-  html.lantern-active * { cursor: none !important; }
-}
 .lantern,
 .lantern-light {
   position: fixed;

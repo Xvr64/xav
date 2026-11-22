@@ -37,6 +37,27 @@ export const WAVE2_DURATION = WAVE2_DURATIONS.reduce((sum, d) => sum + d, 0); //
 export const MEMORY_DURATION = WAVE1_DURATION + ASCII_HOLD_DURATION + WAVE2_DURATION; // 5820 ms
 export const MEMORY_RETURN_DURATION = 2900;
 
+/** Narrow screens only: on wide screens the photographs are already read at full size. */
+export const MEMORY_INSPECT_QUERY = '(max-width: 850px)';
+
+/** A photograph can be opened for inspection once every plate has resolved, on narrow screens. */
+export function canInspectMemory(plates: string | undefined, narrow: boolean): boolean {
+  return narrow && plates === 'revealed';
+}
+
+export type MemoryInspectEvent =
+  | { readonly type: 'open'; readonly id: string; readonly plates: string | undefined; readonly narrow: boolean }
+  | { readonly type: 'close' };
+
+/**
+ * The open photograph (a city id) or null. Opening is refused until the reveal has finished
+ * and on wide screens; any close (a tap, Escape, the screen widening) clears it.
+ */
+export function nextMemoryInspection(current: string | null, event: MemoryInspectEvent): string | null {
+  if (event.type === 'close') return null;
+  return canInspectMemory(event.plates, event.narrow) ? event.id : current;
+}
+
 export type MemoryWave = 'wave1' | 'hold' | 'wave2';
 
 export interface MemorySlotSample {
