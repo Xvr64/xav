@@ -352,7 +352,7 @@ test('a Magnetic CV passage holds the water off the root until it lands', async 
   }
 });
 
-test('the ocean layer runs no loop of its own: the water follows scroll and resize, the 2D canvases only a ping', () => {
+test('the ocean layer runs no loop of its own: the water follows scroll and resize, the 2D canvases only a ping or a crossing ray', () => {
   const src = readFileSync(new URL('./AsciiWhaleBackground.tsx', import.meta.url), 'utf8');
   const rafs = src.match(/requestAnimationFrame\((\w+)\)/g) ?? [];
   // One coalesced update for the water, and the ping's own frames
@@ -361,9 +361,16 @@ test('the ocean layer runs no loop of its own: the water follows scroll and resi
   const update = src.slice(src.indexOf('const updateWater'), src.indexOf('const scheduleWater'));
   assert.ok(!/requestAnimationFrame/.test(update));
   assert.ok(/else if \(unmeasuredFrames < UNMEASURED_RETRY_FRAMES\) \{ unmeasuredFrames\+\+; scheduleWater\(\); \}/.test(update));
-  // The ping loop stops (and gives its canvases back) the frame its last ping has gone
+  // The canvas loop stops (and gives its canvases back) the frame there is no ping and no ray in sight
   const pings = src.slice(src.indexOf('const drawPings'), src.indexOf('pingRaf = requestAnimationFrame(drawPings)'));
-  assert.ok(/if \(!pings\.length\) \{\s*releaseCanvases\(\);\s*return;\s*\}/.test(pings));
+  assert.ok(/const rayInSight = ray\.active && rayParkedAt < 0;\s*if \(!pings\.length && !rayInSight\) \{\s*releaseCanvases\(\);\s*return;\s*\}/.test(pings));
+  // At rest it is never started: only a ping, a ray in sight, or one last frame to release the stores
+  const schedule = src.slice(src.indexOf('const schedulePings'), src.indexOf('const handleSonarClick'));
+  assert.ok(/if \(!pingRaf && \(pings\.length \|\| \(ray\.active && rayParkedAt < 0\) \|\| sized\) && !document\.hidden\) pingRaf = requestAnimationFrame\(drawPings\);/.test(schedule));
+  // The wait between crossings is a timeout, not a frame loop: arming it schedules no frame
+  const arm = src.slice(src.indexOf('const armRay'), src.indexOf('const holdRay'));
+  assert.ok(/rayTimer = window\.setTimeout\(/.test(arm));
+  assert.ok(!/requestAnimationFrame|schedulePings/.test(arm), 'waiting runs no frames');
   // No backing store until a ping: both canvases start empty
   assert.equal((src.match(/data-ocean-life width=\{0\} height=\{0\}/g) ?? []).length, 2);
   assert.ok(!/getContext\('webgl/.test(src), 'no second WebGL whale engine');

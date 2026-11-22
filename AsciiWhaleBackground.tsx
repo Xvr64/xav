@@ -4,8 +4,12 @@ import { playSonarPing, setSoundDepth } from './decodeAudio';
 import { MAX_PINGS, arrivalTime, echoStrength, isOpenWaterClick, pingRadius, pingStrength } from './sonarPing';
 import { waterShade } from './terminalMotion';
 import { applyAbyssPalette, applyAbyssWash, abyssPaletteScoped, globeScrollGeometry, inkMixFromAbyss, releaseAbyssPalette } from './abyssPalette';
-import { ambientWhalesLive, readingZones } from './oceanDirection';
+import { ambientWhalesLive, migrationRunway, readingZones } from './oceanDirection';
 import { globeStageFillsScreen } from './oceanWorld';
+import { migrationAt } from './migrationScene';
+import {
+  MANTA_CELL, MANTA_START_VISIBILITY, bakeMantaAtlas, drawMantaRay, glideMantaRay, launchMantaRay, mantaVisibility, newMantaRay, stepMantaRay, type Random
+} from './oceanManta';
 
 export interface AsciiWhaleBackgroundProps {
   mode: 'ambient' | 'focus' | 'off';
@@ -26,8 +30,9 @@ const UNMEASURED_RETRY_FRAMES = 300;
  *
  * Nothing here runs on its own. The palette, the lantern and the sound are brought up to date
  * once per frame in which the page scrolled or changed size (one coalesced rAF); the 2D canvases
- * hold no pixels and no backing store until an open-water click sends a ping, and then draw for
- * the ping's three seconds only. (The 2D whales, fish, wake, manta and generative water this file
+ * hold no pixels and no backing store until an open-water click sends a ping, or a distant manta
+ * ray crosses deep water (oceanManta.ts), and draw only for as long as one of them is there: the
+ * ray's wait is a timeout, not a loop. (The 2D whales, fish, wake and generative water this file
  * used to animate at display rate had been retired behind the 3D whales: they drew nothing.)
  */
 export const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.memo(({ mode }) => {
@@ -87,6 +92,10 @@ export const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.m
       }
       const rawDepth = Math.max(0, Math.min(1, window.scrollY / docScrollable));
       setSoundDepth(Math.max(abyss, rawDepth * 0.4));
+      // A ray out of sight comes back where it would be; one that is due sets out the moment the
+      // visitor has descended far enough
+      resumeParkedRay();
+      tryLaunchRay();
       // The Globe measures its runway after mount: until it has, look again next frame, for a
       // bounded number of frames (a Globe that never measures must not leave a display-rate loop
       // behind); after that, scroll and resize still bring the water up to date
@@ -124,12 +133,109 @@ export const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.m
       }
       sized = false;
     };
-    const drawPings = () => {
+
+    // ------------------------------------------------------------------------
+    // THE DEEP-WATER SILHOUETTE — a distant manta ray glides past now and then, only once the
+    // visitor has descended (oceanManta.ts: main's ray, its timing, planform and glyphs). It is
+    // drawn on the canvas beneath the whales, after the sonar rings, as on main. Its wait is a
+    // timeout; frames run only while it crosses; reduced motion and focus mode never see it.
+    // ------------------------------------------------------------------------
+    const ray = newMantaRay();
+    const mantaTiles = isFocus ? null : bakeMantaAtlas(window.devicePixelRatio || 1);
+    let rayTimer = 0;
+    /** The wait has run out: the ray sets out as soon as the water is deep enough. */
+    let rayDue = false;
+    let rayWaitEnds = 0;
+    /** Wait left (ms) while the tab is hidden or motion is reduced: the wait does not run then. */
+    let rayWaitHeld: number | null = null;
+    /** The ray's own clock (s) and the last frame it moved on. */
+    let rayClock = 0;
+    let rayLastFrame = 0;
+    /**
+     * When (performance.now) a crossing went out of sight (the visitor went back up the page):
+     * it then runs no frames and is moved on by the time that passed when the water is deep
+     * again (glideMantaRay), so it is where main's ever-running loop would have it. -1: in sight.
+     */
+    let rayParkedAt = -1;
+    /** When the tab was hidden while parked: hidden time does not count, as on main. */
+    let rayHiddenAt = -1;
+    const rayMigrating = () => {
+      if (isFocus || prefersReducedMotion || migrationRunway.height <= 1) return false;
+      const t = migrationAt(window.scrollY, migrationRunway.top, migrationRunway.height, viewH);
+      return t.p > 0 && t.handoff < 1;
+    };
+    const rayVisibility = () =>
+      mantaVisibility(Math.max(0, Math.min(1, window.scrollY / docScrollable)), {
+        focus: isFocus,
+        reduced: prefersReducedMotion,
+        migrating: rayMigrating()
+      });
+    const armRay = (seconds: number) => {
+      window.clearTimeout(rayTimer);
+      rayTimer = 0;
+      rayDue = false;
+      if (isFocus || prefersReducedMotion || document.hidden) { rayWaitHeld = seconds * 1000; return; }
+      rayWaitHeld = null;
+      rayWaitEnds = performance.now() + seconds * 1000;
+      rayTimer = window.setTimeout(() => { rayTimer = 0; rayDue = true; tryLaunchRay(); }, seconds * 1000);
+    };
+    /** Stop the wait where it is (hidden tab, reduced motion); resumeRay picks it up again. */
+    const holdRay = () => {
+      if (!rayTimer) return;
+      window.clearTimeout(rayTimer);
+      rayTimer = 0;
+      rayWaitHeld = Math.max(0, rayWaitEnds - performance.now());
+    };
+    const resumeRay = () => {
+      if (rayWaitHeld !== null && !isFocus && !prefersReducedMotion && !document.hidden) armRay(rayWaitHeld / 1000);
+    };
+    const tryLaunchRay = (rnd?: Random) => {
+      if (!rayDue || ray.active || !mantaTiles || document.hidden || isFocus || prefersReducedMotion) return;
+      if (rayVisibility() <= MANTA_START_VISIBILITY) return;
+      rayDue = false;
+      launchMantaRay(ray, viewW, viewH, rnd);
+      rayParkedAt = -1;
+      rayLastFrame = performance.now();
+      schedulePings();
+    };
+    /** A crossing out of sight comes back where it would be by now (or is gone, its wait running). */
+    const resumeParkedRay = () => {
+      if (!ray.active || rayParkedAt < 0 || document.hidden || rayVisibility() <= 0.01) return;
+      const now = performance.now();
+      const seconds = (now - rayParkedAt) / 1000;
+      rayParkedAt = -1;
+      rayClock += seconds;
+      rayLastFrame = now;
+      const gone = glideMantaRay(ray, seconds, viewW);
+      if (gone >= 0) armRay(Math.max(0, ray.wait - gone));
+      else schedulePings();
+    };
+    /** One frame of the crossing on the canvas beneath the whales. */
+    const drawRay = (now: number) => {
+      const dt = Math.max(0.004, Math.min(0.033, (now - rayLastFrame) * 0.001 || 0.0166));
+      rayLastFrame = now;
+      rayClock += dt;
+      const pose = stepMantaRay(ray, dt * 60, rayClock, viewW, viewH);
+      // Gone off the far side: the next one waits 16-32 s, on a timeout
+      if (!pose) { armRay(ray.wait); return; }
+      const visibility = rayVisibility();
+      if (visibility > 0.01 && mantaTiles) {
+        drawMantaRay(underCtx, mantaTiles.atlas, mantaTiles.tilePx, pose, visibility, abyssNow(),
+          Math.ceil(viewW / MANTA_CELL), Math.ceil(viewH / MANTA_CELL));
+      } else if (!pings.length) {
+        // Out of sight up the page: no frames until the water is deep again (resumeParkedRay)
+        rayParkedAt = now;
+      }
+    };
+
+    const drawPings = (now: number) => {
       pingRaf = 0;
       if (document.hidden) return;
       const nowS = performance.now() / 1000;
       while (pings.length && nowS - pings[0].at > PING_LIFE_S) pings.shift();
-      if (!pings.length) {
+      // Quiet water (no ping, no ray in sight): the canvases give their backing stores back
+      const rayInSight = ray.active && rayParkedAt < 0;
+      if (!pings.length && !rayInSight) {
         releaseCanvases();
         return;
       }
@@ -143,7 +249,7 @@ export const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.m
       // seafoam in the deep), passing beneath the whales and never over a line of text
       const deep = Math.max(0, Math.min(1, (abyssNow() - 0.4) / 0.25));
       const sonarInk = `rgb(${Math.round(47 + 123 * deep)}, ${Math.round(72 + 152 * deep)}, ${Math.round(88 + 126 * deep)})`;
-      const lines = readingZones.read();
+      const lines = pings.length ? readingZones.read() : [];
       const ctx = underCtx;
       ctx.font = '500 12px "JetBrains Mono", monospace';
       ctx.textAlign = 'center';
@@ -176,6 +282,9 @@ export const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.m
         }
       }
       ctx.globalAlpha = 1;
+
+      // The ray, on the same canvas after the rings (main's order)
+      if (rayInSight) drawRay(now);
 
       // The echoes: each whale the ring reaches answers with a brief bracket of glyphs around
       // the middle of its body, the moment the ring arrives
@@ -210,9 +319,9 @@ export const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.m
       }
       pingRaf = requestAnimationFrame(drawPings);
     };
-    // A frame is due while a ping lives, and once more after the last, to clear and release
+    // A frame is due while a ping lives or a ray crosses, and once more after, to clear and release
     const schedulePings = () => {
-      if (!pingRaf && (pings.length || sized) && !document.hidden) pingRaf = requestAnimationFrame(drawPings);
+      if (!pingRaf && (pings.length || (ray.active && rayParkedAt < 0) || sized) && !document.hidden) pingRaf = requestAnimationFrame(drawPings);
     };
     const handleSonarClick = (e: MouseEvent) => {
       if (prefersReducedMotion || isFocus || e.button !== 0) return;
@@ -238,10 +347,43 @@ export const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.m
     const onVisibility = () => {
       cancelAnimationFrame(waterRaf); waterRaf = 0;
       cancelAnimationFrame(pingRaf); pingRaf = 0;
-      if (!document.hidden) { scheduleWater(); schedulePings(); }
+      // The ray's wait stands still while the tab is hidden (main's loop did not run then either)
+      if (document.hidden) { holdRay(); if (rayParkedAt >= 0) rayHiddenAt = performance.now(); }
+      else {
+        if (rayParkedAt >= 0 && rayHiddenAt >= 0) rayParkedAt += performance.now() - rayHiddenAt;
+        rayHiddenAt = -1;
+        resumeRay(); rayLastFrame = performance.now(); scheduleWater(); schedulePings();
+      }
     };
-    const onMotion = () => { prefersReducedMotion = motionQuery.matches; scheduleWater(); };
+    const onMotion = () => {
+      prefersReducedMotion = motionQuery.matches;
+      // Reduced motion: no ray, and no wait running toward one
+      if (prefersReducedMotion) { holdRay(); ray.active = false; rayParkedAt = -1; schedulePings(); }
+      else resumeRay();
+      scheduleWater();
+    };
     releaseCanvases();
+    // The first ray may come 6-12 s after the ocean appears, as on main
+    armRay(ray.wait);
+    if ((import.meta as unknown as { env?: { DEV?: boolean } }).env?.DEV && !isFocus) {
+      // QA (dev only): send a ray now (a seed makes its course repeatable), and read its state
+      (window as unknown as Record<string, unknown>).__oceanManta = {
+        force: (seed?: number) => {
+          let s = (seed ?? 0) >>> 0;
+          const rnd: Random | undefined = seed === undefined ? undefined : () => {
+            s = (s + 0x6d2b79f5) >>> 0;
+            let t = s;
+            t = Math.imul(t ^ (t >>> 15), t | 1);
+            t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+            return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+          };
+          window.clearTimeout(rayTimer); rayTimer = 0; rayDue = true; ray.active = false;
+          tryLaunchRay(rnd);
+          return ray.active;
+        },
+        state: () => ({ ...ray, due: rayDue, waitLeftMs: rayTimer ? Math.round(rayWaitEnds - performance.now()) : rayWaitHeld, clock: rayClock, visibility: rayVisibility() })
+      };
+    }
     window.addEventListener('resize', handleResize);
     window.addEventListener('scroll', scheduleWater, { passive: true });
     window.addEventListener('click', handleSonarClick);
@@ -258,6 +400,8 @@ export const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.m
       motionQuery.removeEventListener('change', onMotion);
       cancelAnimationFrame(waterRaf);
       cancelAnimationFrame(pingRaf);
+      window.clearTimeout(rayTimer);
+      if ((import.meta as unknown as { env?: { DEV?: boolean } }).env?.DEV) delete (window as unknown as Record<string, unknown>).__oceanManta;
       // Nothing may keep the palette on the stage once its writer has gone
       releaseAbyssPalette();
     };
