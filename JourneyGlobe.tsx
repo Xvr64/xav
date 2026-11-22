@@ -1,7 +1,16 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { portfolioExperiments } from './portfolioExperiments';
 import { createAsciiGlobePainter } from './asciiGlobePrototype';
-import { observeGlobeSurface } from './globeSurface';
+import {
+  captionInOpacity,
+  captionLeavingAt,
+  planCaptionHandoff,
+  type CaptionHandoff,
+  globeZoneRects,
+  inlineTranslateY,
+  observeGlobeSurface,
+  type GlobeStageGeometry
+} from './globeSurface';
 import { loadLandDots, type LandDots } from './glyphcssGlobe';
 import type { LocationItem } from './cvData';
 import { abyssFromProgress, globeScrollGeometry, globeScrollProgress, lerpN } from './abyssPalette';
@@ -266,9 +275,17 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
     let runwayDocTop = 0;
     let runwayTravel = 1;
     let stickyTop = 0;
-    let stageDocLeft = 0;
-    let cachedDocScrollable = 1;
     let globeInView = true;
+    // Stage + caption layout for the ocean's calm zones (publishZone), refreshed with resize()
+    const zoneGeometry: GlobeStageGeometry = {
+      runwayDocTop: 0,
+      travel: 0,
+      stickyTop: 0,
+      stageInPinned: 0,
+      stageLeft: 0,
+      viewH: 1,
+      caption: null
+    };
 
     // ---- Canvas sizing ---------------------------------------------------------
     let W = 0;
@@ -276,12 +293,13 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
     let dpr = 1;
     const resize = () => {
       const sy = window.scrollY;
-      const sx = window.scrollX;
       const rect = stage.getBoundingClientRect();
       W = Math.max(1, rect.width);
       H = Math.max(1, rect.height);
-      stageDocLeft = rect.left + sx;
       dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+      const zg = zoneGeometry;
+      zg.stageLeft = rect.left;
+      zg.viewH = window.innerHeight || H;
       if (runway && pinned) {
         const rr = runway.getBoundingClientRect();
         const pr = pinned.getBoundingClientRect();
@@ -290,8 +308,20 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
         stickyTop = parseFloat(getComputedStyle(pinned).top) || 0;
         globeScrollGeometry.start = runwayDocTop - stickyTop;
         globeScrollGeometry.travel = runwayTravel;
+        zg.runwayDocTop = runwayDocTop;
+        zg.travel = runwayTravel;
+        zg.stickyTop = stickyTop;
+        zg.stageInPinned = rect.top - pr.top;
+      } else {
+        zg.runwayDocTop = rect.top + sy;
+        zg.travel = 0;
+        zg.stickyTop = 0;
+        zg.stageInPinned = 0;
       }
-      cachedDocScrollable = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
+      const cr = captionRef.current?.getBoundingClientRect();
+      zg.caption = cr && cr.width > 0
+        ? { dx: cr.left - rect.left, dy: cr.top - rect.top, width: cr.width, height: cr.height }
+        : null;
     };
 
     const measureProgress = (): number => {
@@ -586,30 +616,24 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
     };
 
     // While the stage is on screen, its disc and caption are calm zones for the ocean layers
-    // (fluid, whales, jellyfish), so nothing swims across the globe or the city name
-    const publishZone = (st: JourneyState) => {
-      const sr = stage.getBoundingClientRect();
-      if (sr.bottom <= 0 || sr.top >= window.innerHeight) {
-        setGlobeZone([]);
-        return;
-      }
+    // (fluid, whales, jellyfish), so nothing swims across the globe or the city name.
+    // Positions come from the cached stage geometry and the scroll position: no layout reads.
+    const publishZone = (st: JourneyState, y: number) => {
       const { cx, cy, baseR } = globeFrame(W, H);
-      const R = baseR * st.zoom;
-      const rects = [{ left: sr.left + cx - R, top: sr.top + cy - R, width: R * 2, height: R * 2 }];
-      const caption = captionRef.current?.getBoundingClientRect();
-      if (caption && caption.width > 0) {
-        rects.push({ left: caption.left, top: caption.top, width: caption.width, height: caption.height });
-      }
-      setGlobeZone(rects);
+      // A Magnetic CV slide moves the pinned chapter with an inline translate (no layout read)
+      const slide = inlineTranslateY(pinned?.style.translate);
+      setGlobeZone(globeZoneRects(zoneGeometry, y, H, { cx, cy, r: baseR * st.zoom }, slide));
     };
 
     let raf = 0;
     const frame = () => {
       raf = 0;
+      // Read the scroll position once, before this frame writes anything
+      const y = globeScrollGeometry.controlledY ?? window.scrollY;
       const st = prefersReduced ? reducedState() : stateAt(measureProgress());
       apply(st);
-      publishZone(st);
-      syncScrollHint();
+      publishZone(st, y);
+      syncScrollHint(y);
     };
     const requestRender = () => {
       if (!raf) raf = requestAnimationFrame(frame);
@@ -656,11 +680,11 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
       // Scale every phase equally, including city holds and the final release.
       return { y, dur: dur.map(seconds => seconds / CINEMATIC_SPEED), earth };
     };
-    const syncScrollHint = () => {
+    const syncScrollHint = (scrollY?: number) => {
       const hintEl = scrollHintRef.current;
       if (!hintEl) return;
       const st = cinematicStops();
-      const y = globeScrollGeometry.controlledY ?? window.scrollY;
+      const y = globeScrollGeometry.controlledY ?? scrollY ?? window.scrollY;
       const isAtDohaWaiting =
         !prefersReduced &&
         !cinematicPlayingRef.current &&
@@ -712,7 +736,7 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
     window.addEventListener('scroll', onScroll, { passive: true });
     window.addEventListener('resize', onResize, { passive: true });
     window.visualViewport?.addEventListener('resize', onResize, { passive: true });
-    const stopSurface = observeGlobeSurface(stage, onResize);
+    const stopSurface = observeGlobeSurface(stage, onResize, [captionRef.current]);
     // Labels use the editorial web fonts: re-measure & redraw once they are ready
     document.fonts?.ready
       .then(() => {
@@ -752,6 +776,52 @@ export const JourneyGlobe: React.FC<JourneyGlobeProps> = React.memo(({ locations
   }, [activeId]);
 
   const activeIdx = Math.max(0, locations.findIndex((l) => l.id === activeId));
+
+  // City change = a sequenced hand-off (planCaptionHandoff): the leaving caption fades out over
+  // CAPTION_OUT_MS while the arriving one holds its unchanged entrance (.globe-caption-in) until the
+  // leaving one is faint, so two cities never overprint and the caption is never blank. Reduced
+  // motion swaps instantly. Animations (like the entrance) take precedence over inline styles.
+  const captionEntrance = useRef<number[]>([]); // when each caption's entrance curve was at 0
+  const captionFades = useRef<({ anim: Animation; start: number; plan: CaptionHandoff } | null)[]>([]);
+  const shownIdxRef = useRef(-1);
+  useLayoutEffect(() => {
+    const prev = shownIdxRef.current;
+    shownIdxRef.current = activeIdx;
+    const now = performance.now();
+    const kids = captionRef.current?.children;
+    const next = kids?.[activeIdx] as HTMLElement | undefined;
+    // How visible both captions are right now (a quick reversal can catch either mid-way)
+    const fading = captionFades.current[activeIdx];
+    const arriving = fading ? captionLeavingAt(fading.plan, now - fading.start) : 0;
+    fading?.anim.cancel();
+    captionFades.current[activeIdx] = null;
+    const entered = captionEntrance.current[prev];
+    const leaving = prev < 0 ? 0 : entered === undefined ? 1 : captionInOpacity(now - entered);
+    const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    if (prev < 0 || prev === activeIdx || reduced || !next || typeof next.animate !== 'function') {
+      if (next) next.style.animationDelay = '';
+      captionEntrance.current[activeIdx] = now;
+      return;
+    }
+    const plan = planCaptionHandoff(leaving, arriving);
+    next.style.animationDelay = `${plan.arriveDelayMs.toFixed(1)}ms`;
+    captionEntrance.current[activeIdx] = now + plan.arriveDelayMs;
+    const el = kids?.[prev] as HTMLElement | undefined;
+    if (!el || !plan.leave) return;
+    const lift = `translate3d(0, ${(6 * (1 - leaving)).toFixed(2)}px, 0)`;
+    captionFades.current[prev]?.anim.cancel();
+    const anim = el.animate(
+      plan.leave.frames.map((f) => ({
+        offset: f.offset,
+        opacity: f.opacity,
+        easing: f.easing ?? 'linear',
+        visibility: 'visible',
+        transform: lift
+      })),
+      { duration: plan.leave.duration }
+    );
+    captionFades.current[prev] = { anim, start: now, plan };
+  }, [activeIdx]);
 
   return (
     <div ref={stageRef} className="relative w-full max-w-full h-full overflow-hidden">
