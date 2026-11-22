@@ -21,8 +21,15 @@ import {
   GLOBE_TRANSITION_DURATION_MS,
   MAGNETIC_IDLE_GAP_MS,
   MAGNETIC_DRAIN_IDLE_MS,
-  createMagneticGestureMachine
+  createMagneticGestureMachine,
+  resolveInterruptedScrollY,
+  resolveInterruptedTransfer,
+  createProfileTransferPlayhead,
+  createInputGestureIds,
+  planHistoryCommit,
+  PROFILE_TRANSFER_MAX_DT_MS
 } from './magneticCVState.ts';
+import fs from 'node:fs';
 
 test('the magnetic CV is enabled by default in both development and production, with ?magneticCV=0 as a fallback to disable it', () => {
   assert.equal(parseMagneticCV(''), true);
@@ -710,4 +717,264 @@ test('1-vs-2 packet coalescing and ±1-2px quantization jitter across all tail m
       assert.deepEqual(m.feedWheel(dy, t, atBoundary), { kind: 'consume' }, `base=${base} i=${i} must stay consumed`);
     }
   }
+});
+
+test('resolveInterruptedScrollY snaps mid-transition interrupt() cleanly to an exact chapter boundary', () => {
+  // Early interruption (t < 0.35) snaps back to startY
+  assert.deepEqual(resolveInterruptedScrollY(1200, 2100, 0.0), { targetY: 1200, landedOnDestination: false });
+  assert.deepEqual(resolveInterruptedScrollY(1200, 2100, 0.22), { targetY: 1200, landedOnDestination: false });
+  assert.deepEqual(resolveInterruptedScrollY(1200, 2100, 0.349), { targetY: 1200, landedOnDestination: false });
+  // Mid/late interruption (t >= 0.35) snaps forward to endY
+  assert.deepEqual(resolveInterruptedScrollY(1200, 2100, 0.35), { targetY: 2100, landedOnDestination: true });
+  assert.deepEqual(resolveInterruptedScrollY(1200, 2100, 0.68), { targetY: 2100, landedOnDestination: true });
+  assert.deepEqual(resolveInterruptedScrollY(1200, 2100, 1.0), { targetY: 2100, landedOnDestination: true });
+});
+
+test('createProfileTransferPlayhead accelerates to 2.4x on a fresh same-direction gesture and smoothly reverses at -1.6x on opposite gesture', () => {
+  // 1. Same-direction acceleration (2.4x) from a fresh gesture (id 1, not the starting id 0) cuts remaining duration by >2x
+  const normal = createProfileTransferPlayhead(1, 5820, 1340, 0);
+  const boosted = createProfileTransferPlayhead(1, 5820, 1340, 0);
+  let elapsed = 0;
+  let normalDoneAt = 0;
+  let boostedDoneAt = 0;
+  while (!normal.step(16).done && elapsed < 10000) {
+    elapsed += 16;
+    normalDoneAt = elapsed;
+  }
+  elapsed = 0;
+  while (elapsed < 10000) {
+    elapsed += 16;
+    if (elapsed === 240) boosted.feedInput(80, 1);
+    const st = boosted.step(16);
+    if (st.done) {
+      boostedDoneAt = elapsed;
+      assert.equal(st.landedStep, 1);
+      assert.equal(st.p, 1);
+      break;
+    }
+  }
+  assert.equal(boosted.targetRate, 2.4);
+  assert.ok(boostedDoneAt < normalDoneAt * 0.52, `2.4x boost finishes much faster (${boostedDoneAt}ms vs ${normalDoneAt}ms)`);
+
+  // 2. Opposite-direction gesture smoothly reverses back to step 0 at -1.6x
+  const rev = createProfileTransferPlayhead(1, 5820, 1340, 0);
+  for (let i = 0; i < 60; i++) rev.step(16); // advance ~1s forward
+  const peakP = rev.p;
+  assert.ok(peakP > 0.14 && peakP < 0.25);
+  rev.feedInput(-60, 2);
+  assert.equal(rev.dir, -1);
+  assert.equal(rev.targetRate, -1.6);
+  let reversedToZero = false;
+  for (let i = 0; i < 120; i++) {
+    const st = rev.step(16);
+    if (st.done) {
+      reversedToZero = true;
+      assert.equal(st.p, 0);
+      assert.equal(st.landedStep, 0);
+      break;
+    }
+  }
+  assert.equal(reversedToZero, true, 'reverses smoothly back to step 0');
+});
+
+/** Trackpad-like wheel stream: `n` packets every 16 ms decaying from `a` px (the guardian's profile stream). */
+const trackpadStream = (at, sign, a = 45, n = 70) =>
+  Array.from({ length: n }, (_, i) => ({ at: at + i * 16, delta: sign * Math.max(1, Math.round(a * Math.pow(0.94, i))) }));
+
+/**
+ * Drive one Profile transfer the way magneticCV.ts does: a playhead fed with gesture ids plus the
+ * gesture machine, re-locked to the new direction whenever the playhead reverses. After the
+ * playhead finishes, remaining wheel packets reach the machine at a chapter boundary: any `snap`
+ * there would start a second move. Wheel packets without an explicit gesture get ids from
+ * createInputGestureIds, exactly like onWheel.
+ */
+function runTransfer({ inputs, startGesture, relock = true, forward = 5820, back = 2900 }) {
+  const ids = createInputGestureIds();
+  const m = createMagneticGestureMachine();
+  const t0 = 10000;
+  const tagged = inputs.map(x => ({ ...x })).sort((a, b) => a.at - b.at);
+  let start = startGesture;
+  // Packets before the transfer starts belong to the gesture that launches it.
+  for (const x of tagged) if (x.gesture === undefined) x.gesture = ids.wheel(x.delta, t0 + x.at);
+  if (start === undefined) start = tagged.find(x => x.at <= 0)?.gesture ?? 0;
+  m.beginTransition(1, t0);
+  const ph = createProfileTransferPlayhead(1, forward, back, start);
+  let dir = 1;
+  let doneAt = null;
+  let landed = null;
+  let snaps = 0;
+  let i = 0;
+  while (i < tagged.length && tagged[i].at <= 0) i++;
+  for (let t = t0; t <= t0 + 12000; t += 4) {
+    while (i < tagged.length && t0 + tagged[i].at <= t) {
+      const { delta, gesture } = tagged[i++];
+      if (doneAt === null) {
+        ph.feedInput(delta, gesture);
+        if (relock && ph.dir !== dir) { dir = ph.dir; m.beginTransition(dir, t); }
+        m.feedWheel(delta, t, () => ({ room: 0, hasTarget: false }));
+      } else if (m.feedWheel(delta, t, atBoundary).kind === 'snap') {
+        snaps++;
+      }
+    }
+    if (doneAt === null && (t - t0) % 16 === 0 && t > t0) {
+      const st = ph.step(16);
+      if (st.done) {
+        doneAt = t - t0;
+        landed = st.landedStep;
+        m.endTransition(t, false);
+      }
+    }
+  }
+  return { doneAt, landed, snaps, targetRate: ph.targetRate };
+}
+
+test('a reversed Profile transfer re-locks the gesture: its own trailing reverse momentum never starts a second move', () => {
+  // Keyboard start (gesture 1), reverse trackpad stream at 1.5 s: exactly one move, back to step 0.
+  const run = runTransfer({ startGesture: 1, inputs: trackpadStream(1500, -1) });
+  assert.equal(run.landed, 0, 'the reversal lands back on step 0');
+  assert.ok(run.doneAt > 1500 && run.doneAt < 2600, `reversal finishes while the reverse stream is still running (${run.doneAt} ms)`);
+  assert.equal(run.snaps, 0, 'the trailing reverse momentum drains instead of starting Profile -> Globe');
+  assert.equal(run.targetRate, -1.6, 'the reversing stream does not also boost its own reversal');
+  // The same input without the re-lock reproduces the guardian's double advance.
+  assert.ok(runTransfer({ startGesture: 1, inputs: trackpadStream(1500, -1), relock: false }).snaps > 0);
+});
+
+test('the gesture that starts a Profile transfer never boosts it; a fresh gesture does', () => {
+  const near = (ms, label) => assert.ok(Math.abs(ms - 5820) <= 80, `${label}: ~5.82 s design duration (${ms} ms)`);
+  // Trackpad stream starting the transfer: its own momentum tail is the same gesture.
+  near(runTransfer({ inputs: trackpadStream(0, 1) }).doneAt, 'trackpad stream start');
+  // A spun mouse wheel (notches every 90 ms) is one gesture too.
+  near(runTransfer({ inputs: Array.from({ length: 6 }, (_, i) => ({ at: i * 90, delta: 100 })) }).doneAt, 'spun mouse wheel');
+  // A finger still sliding after it started the transfer (fast flick or slow swipe): same touch id.
+  near(runTransfer({ startGesture: 5, inputs: Array.from({ length: 12 }, (_, i) => ({ at: 20 + i * 30, delta: 30, gesture: 5 })) }).doneAt, 'slow swipe start');
+  // Held key auto-repeat keeps the starting key's id.
+  near(runTransfer({ startGesture: 3, inputs: Array.from({ length: 20 }, (_, i) => ({ at: 500 + i * 33, delta: 60, gesture: 3 })) }).doneAt, 'key auto-repeat');
+
+  // Fresh gestures boost: a new trackpad stream after the starting one has ended...
+  const freshStream = runTransfer({ inputs: [...trackpadStream(0, 1), ...trackpadStream(2000, 1)] });
+  assert.equal(freshStream.targetRate, 2.4);
+  assert.ok(freshStream.doneAt < 4300, `fresh trackpad stream boosts (${freshStream.doneAt} ms)`);
+  // ...a bold stroke after a short pause on the faded tail (fingers cut the momentum)...
+  const tail = trackpadStream(0, 1, 45, 50);
+  const cut = runTransfer({ inputs: [...tail, ...Array.from({ length: 6 }, (_, i) => ({ at: 49 * 16 + 100 + i * 16, delta: 30 }))] });
+  assert.equal(cut.targetRate, 2.4, 'a bold stroke after a pause on a faded tail is a fresh gesture');
+  // ...a new touch or a new key press.
+  assert.equal(runTransfer({ startGesture: 5, inputs: [{ at: 1200, delta: 40, gesture: 6 }] }).targetRate, 2.4);
+  assert.equal(runTransfer({ startGesture: 3, inputs: [{ at: 1000, delta: 60, gesture: 4 }] }).targetRate, 2.4);
+});
+
+test('createInputGestureIds keeps one id per wheel stream and opens a new one after a quiet gap or a bold fresh stroke', () => {
+  const ids = createInputGestureIds();
+  const a = ids.wheel(45, 1000);
+  assert.equal(ids.wheel(40, 1016), a);
+  assert.equal(ids.wheel(-2, 1032), a, 'a sign bounce stays in its stream');
+  assert.equal(ids.wheel(3, 1120), a, 'a weak packet after a short pause stays in the stream');
+  assert.notEqual(ids.wheel(3, 1400), a, 'a quiet gap ends the stream');
+  const touch = ids.next();
+  assert.ok(touch > a, 'discrete gestures share the same id sequence');
+
+  // Fresh-impulse rule at its edges: a quiet gap of exactly MAGNETIC_DRAIN_IDLE_MS opens a new id,
+  // one millisecond less with a weak packet does not; a bold stroke after an 85 ms pause does.
+  const edge = createInputGestureIds();
+  const s = edge.wheel(20, 0);
+  assert.equal(edge.wheel(4, MAGNETIC_DRAIN_IDLE_MS - 1), s);
+  assert.notEqual(edge.wheel(4, 2 * MAGNETIC_DRAIN_IDLE_MS - 1), s, `gap of ${MAGNETIC_DRAIN_IDLE_MS} ms is a new gesture`);
+  const tail = createInputGestureIds();
+  let id = tail.wheel(30, 0);
+  for (let i = 1; i <= 30; i++) id = tail.wheel(Math.max(1, Math.round(30 * 0.88 ** i)), i * 16);
+  assert.equal(tail.wheel(4, 30 * 16 + 84), id, 'an 84 ms pause is still the same stream');
+  assert.notEqual(tail.wheel(30, 30 * 16 + 84 + 90), id, 'a bold stroke after an 85+ ms pause on a faded tail is fresh');
+
+  // The starting stream's whole momentum tail keeps the starting id, so it never boosts.
+  const start = createInputGestureIds();
+  const packets = trackpadStream(0, 1).map(p => start.wheel(p.delta, p.at));
+  assert.equal(new Set(packets).size, 1, 'one id for the whole 70-packet trackpad stream');
+  const ph = createProfileTransferPlayhead(1, 5820, 2900, packets[0]);
+  for (const [i, p] of trackpadStream(0, 1).entries()) ph.feedInput(p.delta, packets[i]);
+  assert.equal(ph.targetRate, 1, 'the starting stream tail leaves the transfer at 1x');
+});
+
+test('an interrupted Profile transfer settles on the step its playhead progress decides (both steps share one scrollY)', () => {
+  // Forward transfer (step 0 -> 1): early -> back to 0, from p = 0.35 on -> 1.
+  assert.deepEqual(resolveInterruptedTransfer(1, 0.2), { landedOnDestination: false, step: 0 });
+  assert.deepEqual(resolveInterruptedTransfer(1, 0.349), { landedOnDestination: false, step: 0 });
+  assert.deepEqual(resolveInterruptedTransfer(1, 0.35), { landedOnDestination: true, step: 1 });
+  assert.deepEqual(resolveInterruptedTransfer(1, 0.55), { landedOnDestination: true, step: 1 });
+  // Reverse transfer (step 1 -> 0): early (p near 1) stays on 1, past 0.35 of the way lands on 0.
+  assert.deepEqual(resolveInterruptedTransfer(-1, 0.9), { landedOnDestination: false, step: 1 });
+  assert.deepEqual(resolveInterruptedTransfer(-1, 0.6), { landedOnDestination: true, step: 0 });
+  // A forward transfer reversed at p = 0.25 now heads for step 0 and is 0.75 of the way there.
+  const ph = createProfileTransferPlayhead(1, 5820, 2900, 0);
+  for (let i = 0; i < 90; i++) ph.step(16);
+  ph.feedInput(-60, 1);
+  ph.step(16);
+  assert.deepEqual(resolveInterruptedTransfer(ph.dir, ph.p), { landedOnDestination: true, step: 0 });
+
+  // interrupt() takes the transfer's step from that rule, never from the scrollY tie.
+  const src = fs.readFileSync(new URL('./magneticCV.ts', import.meta.url), 'utf8');
+  const interrupt = src.slice(src.indexOf('function interrupt('), src.indexOf('const focusable'));
+  assert.match(interrupt, /resolveInterruptedTransfer\(transferPlayhead\.dir, transferPlayhead\.p\)/);
+  assert.match(interrupt, /transferStep >= 0\s*\?\s*transferStep/);
+});
+
+test('an older gesture cannot flip back a transfer that a newer gesture reversed', () => {
+  // Trackpad stream starts the transfer (wheel id 1); PageUp at 1 s (key id 100) reverses it while
+  // the stream's forward tail still flows: the tail must not flip it forward again.
+  const slowTail = Array.from({ length: 150 }, (_, i) => ({ at: i * 16, delta: Math.max(1, Math.round(45 * 0.975 ** i)) }));
+  const run = runTransfer({ inputs: [...slowTail, { at: 1000, delta: -60, gesture: 100 }] });
+  assert.equal(run.landed, 0, 'stays reversed and lands on step 0');
+  assert.ok(run.doneAt < 2000, `reversal completes promptly (${run.doneAt} ms)`);
+  // A newer opposite gesture still reverses it again.
+  const again = runTransfer({ inputs: [{ at: 0, delta: 40 }, { at: 1000, delta: -60, gesture: 100 }, { at: 1150, delta: 60, gesture: 101 }] });
+  assert.equal(again.landed, 1);
+  // The controller also retires that wheel stream, so its tail cannot start a new move after landing.
+  const src = fs.readFileSync(new URL('./magneticCV.ts', import.meta.url), 'utf8');
+  assert.match(src, /gestureId !== lastWheelGesture\) staleWheelGesture = lastWheelGesture/);
+  assert.match(src, /if \(wheelGesture && wheelGesture === staleWheelGesture\) \{\s*consumeWheel\(e\);\s*return;/);
+});
+
+test('a hidden tab or pagehide interrupts the transfer before the 250 ms dt cap could advance it', () => {
+  const src = fs.readFileSync(new URL('./magneticCV.ts', import.meta.url), 'utf8');
+  assert.match(src, /addEventListener\('pagehide', interrupt/);
+  assert.match(src, /addEventListener\('visibilitychange', interrupt/);
+  // interrupt() clears the animation; the glide loop stops at its next frame without stepping.
+  const glide = src.slice(src.indexOf('const glide = (time: number) => {'), src.indexOf('glide(now);'));
+  assert.ok(glide.indexOf('if (!animation) return;') >= 0 && glide.indexOf('if (!animation) return;') < glide.indexOf('.step(dt)'));
+});
+
+test('the transfer playhead integrates a janky frame by its real duration (dt cap raised from 64 ms)', () => {
+  assert.ok(PROFILE_TRANSFER_MAX_DT_MS >= 200);
+  const smooth = createProfileTransferPlayhead(1, 5820, 2900);
+  const janky = createProfileTransferPlayhead(1, 5820, 2900);
+  for (let i = 0; i < 120; i++) smooth.step(16);
+  for (let i = 0; i < 16; i++) janky.step(120);
+  assert.ok(Math.abs(smooth.p - janky.p) < 0.02, `1.92 s of 120 ms frames ≈ 1.92 s of 16 ms frames (${janky.p} vs ${smooth.p})`);
+});
+
+test('a landed move commits the hash and Back/Forward state; interrupt() commits like finish() when it lands on the destination', () => {
+  const from = { id: 'education', offset: 0 };
+  const to = { id: 'skills', offset: 0 };
+  assert.deepEqual(planHistoryCommit({ from, to, toIsCv: true, toIsProfile: false, hash: '#education', clearUrl: '/' }), [
+    { kind: 'replace', reading: from },
+    { kind: 'push', reading: to, url: '#skills' }
+  ]);
+  assert.deepEqual(planHistoryCommit({ from, to, toIsCv: true, toIsProfile: false, hash: '#skills', clearUrl: '/' }), []);
+  const step = { id: 'introduction', offset: 900, step: 1 };
+  assert.deepEqual(planHistoryCommit({ from: step, to: step, toIsCv: true, toIsProfile: true, hash: '#introduction', clearUrl: '/' }), [
+    { kind: 'replace', reading: step }
+  ]);
+  assert.deepEqual(planHistoryCommit({ from: step, to: { id: 'journey', offset: 0 }, toIsCv: false, toIsProfile: false, hash: '#introduction', clearUrl: '/?x=1' }), [
+    { kind: 'replace', reading: step },
+    { kind: 'push', reading: { id: 'journey', offset: 0 }, url: '/?x=1' }
+  ]);
+  assert.deepEqual(planHistoryCommit({ from: step, to: { id: 'journey', offset: 0 }, toIsCv: false, toIsProfile: false, hash: '', clearUrl: '/' }), []);
+
+  // Both landing paths of the controller share the one commit.
+  const src = fs.readFileSync(new URL('./magneticCV.ts', import.meta.url), 'utf8');
+  const body = (name, until) => src.slice(src.indexOf(`function ${name}(`), src.indexOf(until, src.indexOf(`function ${name}(`)));
+  assert.match(body('finish', 'function commitHistory('), /commitHistory\(from, to, offset, endY\)/);
+  const interrupt = body('interrupt', 'const focusable');
+  assert.match(interrupt, /resolveInterruptedScrollY\(/);
+  assert.match(interrupt, /if \(landedOnDestination\) commitHistory\(from, to, offset, targetY\)/);
+  assert.doesNotMatch(body('commitHistory', 'function start('), /location\.hash !==/, 'the decision lives in planHistoryCommit');
 });

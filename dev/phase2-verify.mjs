@@ -154,7 +154,7 @@ const unsetInReadingZone = (c) => c.evaluate(`(() => {
 })()`);
 
 /** Read the page top to bottom at each width: every line decodes out of the encrypted alphabet,
- * rests readable in the reading zone, scrambles out at the top and comes back on the way up. */
+ * rests readable in the reading zone, and stays set once read (above the fold and on the way back). */
 async function cv() {
   for (const v of [{ w: 1440, h: 900 }, { w: 1280, h: 800 }, { w: 768, h: 1024, touch: true }, { w: 390, h: 844, touch: true }, { w: 320, h: 740, touch: true }]) {
     const c = await browser({ width: v.w, height: v.h, touch: v.touch });
@@ -175,8 +175,10 @@ async function cv() {
         };
         requestAnimationFrame(tick);
       })()`);
-      await c.evaluate(`scrollTo(0, ${g.intro - v.h})`); await sleep(500);
-      await scrollRun(c, g.intro - v.h, g.max, 700);
+      // Start on Profile, not one screen above it: that is the Globe's Shanghai stop, where
+      // cinematicScroll's "leave Shanghai upward" can yank the page back to the Earth under load.
+      await c.evaluate(`scrollTo(0, ${g.intro})`); await sleep(500);
+      await scrollRun(c, g.intro, g.max, 700);
       await sleep(6000);
       const decode = await c.evaluate(`(window.__decode.stop = true, window.__decode)`);
       assert.ok(decode.title > 0, 'titles decode letter by letter');
@@ -201,16 +203,26 @@ async function cv() {
       const at = g.experience - v.h * 0.18;
       await c.evaluate(`scrollTo(0, ${at})`); await sleep(6000);
       const read = await unsetInReadingZone(c);
-      const gone = await c.evaluate(`[...document.querySelectorAll('#introduction .ascii-word')].filter(el => el.getBoundingClientRect().top < innerHeight * 0.03 && el.style.opacity === '0').length`);
+      // Reveals are permanent (owner commit 42fe518): words read once stay set, plainly, above the
+      // fold and after their title has scrolled away, and they read the same on the way back.
+      const kept = await c.evaluate(`(() => {
+        const above = [...document.querySelectorAll('#introduction .ascii-word')].filter(el => el.getBoundingClientRect().top < innerHeight * 0.03);
+        return { above: above.length, unset: above.filter(el => el.style.opacity !== '1' || el.querySelector('.ascii-visual').firstElementChild).length };
+      })()`);
       await scrollRun(c, at, at + v.h * 1.4, 900); await sleep(400);
-      const leaving = await c.evaluate(`[...document.querySelectorAll('#experience h2 .ascii-word')].every(el => el.style.opacity === '0')`);
+      const leaving = await c.evaluate(`(() => {
+        const title = [...document.querySelectorAll('#experience h2 .ascii-word')];
+        return { words: title.length, unset: title.filter(el => el.style.opacity !== '1' || el.querySelector('.ascii-visual').firstElementChild).length };
+      })()`);
       await c.evaluate(`scrollTo(0, ${at})`); await sleep(6000);
       const back = await unsetInReadingZone(c);
       assert.equal(read, 0, 'the reading zone is fully set');
-      assert.ok(gone > 0, 'copy above the top of the screen has scrambled out');
-      assert.equal(leaving, true, 'a title scrolled away is gone');
-      assert.equal(back, 0, 'and it reads again on the way back');
-      pass(`CV read through at ${v.w}px`, { decode, rest, read, gone, back, errors: c.errors });
+      assert.ok(kept.above > 0, 'copy has been read and scrolled above the top of the screen');
+      assert.equal(kept.unset, 0, 'copy read once stays set above the top of the screen');
+      assert.ok(leaving.words > 0);
+      assert.equal(leaving.unset, 0, 'a title read and scrolled away stays set');
+      assert.equal(back, 0, 'and it reads the same on the way back');
+      pass(`CV read through at ${v.w}px`, { decode, rest, read, kept, leaving, back, errors: c.errors });
       assert.deepEqual(c.errors, []);
     } finally { await c.close(); }
   }

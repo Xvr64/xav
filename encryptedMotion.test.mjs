@@ -70,3 +70,10 @@ test('locked characters stay correct; suffix glyphs are deterministic and scroll
   assert.ok(ENCRYPTED_CHARSET[glyph]);
   for (let i = 0; i < 150; i++) assert.equal(encryptedCharacterState(1, i, 150, 17), -1);
 });
+
+test('ENCRYPTED_CHARSET contains strictly narrow/medium oceanic characters and zero wide collision symbols', () => {
+  for (const wide of ['M', 'W', '@', '%', '#', '&']) {
+    assert.equal(ENCRYPTED_CHARSET.includes(wide), false, `must not contain wide glyph ${wide}`);
+  }
+  assert.ok(ENCRYPTED_CHARSET.length >= 10);
+});

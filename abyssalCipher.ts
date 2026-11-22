@@ -150,12 +150,14 @@ export interface AbyssalCipher {
   readonly fragmentCount: number;
 }
 
-// Restrained editorial oceanic ASCII vocabulary
-// Indices: 0:~  1:/  2:\  3::  4:·  5:+  6:#  7:%  8:=  9:-  10:|  11:≈
-const ATLAS_CHARS = ['~', '/', '\\', ':', '·', '+', '#', '%', '=', '-', '|', '≈'] as const;
-const CIPHER_CORE = [6, 7, 8, 5, 1, 2, 10] as const;   // # % = + / \ |
-const CIPHER_CREST = [6, 7, 5, 8, 1, 2] as const;      // # % + = / \
-const CIPHER_FLOW_H = [0, 9, 8, 11, 3, 4] as const;    // ~ - = ≈ : ·
+// Restrained editorial oceanic ASCII vocabulary, drawn only from the owner-approved narrow decode
+// alphabet (· : - ~ / \ | + * = ; _) so no wide glyph (#, %, ≈) crowds its neighbours.
+// Indices: 0:~  1:/  2:\  3::  4:·  5:+  6:*  7:;  8:=  9:-  10:|
+// Dense core/crest: * + = | / \ (heaviest strokes first); light flow: ~ - : · (doubled ~ for the swell).
+const ATLAS_CHARS = ['~', '/', '\\', ':', '·', '+', '*', ';', '=', '-', '|'] as const;
+const CIPHER_CORE = [6, 5, 8, 10, 1, 2, 7] as const;   // * + = | / \ ;
+const CIPHER_CREST = [6, 5, 8, 10, 1, 2] as const;     // * + = | / \
+const CIPHER_FLOW_H = [0, 9, 8, 0, 3, 4] as const;     // ~ - = ~ : ·
 const CIPHER_FLOW_D1 = [2, 0, 8, 3, 5] as const;       // \ ~ = : +
 const CIPHER_FLOW_D2 = [1, 0, 8, 3, 5] as const;       // / ~ = : +
 const CIPHER_FADE = [3, 0, 9, 4, 4] as const;          // : ~ - · ·
@@ -203,12 +205,66 @@ function collectSectionPlanes(section: HTMLElement) {
   return { hero, meta: [] as HTMLElement[], items };
 }
 
-/** Measure character bounding centers & exact left edges using Range on `.ascii-source` (exact serif kerning). */
+interface CachedCharItem {
+  relLeft: number;
+  relCx: number;
+  relCy: number;
+  cw: number;
+}
+interface CachedCharMeasure {
+  width: number;
+  height: number;
+  items: CachedCharItem[];
+}
+
+let charGeometryCache = new WeakMap<Text, Map<number, CachedCharMeasure>>();
+let fontSizeCache = new WeakMap<HTMLElement, number>();
+let cacheViewportKey = '';
+
+function ensureGeometryCacheEpoch() {
+  if (typeof window === 'undefined') return;
+  const key = `${window.innerWidth}x${window.innerHeight}`;
+  if (key !== cacheViewportKey) {
+    cacheViewportKey = key;
+    charGeometryCache = new WeakMap();
+    fontSizeCache = new WeakMap();
+  }
+}
+
+function getCachedFontSize(el: HTMLElement, fallbackHeight: number): number {
+  let cached = fontSizeCache.get(el);
+  if (cached === undefined) {
+    cached = parseFloat(getComputedStyle(el).fontSize) || fallbackHeight * 0.72;
+    fontSizeCache.set(el, cached);
+  }
+  return cached;
+}
+
+/** Measure character bounding centers & exact left edges using Range on `.ascii-source` (exact serif kerning),
+ * cached relative to the word's bounding rect per (Text, maxChars, viewport) so frame-0 begin() does zero redundant Range layout reads. */
 function measureCharCenters(
   textNode: Text,
   fallbackRect: DOMRect,
   maxChars: number
 ): { left: number; cx: number; cy: number; cw: number }[] {
+  ensureGeometryCacheEpoch();
+  let byMax = charGeometryCache.get(textNode);
+  const existing = byMax?.get(maxChars);
+  if (
+    existing &&
+    Math.abs(existing.width - fallbackRect.width) < 1.5 &&
+    Math.abs(existing.height - fallbackRect.height) < 1.5
+  ) {
+    const ox = fallbackRect.left;
+    const oy = fallbackRect.top;
+    return existing.items.map(it => ({
+      left: ox + it.relLeft,
+      cx: ox + it.relCx,
+      cy: oy + it.relCy,
+      cw: it.cw
+    }));
+  }
+
   const raw = textNode.textContent ?? '';
   const chars = Array.from(raw);
   if (!chars.length) return [];
@@ -239,6 +295,24 @@ function measureCharCenters(
       cx: left + cw * 0.5,
       cy: fallbackRect.top + fallbackRect.height * 0.52,
       cw
+    });
+  }
+  if (fallbackRect.width > 0.5 && fallbackRect.height > 0.5) {
+    if (!byMax) {
+      byMax = new Map();
+      charGeometryCache.set(textNode, byMax);
+    }
+    const ox = fallbackRect.left;
+    const oy = fallbackRect.top;
+    byMax.set(maxChars, {
+      width: fallbackRect.width,
+      height: fallbackRect.height,
+      items: out.map(it => ({
+        relLeft: it.left - ox,
+        relCx: it.cx - ox,
+        relCy: it.cy - oy,
+        cw: it.cw
+      }))
     });
   }
   return out;
@@ -549,7 +623,7 @@ export function createAbyssalCipher(): AbyssalCipher {
       if (w.closest('h2.ocean-h2, #introduction .lead')) tier = 0;
       else if (w.closest('.meta, dt, time')) tier = 2;
       else if (w.closest('h3.exp-company, h3.entry-title, h3.lang-name, a.contact-address, p.exp-role, p.edu-degree')) tier = 1;
-      const fontPx = parseFloat(getComputedStyle(w).fontSize) || r.height * 0.72;
+      const fontPx = getCachedFontSize(w, r.height);
       bucket[tier].push({ el: w, r, tier, fontPx, planeIdx: findPlaneIdx(w) });
     }
 
@@ -899,7 +973,7 @@ export function createAbyssalCipher(): AbyssalCipher {
       accepted.add(block);
       const tier = classifyLeafTier(block, section);
       const { idx: planeIdx, rowOrder } = findInPlane(block);
-      const fontPx = parseFloat(getComputedStyle(block).fontSize) || 18;
+      const fontPx = getCachedFontSize(block, 25);
 
       // Group words into actual rendered visual lines (in block-local coords)
       const lineGroups: { top: number; bottom: number; left: number; right: number; words: { el: HTMLElement; r: DOMRect }[] }[] = [];
@@ -1394,6 +1468,42 @@ export function createAbyssalCipher(): AbyssalCipher {
     }
   };
 
+  // Lazily warm character geometry cache during idle slices after fonts settle so the first transition begin() is instant.
+  let warmupTimer = 0;
+  const scheduleWarmup = () => {
+    if (typeof window === 'undefined' || typeof document === 'undefined') return;
+    const words = [...document.querySelectorAll<HTMLElement>(
+      '[data-editorial-section] :is(h2.ocean-h2, #introduction .lead, h3.exp-company, h3.entry-title, h3.lang-name, a.contact-address, p.exp-role, p.edu-degree) .ascii-word'
+    )];
+    let idx = 0;
+    const step = () => {
+      warmupTimer = 0;
+      if (active) {
+        warmupTimer = window.setTimeout(step, 180);
+        return;
+      }
+      const start = performance.now();
+      while (idx < words.length && performance.now() - start < 3.2) {
+        const w = words[idx++];
+        const src = w.querySelector<HTMLElement>('.ascii-source');
+        const node = src?.firstChild;
+        if (node instanceof Text) {
+          const r = w.getBoundingClientRect();
+          if (r.width > 1 && r.height > 1) {
+            const isHero = !!w.closest('h2.ocean-h2, #introduction .lead');
+            measureCharCenters(node, r, isHero ? 18 : 8);
+            measureCharCenters(node, r, isHero ? 22 : 14);
+          }
+        }
+      }
+      if (idx < words.length) {
+        warmupTimer = window.setTimeout(step, 24);
+      }
+    };
+    warmupTimer = window.setTimeout(step, 60);
+  };
+  document.fonts?.ready?.then(scheduleWarmup, () => undefined);
+
   return {
     get fragmentCount() {
       return outGlyphs.length + carriers.length + reconBlocks.reduce((acc, b) => acc + b.glyphs.length, 0) + globeCrystals.length;
@@ -1777,6 +1887,7 @@ export function createAbyssalCipher(): AbyssalCipher {
     },
 
     destroy() {
+      if (warmupTimer) window.clearTimeout(warmupTimer);
       this.end();
       canvas.remove();
     }

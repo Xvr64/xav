@@ -473,14 +473,17 @@ html[data-handoff] .creation-scroll-hint { opacity: 0 !important; }
   font-size: 13px;
   line-height: 1.5;
   letter-spacing: 0.01em;
-  color: var(--ink-secondary);
+  text-decoration: none;
+  /* The sound icon's resting tone: the dimmer secondary nav voice, >= 4.5:1 on the darkest water. */
+  color: var(--ink-52595E, var(--ink-muted));
+  opacity: 0.82;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
-  transition: color 160ms ease;
+  transition: opacity 160ms ease;
 }
 .mobile-chapters-trigger:hover,
 .mobile-chapters-trigger[aria-expanded='true'] {
-  color: var(--ink-primary);
+  opacity: 1;
 }
 .mobile-chapters-trigger:focus-visible {
   outline: 1px solid currentColor;
@@ -587,4 +590,10 @@ html[data-handoff] .creation-scroll-hint { opacity: 0 !important; }
   .mobile-chapters-link { transition: none; }
   .mobile-chapters-link:hover,
   .mobile-chapters-link[aria-current='location'] { transform: none; }
+  /* The corner rule above sets display at higher specificity than terminal.css's reduced-motion
+     hide: no decoding motion, so there is nothing for the decoding sound to accompany. */
+  .fixed-top-controls > .decode-sound-toggle { display: none; }
+}
+@media print {
+  .fixed-top-controls > .decode-sound-toggle { display: none !important; }
 }
