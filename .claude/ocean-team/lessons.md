@@ -53,9 +53,9 @@ Performance rules already in the agent definitions (root restyles, rAF ownership
 - Applies to: team
 
 ## L-008 Each Vite server gets its own cacheDir and runs from its own tree
-- Rule: When several agents serve trees that share `node_modules` through a junction, give every server a separate `cacheDir` (a `--config` file in the agent's output folder), `--strictPort`, and `hmr: false` for scripted runs; start it from its tree's folder, since Tailwind globs resolve from the cwd.
+- Rule: When several agents serve trees that share `node_modules` through a junction, give every server a separate `cacheDir` (a `--config` file in the agent's output folder), `--strictPort`, and `hmr: false` for scripted runs; start it in its tree's folder (Tailwind globs resolve from the cwd).
 - Evidence: mission stabilize-baseline: a shared `node_modules/.vite` mixed two React copies ("Invalid hook call", blank page); builder-s2's pages full-reloaded mid-scenario when other builders edited the worktree.
-- Verified: 2026-11-22, later reviewers ran in parallel without blank pages.
+- Verified: 2026-11-22, later reviewers then ran in parallel without blank pages.
 - Applies to: dev/, team
 
 ## L-009 Wall-clock budgets in unit tests take the best of several batches
