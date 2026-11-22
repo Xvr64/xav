@@ -50,12 +50,8 @@ async function journeys() {
       assert.equal(state.active, false, `${id} did not finish: ${JSON.stringify(state)}`);
       const seconds = (Date.now() - t0) / 1000;
       await sleep(1200);
-      const hero = await c.evaluate(`({ y: scrollY, introTop: Math.round(document.querySelector('#introduction').getBoundingClientRect().top + scrollY), scrollable: getComputedStyle(document.documentElement).overflowY, whales: !!document.querySelector('canvas[data-whale-renderer]'), cover: document.querySelector('.cover-title .sr-only').textContent, playback: ${JSON.stringify([...playback])} })`);
-      if (id === 'direct') {
-        assert.ok(hero.y > 0 && Math.abs(hero.y - hero.introTop) < 80, `01 Direct lands straight on Profile (#introduction): y=${hero.y}, introTop=${hero.introTop}`);
-      } else {
-        assert.equal(hero.y, 0, 'the visitor arrives at the top of the cover');
-      }
+      const hero = await c.evaluate(`({ y: scrollY, scrollable: getComputedStyle(document.documentElement).overflowY, whales: !!document.querySelector('canvas[data-whale-renderer]'), cover: document.querySelector('.cover-title .sr-only').textContent, playback: ${JSON.stringify([...playback])} })`);
+      assert.equal(hero.y, 0, 'the visitor arrives at the top of the cover');
       await jpg(c, `verify/journey-${id}-hero`);
       pass(`journey ${id} → Hero`, { seconds: Math.round(seconds * 10) / 10, nudged, hero, errors: c.errors });
     } finally { await c.close(); }

@@ -352,12 +352,12 @@ html[data-arrival='open'] { overflow: hidden !important; }
 }
 .journey-arrival[data-phase='leaving'] .journey-item:has(.journey[data-active]) { animation-delay: 0.3s; }
 .journey-arrival[data-phase='leaving'] .journey-list[data-any-active] .journey:not([data-active]) { opacity: 0.62; }
-/* 01 DIRECT ("Straight to the profile.") exits in <500ms and lands directly on #introduction */
-.journey-arrival[data-phase='leaving'][data-chosen='direct'] {
+/* Arrival Contact shortcut exits in ~340ms and lands directly on #contact */
+.journey-arrival[data-phase='leaving'][data-contact-jump] {
   animation: journey-arrival-out 0.34s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
-.journey-arrival[data-phase='leaving'][data-chosen='direct'] .journey-stage > *:not(.journey-list),
-.journey-arrival[data-phase='leaving'][data-chosen='direct'] .journey-item {
+.journey-arrival[data-phase='leaving'][data-contact-jump] .journey-stage > *:not(.journey-list),
+.journey-arrival[data-phase='leaving'][data-contact-jump] .journey-item {
   animation: journey-recede 0.26s cubic-bezier(0.4, 0, 1, 1) both;
   animation-delay: 0s;
 }

@@ -106,15 +106,17 @@ export function enterJourney(id: JourneyId) {
   arrival.selected = id;
   // The opening takes the journey's route (and records it, so Skip intro can reverse back into it)
   setCreationJourney(id);
-  if (id === 'direct') {
-    // 01 DIRECT ("Straight to the profile.") bypasses the 3D Eye of Creation opening
-    // and lands directly on the #introduction Profile chapter in <500ms.
-    if (creation.active) finishCreation('direct');
-  } else if (creation.active && !prefersReducedMotion()) {
-    // The arrival becomes the opening (journeyHandoff.ts); without one to enter, or with reduced
-    // motion, the arrival simply lifts away as before
-    beginHandoff(id);
-  }
+  // The arrival becomes the opening (journeyHandoff.ts); without one to enter, or with reduced
+  // motion, the arrival simply lifts away as before
+  if (creation.active && !prefersReducedMotion()) beginHandoff(id);
+  launchJourney();
+}
+
+/** Dedicated exit for the Arrival masthead's Contact shortcut: closes the arrival and skips the opening. */
+export function enterContact() {
+  if (!arrival.open) return;
+  arrival.selected = null;
+  if (creation.active) finishCreation('contact');
   launchJourney();
 }
 
