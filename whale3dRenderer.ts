@@ -670,6 +670,8 @@ export class WhaleAsciiRenderer {
   private previousCells: THREE.WebGLRenderTarget | null = null;
   private cellsValid = false;
   private current: WhaleMemoryCurrent | null = null;
+  /** The current's program has been used once (warmed or drawn): its link is behind us. */
+  private currentWarm = false;
   private readonly cellMaterial: THREE.ShaderMaterial;
   private readonly compositeMaterial: THREE.ShaderMaterial;
   private readonly rawMaterial: THREE.ShaderMaterial;
@@ -1084,10 +1086,18 @@ export class WhaleAsciiRenderer {
         this.current ??= new WhaleMemoryCurrent(memoryWater.landings!);
         this.current.draw(r, this.quadCamera, this.cells, this.atlasTexture!, cw / this.dpr, ch / this.dpr,
           pu.uInk.value, pu.uInkFar.value, this.style.opacity);
-      } else if (profileMemories && memoryWater.framed && memoryWater.landings && !this.current) {
+        this.currentWarm = true;
+      } else if (profileMemories && memoryWater.framed && memoryWater.landings && !this.currentWarm) {
+        // The current's program starts linking ahead of the Profile (prepareMemoryCurrent, from the
+        // Globe on) and is warmed here on the first framed frame it has linked: linked on the spot,
+        // the frame the Profile is framed waited 110-380 ms for it. Without the parallel-compile
+        // extension prepared() is true at once and this is the warm of before, on the same frame.
         this.previousCells ??= this.cells.clone();
-        this.current = new WhaleMemoryCurrent(memoryWater.landings);
-        this.current.warm(r, this.quadCamera, this.cells, this.atlasTexture!);
+        this.prepareMemoryCurrent();
+        if (this.current?.prepared(r)) {
+          this.current.warm(r, this.quadCamera, this.cells, this.atlasTexture!);
+          this.currentWarm = true;
+        }
       }
     }
 
@@ -1099,6 +1109,18 @@ export class WhaleAsciiRenderer {
     if (this.lost) return;
     this.renderer.setRenderTarget(null);
     this.renderer.clear(true, true, true);
+  }
+
+  /**
+   * Begin linking the Profile memory current's program ahead of the Profile (from the Globe on):
+   * with KHR_parallel_shader_compile its link runs off the main thread and has long finished when
+   * the Profile is framed. Once; nothing is drawn.
+   */
+  prepareMemoryCurrent() {
+    if (this.lost || this.current || !memoryWater.landings) return;
+    this.renderer.setRenderTarget(null);
+    this.current = new WhaleMemoryCurrent(memoryWater.landings);
+    this.current.prepare(this.renderer, this.quadCamera);
   }
 
   dispose() {

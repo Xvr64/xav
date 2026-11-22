@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { AMBIENT_SIZE, LANE_PROBES, LANE_SHIFT_MAX, LANE_SHIFT_RATE, ambientCamera, ambientPath, laneShiftRate, newTravel, noteScrollIntent, projectedBounds, rollAt, sampleAmbientWhale, socialAt, stepTravel } from './ambientWhaleScene.ts';
+import { readFileSync } from 'node:fs';
+import { AMBIENT_SIZE, LANE_PROBES, LANE_SHIFT_MAX, LANE_SHIFT_RATE, NARROW_LAYOUT_MAX, ambientCamera, ambientPath, laneShiftRate, newTravel, noteScrollIntent, projectedBounds, rollAt, sampleAmbientWhale, sideLanesFit, socialAt, stepTravel } from './ambientWhaleScene.ts';
 import { qRotate, vLen, vSub } from './whale3dPose.ts';
 
 const composition = (width = 1280, height = 720) => ({ width, height, scroll: 0, weight: 0, lanes: [{ x: 0.79, y: 0.8 }, { x: 0.15, y: 0.9 }], surfaceY: -Infinity });
@@ -322,6 +323,51 @@ test('a lane only moves while the torso lies over copy, toward the nearest clear
   // A torso only brushing the copy moves its lane gently
   const brushing = laneShiftRate(probes({ 0: 0.03, 0.12: 0 }));
   assert.ok(brushing > 0 && brushing < LANE_SHIFT_RATE / 2, `${brushing}`);
+});
+
+test('the side lanes run on the desktop layout only: off at the 1100 px breakpoint itself, on beyond it', () => {
+  assert.equal(NARROW_LAYOUT_MAX, 1100);
+  for (const w of [320, 390, 768, 1024, 1099, 1100]) assert.equal(sideLanesFit(w), false, `${w}`);
+  for (const w of [1101, 1280, 1440, 1920]) assert.equal(sideLanesFit(w), true, `${w}`);
+  // The same edge as the CSS: the narrow layout is `max-width: 1100px`, inclusive
+  assert.ok(/@media \(max-width: 1100px\)/.test(readFileSync(new URL('./terminal.css', import.meta.url), 'utf8')));
+  const runtime = readFileSync(new URL('./ambientWhaleRuntime.ts', import.meta.url), 'utf8');
+  const deep = runtime.slice(runtime.indexOf('const deepCopyLanes'), runtime.indexOf('const composeAround'));
+  assert.ok(/!sideLanesFit\(vw\(\)\)/.test(deep), 'composeAround asks the shared predicate');
+  assert.ok(!/vw\(\) <\s*\d/.test(deep), 'no second, off-by-one width test');
+});
+
+test('the memory current is linked ahead of the Profile and warmed after the composite, only once linked', () => {
+  const read = (f) => readFileSync(new URL(f, import.meta.url), 'utf8');
+  const current = read('./whaleMemoryCurrent.ts');
+  // prepare(): a link started without waiting; prepared(): a status query, no timer, no compileAsync
+  const prepare = current.slice(current.indexOf('  prepare('), current.indexOf('  warm('));
+  assert.ok(/renderer\.compile\(this\.scene, camera\)/.test(prepare));
+  assert.ok(/\.currentProgram;/.test(prepare) && /program\?\.isReady\(\) === true/.test(prepare));
+  assert.ok(!/\.compileAsync\(|setTimeout\(|setInterval\(/.test(current));
+  // warm() itself is as it was: one zero-strength instance drawn into the bound target
+  const warm = current.slice(current.indexOf('  warm('), current.indexOf('  draw('));
+  assert.ok(/u\.uStrength\.value = 0;/.test(warm) && /instanceCount = 1;/.test(warm) && /renderer\.render\(this\.scene, camera\);/.test(warm));
+
+  const renderer = read('./whale3dRenderer.ts');
+  const ahead = renderer.slice(renderer.indexOf('  prepareMemoryCurrent() {'), renderer.indexOf('  dispose() {'));
+  assert.ok(/if \(this\.lost \|\| this\.current \|\| !memoryWater\.landings\) return;/.test(ahead), 'once, and only with landings');
+  assert.ok(ahead.indexOf('setRenderTarget(null)') < ahead.indexOf('.prepare(this.renderer, this.quadCamera)'), 'linked for the canvas, as drawn');
+  const body = renderer.slice(renderer.indexOf('  render(drawOverlay'), renderer.indexOf('  clear() {'));
+  const composite = body.indexOf('this.quad.material = this.compositeMaterial;');
+  const framed = body.slice(body.indexOf('} else if (profileMemories && memoryWater.framed'));
+  // The warm stays after the composite, in the framed branch; prepare, then the readiness check, then warm
+  assert.ok(composite > 0 && body.indexOf('this.current.warm(') > composite);
+  assert.equal((renderer.match(/\.warm\(/g) ?? []).length, 1, 'one warm call site');
+  const order = ['this.prepareMemoryCurrent();', 'this.current?.prepared(r)', 'this.current.warm(', 'this.currentWarm = true;'].map((s) => framed.indexOf(s));
+  assert.ok(order.every((i, k) => i >= 0 && (k === 0 || i > order[k - 1])), `order ${order}`);
+  // A flight that draws the current first also counts as its first use
+  const flight = body.slice(body.indexOf('if (flying && memoryWater.phase'), body.indexOf('} else if (profileMemories && memoryWater.framed'));
+  assert.ok(/this\.current\.draw\([\s\S]*this\.currentWarm = true;/.test(flight));
+
+  // The runtime starts the link from the Globe on, never earlier
+  const runtime = read('./ambientWhaleRuntime.ts');
+  assert.ok(/if \(scrollY >= globeScrollGeometry\.start\) ascii\.prepareMemoryCurrent\(\);/.test(runtime));
 });
 
 test('a lane shift moves the habitat sideways only, and none leaves the paths exactly as before', () => {

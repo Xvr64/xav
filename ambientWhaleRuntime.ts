@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { memoryWater } from './profileMemoryTimeline';
 import { WHALE_LOOK, WhaleAsciiRenderer, type WhaleState } from './whale3dRenderer';
 import { ambientWhalesLive, fixedCopy, globeZone, readingZones, whaleDirection, whaleStage, whaleStrength } from './oceanDirection';
-import { LANE_PROBES, LANE_SHIFT_MAX, ambientCamera, laneShiftRate, newTravel, noteScrollIntent, projectedBounds, sampleAmbientWhale, stepTravel, type AmbientComposition } from './ambientWhaleScene';
+import { LANE_PROBES, LANE_SHIFT_MAX, ambientCamera, laneShiftRate, newTravel, noteScrollIntent, projectedBounds, sampleAmbientWhale, sideLanesFit, stepTravel, type AmbientComposition } from './ambientWhaleScene';
 import { qRotate, skinFrames, type Quat } from './whale3dPose';
 import type { V3 } from './whale3dAnatomy';
 import type { VeilRect } from './whaleVeil';
@@ -11,8 +11,6 @@ import { waterShade } from './terminalMotion';
 import { creation, arrivalOffset, easeRange, WHALES_ARRIVE_AT, CAMERA_SETTLE_AT, WHALE_FADE_SPAN } from './creationTimeline';
 
 const mix = (a: number, b: number, t: number) => a + (b - a) * t;
-/** Narrowest screen whose CV copy leaves open water beside it (the side lanes, composeAround). */
-const LANE_MIN_WIDTH = 1100;
 /** A finite number, or the fallback: one bad frame (a zero-height viewport) must never poison eased state. */
 const finite = (x: number, fallback: number) => (Number.isFinite(x) ? x : fallback);
 
@@ -74,7 +72,8 @@ export function mountAmbientWhales(host: HTMLElement): () => void {
    * phones) the lane eases back home.
    */
   const deepCopyLanes = () => {
-    if (!laneBias || vw() < LANE_MIN_WIDTH || composition.weight < 0.5 || memoryWater.framed) return false;
+    // Only the desktop layout leaves open water beside the CV copy (sideLanesFit, ambientWhaleScene.ts)
+    if (!laneBias || !sideLanesFit(vw()) || composition.weight < 0.5 || memoryWater.framed) return false;
     const abyss = 1 - waterShade(scrollY, globeScrollGeometry.start, globeScrollGeometry.travel, innerHeight) / 255;
     return inkMixFromAbyss(abyss) > 0.5;
   };
@@ -282,6 +281,9 @@ export function mountAmbientWhales(host: HTMLElement): () => void {
       if (hiddenByJourney || consumed) {
         ascii.clear(); ambientWhalesLive.presence = 0;
       } else drawAmbient(dt);
+      // From the Globe on, the Profile is next: its memory current's program starts linking now,
+      // off the main thread, rather than on the frame the Profile arrives (once; draws nothing)
+      if (scrollY >= globeScrollGeometry.start) ascii.prepareMemoryCurrent();
       dirty = false; lastDraw = now; frameCount++;
       meanMs += (performance.now() - start - meanMs) * 0.06;
       if (frameCount % 90 === 0 && meanMs > 19 && quality > 0.36) { quality = Math.max(0.35, quality - 0.1); ascii.setResolution(quality); }

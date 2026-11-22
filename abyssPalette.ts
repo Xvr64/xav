@@ -120,9 +120,20 @@ export const PALETTE_SCOPE_SELECTORS = ['[data-journey-runway]', '.fixed-top-con
 /** :root properties computed from the palette (`--display-weight: calc(… var(--ink-light) …)`). */
 const PALETTE_REFERENCE = /var\(\s*--(?:ink|rule|fill|glass)-/;
 
-interface PaletteTarget { style: CSSStyleDeclaration; saved: Map<string, string> }
+/**
+ * The ink a scoped target inherits. Copy inside `.ocean-legible` (buildAbyssCss) inherits
+ * `color: var(--ink-171717)` computed where that rule matches, against the root's (stale) ink, so
+ * a target inside it re-declares the same colour to resolve against its own palette; the fixed
+ * chrome outside it keeps whatever colour it already had.
+ */
+export const PALETTE_SCOPE_INK = 'var(--ink-171717)';
+const INK_SCOPE = '.ocean-legible';
+
+interface PaletteTarget { style: CSSStyleDeclaration; saved: Map<string, string>; inheritsInk: boolean }
 let paletteTargets: PaletteTarget[] | null = null;
 let derivedProperties: [string, string][] | null = null;
+/** The ink mix last written on the scoped targets (what the screen shows while they hold it). */
+let scopedMix = 0;
 
 /**
  * Custom properties declared on :root whose value reads the palette. A custom property is
@@ -157,7 +168,9 @@ function findPaletteTargets(): PaletteTarget[] | null {
   const els = PALETTE_SCOPE_SELECTORS.map((s) => document.querySelector<HTMLElement>(s));
   // Without the runway there is no stage to scope to: the root takes it, as always
   if (!els[0]) return null;
-  return els.filter((el): el is HTMLElement => !!el).map((el) => ({ style: el.style, saved: new Map() }));
+  return els
+    .filter((el): el is HTMLElement => !!el)
+    .map((el) => ({ style: el.style, saved: new Map(), inheritsInk: !!el.closest?.(INK_SCOPE) }));
 }
 
 function releasePaletteTargets() {
@@ -186,17 +199,27 @@ export function applyAbyssPalette(t: number, scoped = false) {
     if (paletteTargets) {
       const all = [...entries, ...rootDerivedProperties()];
       for (const target of paletteTargets) {
-        for (const [name, value] of all) {
+        const own: [string, string][] = target.inheritsInk ? [...all, ['color', PALETTE_SCOPE_INK]] : all;
+        for (const [name, value] of own) {
           if (!target.saved.has(name)) target.saved.set(name, target.style.getPropertyValue(name));
           target.style.setProperty(name, value);
         }
       }
+      scopedMix = t;
       return;
     }
   }
   releasePaletteTargets();
   const root = document.documentElement.style;
   for (const [name, value] of entries) root.setProperty(name, value);
+}
+
+/**
+ * Give the scoped targets back (the ocean layer unmounting): if the stage held the palette, the
+ * root takes the ink it showed, in the same call, so nothing is left reading a stale root.
+ */
+export function releaseAbyssPalette() {
+  if (paletteTargets) applyAbyssPalette(scopedMix, false);
 }
 
 /**

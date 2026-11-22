@@ -45,6 +45,10 @@ export interface AmbientComposition {
   laneShift?: readonly number[];
 }
 
+/** Widest screen still on the narrow layout (terminal.css `max-width: 1100px`: the tablet grid). */
+export const NARROW_LAYOUT_MAX = 1100;
+/** The side lanes need the desktop layout's open water beside the copy: strictly wider than the narrow layout. */
+export const sideLanesFit = (width: number) => width > NARROW_LAYOUT_MAX;
 /** Furthest a habitat may move toward open water (viewport widths). */
 export const LANE_SHIFT_MAX = 0.3;
 /** Fastest it moves (viewport widths per second): a slow change of course, not a correction. */

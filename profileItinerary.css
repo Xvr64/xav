@@ -316,7 +316,7 @@
 }
 
 html[data-profile-steps] .terminal-portfolio #introduction .profile-itinerary[data-plates="waiting"] ~ .profile-memory-cue {
-  opacity: 0.9;
+  opacity: var(--profile-cue-opacity, 0.9);
   visibility: visible;
   transition: opacity 0.6s ease 0.45s, visibility 0s;
 }
@@ -528,12 +528,16 @@ html[data-profile-steps] .terminal-portfolio #introduction .profile-itinerary[da
     transform: rotate(var(--plate-rot));
   }
 
-  /* The cue sits in the open water between the statement and the first row of cities */
+  /* The cue sits in the open water between the statement and the first row of cities: a size
+     below the "Profile" label and dimmer than it, set down from the statement toward the cities
+     (a cue, not a subtitle), and still clear above the first row's photographs (2 px or more at
+     320, 390 and 768: their frames start 9-18 px into the grid) */
   .terminal-portfolio #introduction .profile-memory-cue {
+    --profile-cue-opacity: 0.6;
     grid-area: 2 / 1;
-    top: -8px;
+    top: clamp(-6px, calc(8.5vw - 33px), 0px);
     bottom: auto;
-    font-size: clamp(11px, 3.2vw, 13px);
+    font-size: clamp(10.5px, 2.9vw, 12px);
   }
 
   .terminal-portfolio #introduction .profile-aside {

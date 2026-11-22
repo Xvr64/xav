@@ -219,6 +219,91 @@ test('while the stage is the whole screen the palette is written on the stage, t
   }
 });
 
+test('a scoped target inside the legible copy re-declares its ink colour; the chrome outside keeps its own', () => {
+  const root = fakeStyle();
+  const runway = fakeStyle();
+  const controls = fakeStyle({ color: 'chrome' });
+  const gauge = fakeStyle();
+  // The runway sits inside <main class="ocean-legible">; the fixed controls and the gauge do not
+  const inside = (yes) => (selector) => (selector === '.ocean-legible' && yes ? {} : null);
+  const elements = {
+    '[data-journey-runway]': { style: runway, closest: inside(true) },
+    '.fixed-top-controls': { style: controls, closest: inside(false) },
+    '.depth-gauge': { style: gauge, closest: inside(false) }
+  };
+  const document = { documentElement: { style: root }, querySelector: (s) => elements[s] ?? null, styleSheets: [] };
+  const { applyAbyssPalette, abyssPaletteEntries, PALETTE_SCOPE_INK } = loadPalette({ document });
+  applyAbyssPalette(0, false);
+  applyAbyssPalette(1, true);
+  // Inherited colour (and currentColor) inside the stage resolve against the stage's own ink
+  assert.equal(PALETTE_SCOPE_INK, 'var(--ink-171717)');
+  assert.equal(runway.values.get('color'), PALETTE_SCOPE_INK);
+  assert.equal(runway.values.get('--ink-171717'), Object.fromEntries(abyssPaletteEntries(1))['--ink-171717']);
+  assert.equal(controls.values.get('color'), 'chrome', 'outside the legible copy nothing changes its colour');
+  assert.equal(gauge.values.has('color'), false);
+  // Released with the scope: the runway inherits from the root again
+  applyAbyssPalette(1, false);
+  assert.equal(runway.values.has('color'), false);
+  assert.equal(runway.values.size, 0);
+  assert.equal(controls.values.get('color'), 'chrome');
+  // The CSS side of the contract: the legible copy's colour is that same ink variable
+  assert.ok(/\.ocean-legible \{ color: var\(--ink-171717\); \}/.test(readFileSync(new URL('./abyssPalette.ts', import.meta.url), 'utf8').replace(/\$\{scope\}/g, '.ocean-legible')));
+});
+
+test('releasing the palette gives the stage back and leaves the root on the ink the screen showed', () => {
+  const root = fakeStyle();
+  const runway = fakeStyle({ '--ink-light': 'held-before' });
+  const elements = { '[data-journey-runway]': { style: runway, closest: () => ({}) } };
+  const document = { documentElement: { style: root }, querySelector: (s) => elements[s] ?? null, styleSheets: [] };
+  const { applyAbyssPalette, abyssPaletteScoped, abyssPaletteEntries, releaseAbyssPalette } = loadPalette({ document });
+  // Not scoped: release is a no-op (no root write)
+  applyAbyssPalette(0, false);
+  const before = root.writes;
+  releaseAbyssPalette();
+  assert.equal(root.writes, before);
+  // Scoped at 0.8, then the writer unmounts
+  applyAbyssPalette(0.8, true);
+  assert.equal(abyssPaletteScoped(), true);
+  releaseAbyssPalette();
+  assert.equal(abyssPaletteScoped(), false);
+  assert.equal(runway.values.get('--ink-light'), 'held-before');
+  assert.equal(runway.values.size, 1);
+  for (const [name, value] of abyssPaletteEntries(0.8)) assert.equal(root.values.get(name), value, name);
+  // And the ocean layer calls it on unmount
+  const src = readFileSync(new URL('./AsciiWhaleBackground.tsx', import.meta.url), 'utf8');
+  const cleanup = src.slice(src.lastIndexOf('return () => {'), src.indexOf('}, [mode]);'));
+  assert.ok(/releaseAbyssPalette\(\);/.test(cleanup));
+});
+
+test('an unmeasured Globe gets a bounded number of retry frames, never a display-rate loop', () => {
+  const src = readFileSync(new URL('./AsciiWhaleBackground.tsx', import.meta.url), 'utf8');
+  const cap = Number(src.match(/const UNMEASURED_RETRY_FRAMES = (\d+);/)?.[1]);
+  assert.ok(cap > 0 && cap <= 600, `cap ${cap}`);
+  // Simulate the water's frame logic: geometry never measures
+  const geometry = { start: Infinity };
+  let scheduled = 0;
+  let unmeasuredFrames = 0;
+  const update = () => {
+    if (Number.isFinite(geometry.start)) unmeasuredFrames = 0;
+    else if (unmeasuredFrames < cap) { unmeasuredFrames++; scheduled++; }
+  };
+  const body = src.slice(src.indexOf('const updateWater'), src.indexOf('const scheduleWater'));
+  assert.ok(body.includes('if (Number.isFinite(globeScrollGeometry.start)) unmeasuredFrames = 0;'));
+  // The first frame comes from mount; each later one only if the frame before scheduled it
+  let frames = 0;
+  for (let pending = true; pending && frames < cap * 4; frames++) { const s = scheduled; update(); pending = scheduled > s; }
+  assert.equal(scheduled, cap, 'the self-retry stops at the cap');
+  assert.equal(frames, cap + 1);
+  // Once it measures, the counter is spent no further and nothing more is scheduled by itself
+  geometry.start = 2700;
+  update();
+  assert.equal(scheduled, cap);
+  assert.equal(unmeasuredFrames, 0);
+  // Scroll and resize still schedule the water (outside the retry budget)
+  assert.ok(/window\.addEventListener\('scroll', scheduleWater/.test(src));
+  assert.ok(/new ResizeObserver\(handleResize\)/.test(src));
+});
+
 test('a Magnetic CV passage holds the water off the root until it lands', async () => {
   const root = fakeStyle();
   const body = fakeStyle();
@@ -275,7 +360,7 @@ test('the ocean layer runs no loop of its own: the water follows scroll and resi
   // The water's update never schedules itself, except while the Globe has not yet measured
   const update = src.slice(src.indexOf('const updateWater'), src.indexOf('const scheduleWater'));
   assert.ok(!/requestAnimationFrame/.test(update));
-  assert.ok(/if \(!Number\.isFinite\(globeScrollGeometry\.start\)\) scheduleWater\(\);/.test(update));
+  assert.ok(/else if \(unmeasuredFrames < UNMEASURED_RETRY_FRAMES\) \{ unmeasuredFrames\+\+; scheduleWater\(\); \}/.test(update));
   // The ping loop stops (and gives its canvases back) the frame its last ping has gone
   const pings = src.slice(src.indexOf('const drawPings'), src.indexOf('pingRaf = requestAnimationFrame(drawPings)'));
   assert.ok(/if \(!pings\.length\) \{\s*releaseCanvases\(\);\s*return;\s*\}/.test(pings));

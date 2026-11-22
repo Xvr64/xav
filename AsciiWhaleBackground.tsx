@@ -3,7 +3,7 @@ import { AmbientWhaleLayer } from './AmbientWhaleLayer';
 import { playSonarPing, setSoundDepth } from './decodeAudio';
 import { MAX_PINGS, arrivalTime, echoStrength, isOpenWaterClick, pingRadius, pingStrength } from './sonarPing';
 import { waterShade } from './terminalMotion';
-import { applyAbyssPalette, applyAbyssWash, abyssPaletteScoped, globeScrollGeometry, inkMixFromAbyss } from './abyssPalette';
+import { applyAbyssPalette, applyAbyssWash, abyssPaletteScoped, globeScrollGeometry, inkMixFromAbyss, releaseAbyssPalette } from './abyssPalette';
 import { ambientWhalesLive, readingZones } from './oceanDirection';
 import { globeStageFillsScreen } from './oceanWorld';
 
@@ -17,6 +17,8 @@ const PING_LIFE_S = 3;
 const ECHO_NODE = 24;
 /** Echo radius per whale, as a share of the main whale's on-screen body length. */
 const ECHO_SCALE = [1.0, 0.58];
+/** Frames the water looks again for the Globe's first measurement (about 5 s at 60 Hz). */
+const UNMEASURED_RETRY_FRAMES = 300;
 
 /**
  * The ocean layer: the shared 3D whales (AmbientWhaleLayer) between two 2D sonar canvases, and
@@ -54,6 +56,7 @@ export const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.m
     let lastInkMix = -1;
     let lastWashAbyss = -1;
     let waterRaf = 0;
+    let unmeasuredFrames = 0;
     const abyssNow = () =>
       isFocus ? 0 : 1 - waterShade(window.scrollY, globeScrollGeometry.start, globeScrollGeometry.travel, viewH) / 255;
     const updateWater = () => {
@@ -84,8 +87,11 @@ export const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.m
       }
       const rawDepth = Math.max(0, Math.min(1, window.scrollY / docScrollable));
       setSoundDepth(Math.max(abyss, rawDepth * 0.4));
-      // The Globe measures its runway after mount: until it has, look again next frame
-      if (!Number.isFinite(globeScrollGeometry.start)) scheduleWater();
+      // The Globe measures its runway after mount: until it has, look again next frame, for a
+      // bounded number of frames (a Globe that never measures must not leave a display-rate loop
+      // behind); after that, scroll and resize still bring the water up to date
+      if (Number.isFinite(globeScrollGeometry.start)) unmeasuredFrames = 0;
+      else if (unmeasuredFrames < UNMEASURED_RETRY_FRAMES) { unmeasuredFrames++; scheduleWater(); }
     };
     const scheduleWater = () => {
       if (!waterRaf && !document.hidden) waterRaf = requestAnimationFrame(updateWater);
@@ -252,6 +258,8 @@ export const AsciiWhaleBackground: React.FC<AsciiWhaleBackgroundProps> = React.m
       motionQuery.removeEventListener('change', onMotion);
       cancelAnimationFrame(waterRaf);
       cancelAnimationFrame(pingRaf);
+      // Nothing may keep the palette on the stage once its writer has gone
+      releaseAbyssPalette();
     };
   }, [mode]);
 
