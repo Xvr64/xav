@@ -13,10 +13,11 @@ export const READING_WHALE_ALPHA = [1, 0.5, 0.16];
  * they are engraved in a blue close to the water's own and sit quietly behind the type; on the
  * abyss the same engraving turns to pale sea-glass on near-black, the strongest contrast on the
  * page, and a whale the height of the screen outshouts the CV it swims beside. So their strength
- * eases down with the water's darkness (`ink`, 0 surface .. 1 abyss) for as long as a composed
- * stretch holds them (`weight`), and is whole again in open water. 0 restores the old look.
+ * eases down uniformly with the water's darkness (`ink`, 0 surface .. 1 abyss) for as long as a
+ * composed stretch holds them (`weight`), giving clean foreground/background separation without
+ * localized text-shielding cutouts, and is whole again in open water. 0 restores the old look.
  */
-export const DEEP_READING_RECESSION = 0.28;
+export const DEEP_READING_RECESSION = 0.46;
 export const whaleStrength = (weight: number, ink: number): number =>
   1 - (0.06 + DEEP_READING_RECESSION * Math.max(0, Math.min(1, ink))) * Math.max(0, Math.min(1, weight));
 

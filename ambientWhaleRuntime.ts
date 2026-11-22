@@ -1,11 +1,10 @@
 import * as THREE from 'three';
 import { memoryWater } from './profileMemoryTimeline';
 import { WHALE_LOOK, WhaleAsciiRenderer, type WhaleState } from './whale3dRenderer';
-import { ambientWhalesLive, fixedCopy, globeZone, readingZones, whaleDirection, whaleStage, whaleStrength } from './oceanDirection';
+import { ambientWhalesLive, globeZone, readingZones, whaleDirection, whaleStage, whaleStrength } from './oceanDirection';
 import { LANE_PROBES, LANE_SHIFT_MAX, ambientCamera, laneShiftRate, newTravel, noteScrollIntent, projectedBounds, sampleAmbientWhale, sideLanesFit, stepTravel, type AmbientComposition } from './ambientWhaleScene';
 import { qRotate, skinFrames, type Quat } from './whale3dPose';
 import type { V3 } from './whale3dAnatomy';
-import type { VeilRect } from './whaleVeil';
 import { globeScrollGeometry, inkMixFromAbyss } from './abyssPalette';
 import { waterShade } from './terminalMotion';
 import { creation, arrivalOffset, easeRange, WHALES_ARRIVE_AT, CAMERA_SETTLE_AT, WHALE_FADE_SPAN } from './creationTimeline';
@@ -118,25 +117,6 @@ export function mountAmbientWhales(host: HTMLElement): () => void {
         ? Math.max(-LANE_SHIFT_MAX, Math.min(LANE_SHIFT_MAX, finite(laneShift[i] + sideways * dt, 0)))
         : finite(laneShift[i] * Math.exp(-dt / 2.5), 0);
     }
-  };
-  /**
-   * The copy the whales pass behind (the reading veil, whaleVeil.ts): every line box on screen
-   * except the Globe's disc, which is a picture, not text, and is meant to be seen through.
-   * The same array is handed back while nothing has moved, so the veil is only redrawn on change.
-   */
-  let veilSource: readonly VeilRect[] | null = null;
-  let veilDisc: VeilRect | undefined;
-  let veilFixed = -1;
-  let veilRects: readonly VeilRect[] = [];
-  const copyRects = () => {
-    const source = readingZones.read();
-    const disc = globeZone.rects[0];
-    if (source !== veilSource || disc !== veilDisc || fixedCopy.version !== veilFixed) {
-      veilSource = source; veilDisc = disc; veilFixed = fixedCopy.version;
-      const page = disc ? source.filter(r => r !== disc) : source;
-      veilRects = fixedCopy.rects.length ? [...page, ...fixedCopy.rects] : page;
-    }
-    return veilRects;
   };
   // The scroll's direction drives the whales' travel: + down, - up (smoothed, saturating)
   const travel = newTravel(0);
@@ -260,7 +240,8 @@ export function mountAmbientWhales(host: HTMLElement): () => void {
     }
     current.forEach((w, i) => ascii.setWhale(i, w));
     ambientWhalesLive.presence = presence * (1 - memoryWater.consumed / 8);
-    ascii.setVeil(copyRects());
+    // Keep whales unbroken across the viewport (no localized rectangular cutouts behind text)
+    ascii.setVeil(null);
     ascii.render(false, true);
     publishSpines();
   };
