@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { AMBIENT_SIZE, ambientCamera, ambientPath, newTravel, noteScrollIntent, projectedBounds, rollAt, sampleAmbientWhale, socialAt, stepTravel } from './ambientWhaleScene.ts';
+import { AMBIENT_SIZE, LANE_PROBES, LANE_SHIFT_MAX, LANE_SHIFT_RATE, ambientCamera, ambientPath, laneShiftRate, newTravel, noteScrollIntent, projectedBounds, rollAt, sampleAmbientWhale, socialAt, stepTravel } from './ambientWhaleScene.ts';
 import { qRotate, vLen, vSub } from './whale3dPose.ts';
 
 const composition = (width = 1280, height = 720) => ({ width, height, scroll: 0, weight: 0, lanes: [{ x: 0.79, y: 0.8 }, { x: 0.15, y: 0.9 }], surfaceY: -Infinity });
@@ -301,4 +301,75 @@ test('tiny scroll noise is ignored; rapid genuine reversals keep continuous, bou
     }
     previous=poses;
   }
+});
+
+// ---- Deep-CV side lanes (composeAround → laneShiftRate → the wander's centre) ------------------
+const probes = (byOffset) => LANE_PROBES.map((p) => (p in byOffset ? byOffset[p] : 0.2));
+
+test('a lane only moves while the torso lies over copy, toward the nearest clearly clearer water', () => {
+  // Open water: the lane holds wherever it is, whatever lies beside it
+  assert.equal(laneShiftRate(probes({ 0: 0, [-0.12]: 0, 0.12: 0 })), 0);
+  // Copy here, clear water a step to the right: move right at the full rate
+  assert.equal(laneShiftRate(probes({ 0: 0.2, 0.12: 0 })), LANE_SHIFT_RATE);
+  // … and to the left, the same
+  assert.equal(laneShiftRate(probes({ 0: 0.2, [-0.12]: 0 })), -LANE_SHIFT_RATE);
+  // Equally clear on both sides further out, nearer on the left: the nearer one wins
+  assert.ok(laneShiftRate(probes({ 0: 0.2, [-0.12]: 0.01, 0.36: 0 })) < 0);
+  // A marginally clearer place is not worth leaving for (no fidgeting)
+  assert.equal(laneShiftRate(probes({ 0: 0.2, [-0.36]: 0.15, [-0.24]: 0.2, [-0.12]: 0.2, 0.12: 0.2, 0.24: 0.2, 0.36: 0.2 })), 0);
+  // A place the box would mostly leave the screen for is not open water
+  assert.equal(laneShiftRate(LANE_PROBES.map((p) => (p === 0 ? 0.2 : p > 0 ? NaN : 0.2))), 0);
+  // A torso only brushing the copy moves its lane gently
+  const brushing = laneShiftRate(probes({ 0: 0.03, 0.12: 0 }));
+  assert.ok(brushing > 0 && brushing < LANE_SHIFT_RATE / 2, `${brushing}`);
+});
+
+test('a lane shift moves the habitat sideways only, and none leaves the paths exactly as before', () => {
+  const c = { ...composition(1440, 900), weight: 0.9, lanes: [{ x: 0.85, y: 0.6 }, { x: 0.15, y: 0.95 }] };
+  const cam = ambientCamera(1440, 900);
+  for (const t of [0, 13.7, 41, 88.2, 140, 230]) {
+    for (const i of [0, 1]) {
+      const plain = ambientPath(i, t, c);
+      assert.deepEqual(ambientPath(i, t, { ...c, laneShift: [0, 0] }), plain, 'no shift, the same path to the bit');
+    }
+    // Whale A's habitat moves by the shift across the frame (B follows A's path and keeps its own)
+    const shifted = ambientPath(0, t, { ...c, laneShift: [0.2, 0] });
+    const plain = ambientPath(0, t, c);
+    assert.ok(Math.abs(shifted[0] - plain[0] - 0.2 * 2 * cam.halfW) < 1e-9, 'across');
+    assert.ok(Math.abs(shifted[1] - plain[1]) < 1e-12 && Math.abs(shifted[2] - plain[2]) < 1e-12, 'never up, down or in depth');
+    // Clamped: a runaway shift cannot carry a habitat off the screen
+    const far = ambientPath(0, t, { ...c, laneShift: [5, 0] });
+    assert.ok(Math.abs(far[0] - plain[0] - LANE_SHIFT_MAX * 2 * cam.halfW) < 1e-9);
+  }
+});
+
+test('with its lane shifted the whale swims there: smoothly, heading continuous, nothing slides', () => {
+  const swim = (shifting) => {
+    const c = { ...composition(1440, 900), weight: 0.9, lanes: [{ x: 0.5, y: 0.6 }, { x: 0.15, y: 0.95 }], laneShift: [0, 0] };
+    const st = newTravel(0);
+    let previous = null;
+    let maxStep = 0;
+    let leftmost = Infinity;
+    // Ninety seconds: more than one whole circuit of A's wander (70 s) once the lane has moved
+    for (let k = 0; k < 30 * 100; k++) {
+      // The lane eases across at the rate composeAround allows, as it would over copy
+      if (shifting) c.laneShift = [Math.min(LANE_SHIFT_MAX, k * DT * LANE_SHIFT_RATE), 0];
+      stepTravel(st, 0, DT, k * DT, c);
+      const pose = sampleAmbientWhale(0, k * DT, c, st);
+      if (previous) {
+        assert.ok(angle(previous.quaternion, pose.quaternion) < 0.05, 'the heading turns, it never snaps');
+        maxStep = Math.max(maxStep, vLen(vSub(pose.position, previous.position)));
+      }
+      if (k >= 30 * 10) leftmost = Math.min(leftmost, pose.position[0]);
+      previous = pose;
+    }
+    return { maxStep, leftmost };
+  };
+  const shifted = swim(true);
+  const plain = swim(false);
+  assert.ok(shifted.maxStep < 0.02, `no frame jumps: ${shifted.maxStep}`);
+  // The far side of its circuit, where the copy is, is where the habitat has moved away from
+  // (the near side is held by the frame, as before)
+  const lane = LANE_SHIFT_MAX * 2 * ambientCamera(1440, 900).halfW;
+  assert.ok(shifted.leftmost - plain.leftmost > 0.5 * lane, `swam ${(shifted.leftmost - plain.leftmost).toFixed(3)} of ${lane.toFixed(3)} clear`);
 });

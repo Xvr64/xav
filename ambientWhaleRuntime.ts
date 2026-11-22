@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { memoryWater } from './profileMemoryTimeline';
 import { WHALE_LOOK, WhaleAsciiRenderer, type WhaleState } from './whale3dRenderer';
 import { ambientWhalesLive, fixedCopy, globeZone, readingZones, whaleDirection, whaleStage, whaleStrength } from './oceanDirection';
-import { ambientCamera, newTravel, noteScrollIntent, projectedBounds, sampleAmbientWhale, stepTravel, type AmbientComposition } from './ambientWhaleScene';
+import { LANE_PROBES, LANE_SHIFT_MAX, ambientCamera, laneShiftRate, newTravel, noteScrollIntent, projectedBounds, sampleAmbientWhale, stepTravel, type AmbientComposition } from './ambientWhaleScene';
 import { qRotate, skinFrames, type Quat } from './whale3dPose';
 import type { V3 } from './whale3dAnatomy';
 import type { VeilRect } from './whaleVeil';
@@ -11,6 +11,8 @@ import { waterShade } from './terminalMotion';
 import { creation, arrivalOffset, easeRange, WHALES_ARRIVE_AT, CAMERA_SETTLE_AT, WHALE_FADE_SPAN } from './creationTimeline';
 
 const mix = (a: number, b: number, t: number) => a + (b - a) * t;
+/** Narrowest screen whose CV copy leaves open water beside it (the side lanes, composeAround). */
+const LANE_MIN_WIDTH = 1100;
 /** A finite number, or the fallback: one bad frame (a zero-height viewport) must never poison eased state. */
 const finite = (x: number, fallback: number) => (Number.isFinite(x) ? x : fallback);
 
@@ -44,7 +46,11 @@ export function mountAmbientWhales(host: HTMLElement): () => void {
   const vw = () => Math.max(1, innerWidth || 1);
   const vh = () => Math.max(1, innerHeight || 1);
   const avoid = [0, 0];
-  const composition: AmbientComposition = { width: vw(), height: vh(), scroll: 0, weight: finite(whaleDirection.weight, 0), lanes: whaleDirection.lanes.map(l => ({ ...l })), surfaceY: whaleDirection.surfaceY, avoid };
+  const laneShift = [0, 0];
+  /** Share of each torso's box covered by copy at the last composition (QA reads it). */
+  const torsoCover = [0, 0];
+  let laneBias = true;
+  const composition: AmbientComposition = { width: vw(), height: vh(), scroll: 0, weight: finite(whaleDirection.weight, 0), lanes: whaleDirection.lanes.map(l => ({ ...l })), surfaceY: whaleDirection.surfaceY, avoid, laneShift };
   /** Share of a screen box covered by reading text (line boxes, capped at 1). */
   const textCover = (rects: ReturnType<typeof readingZones.read>, x0: number, y0: number, x1: number, y1: number) => {
     let sum = 0;
@@ -59,9 +65,22 @@ export function mountAmbientWhales(host: HTMLElement): () => void {
    * Composition: where a whale's torso (the densest engraving) has settled over a block of copy,
    * it drifts toward whichever side, above or below, holds less text. Eased, so it reads as the
    * animal choosing open water, never as a correction.
+   *
+   * In the deep CV chapters on a wide screen the copy fills the reading measure from the left
+   * edge to the right column, and a torso drifting up or down only finds the next line. There the
+   * whale's lane also moves sideways (laneShiftRate, ambientWhaleScene.ts), toward the side that
+   * holds less copy, and holds wherever the torso has found open water; the animal swims after
+   * its lane on its own heading. Everywhere else (the cover, the Globe, the Profile's framing,
+   * phones) the lane eases back home.
    */
+  const deepCopyLanes = () => {
+    if (!laneBias || vw() < LANE_MIN_WIDTH || composition.weight < 0.5 || memoryWater.framed) return false;
+    const abyss = 1 - waterShade(scrollY, globeScrollGeometry.start, globeScrollGeometry.travel, innerHeight) / 255;
+    return inkMixFromAbyss(abyss) > 0.5;
+  };
   const composeAround = (dt: number) => {
     const rects = readingZones.read();
+    const deep = deepCopyLanes();
     for (let i = 0; i < 2; i++) {
       const sp = ambientWhalesLive.spines[i];
       let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
@@ -71,6 +90,8 @@ export function mountAmbientWhales(host: HTMLElement): () => void {
         x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y);
       }
       let want = 0;
+      let sideways = 0;
+      torsoCover[i] = 0;
       if (x1 > x0 && rects.length) {
         const girth = 0.08 * ambientCamera(vw(), vh()).px;
         x0 = Math.max(0, x0 - girth); x1 = Math.min(vw(), x1 + girth);
@@ -78,12 +99,25 @@ export function mountAmbientWhales(host: HTMLElement): () => void {
         if (x1 > x0 && y1 > 0 && y0 < vh()) {
           const shift = vh() * 0.3;
           const here = textCover(rects, x0, y0, x1, y1);
+          torsoCover[i] = here;
           const up = textCover(rects, x0, y0 - shift, x1, y1 - shift);
           const down = textCover(rects, x0, y0 + shift, x1, y1 + shift);
           want = Math.max(-1, Math.min(1, (down - up) * 4)) * 0.07 * Math.min(1, here / 0.12);
+          if (deep) {
+            // The same box moved across the screen; a place it would mostly leave is not open water
+            const width = x1 - x0;
+            sideways = laneShiftRate(LANE_PROBES.map((p) => {
+              const a = Math.max(0, x0 + p * vw()), b = Math.min(vw(), x1 + p * vw());
+              return b - a < 0.6 * width ? NaN : textCover(rects, a, y0, b, y1);
+            }));
+          }
         }
       }
       avoid[i] = finite(avoid[i] + (want - avoid[i]) * (1 - Math.exp(-dt / 1.2)), 0);
+      // Outside the deep chapters the lane eases home
+      laneShift[i] = deep
+        ? Math.max(-LANE_SHIFT_MAX, Math.min(LANE_SHIFT_MAX, finite(laneShift[i] + sideways * dt, 0)))
+        : finite(laneShift[i] * Math.exp(-dt / 2.5), 0);
     }
   };
   /**
@@ -274,6 +308,8 @@ export function mountAmbientWhales(host: HTMLElement): () => void {
       orient: (whale: number, yaw: number, pitch = 0, roll = 0) => { debugAngles = { whale: Math.max(0, Math.min(1, whale)), yaw, pitch, roll }; schedule(); },
       release: () => { debugAngles = null; debugTime = null; schedule(); },
       reduced: (value: boolean) => { forceReduced = value; onMotion(); },
+      /** QA: the deep-CV side lanes on or off (off eases each lane back home), and where they are. */
+      laneBias: (on: boolean) => { laneBias = on; return laneShift.map(s => Math.round(s * 1000) / 1000); },
       /** Advance the live whales by `sec` at 30 Hz under a fixed scroll signal (−1 up … 1 down). */
       simulate: (sec: number, signal: number) => {
         debugTime = null; debugAngles = null;
@@ -284,7 +320,7 @@ export function mountAmbientWhales(host: HTMLElement): () => void {
         }
         lastScroll = scrollY; scrollVel = 0;
         drawAmbient(1 / 30);
-        return { s: travel.s, pitch: travel.fwd.map(f => (f ? Math.round(Math.asin(f[1]) * 573) / 10 : null)), drift: travel.drift.map(d => Math.round(d * 100) / 100), side: travel.side.map(d => Math.round(d * 100) / 100), avoid: avoid.map(a => Math.round(a * 1000) / 1000) };
+        return { s: travel.s, pitch: travel.fwd.map(f => (f ? Math.round(Math.asin(f[1]) * 573) / 10 : null)), drift: travel.drift.map(d => Math.round(d * 100) / 100), side: travel.side.map(d => Math.round(d * 100) / 100), avoid: avoid.map(a => Math.round(a * 1000) / 1000), laneShift: laneShift.map(s => Math.round(s * 1000) / 1000), torsoCover: torsoCover.map(c => Math.round(c * 1000) / 1000) };
       },
       /** Each whale's projected hull on screen (CSS px, flippers and flukes included). */
       bounds: () => current.map(w => {

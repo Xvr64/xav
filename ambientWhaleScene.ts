@@ -37,6 +37,46 @@ export interface AmbientComposition {
    * holds still, so the copy reads beside the animal instead of through it.
    */
   avoid?: readonly number[];
+  /**
+   * Per whale, a sideways move of its habitat's centre (viewport widths, + right) toward the open
+   * water beside a body of copy (laneShiftRate). The whale swims there itself: the wander path
+   * moves and the animal steers after it, so nothing slides and no stroke changes.
+   */
+  laneShift?: readonly number[];
+}
+
+/** Furthest a habitat may move toward open water (viewport widths). */
+export const LANE_SHIFT_MAX = 0.3;
+/** Fastest it moves (viewport widths per second): a slow change of course, not a correction. */
+export const LANE_SHIFT_RATE = 0.06;
+/** Where a lane looks for open water: the torso's box moved across by these viewport widths. */
+export const LANE_PROBES = [-0.36, -0.24, -0.12, 0, 0.12, 0.24, 0.36];
+/** A clearer place must be clearer by this much per probe step away to be worth the swim. */
+const LANE_STEP_COST = 0.012;
+/** And it must hold at most this share of the copy the torso lies over now. */
+const LANE_GAIN = 0.6;
+/**
+ * How fast (viewport widths/s, + right) a whale's lane moves while its torso lies over copy:
+ * toward the nearest of the probed places (LANE_PROBES) that holds clearly less of it. `covers`
+ * are the shares of the torso's box covered by copy at each probe (not finite where the box
+ * would mostly leave the screen). Nothing moves while the torso is in open water, so the lane
+ * holds wherever it found it.
+ */
+export function laneShiftRate(covers: readonly number[]): number {
+  const centre = LANE_PROBES.indexOf(0);
+  const here = covers[centre];
+  if (!(here > 0)) return 0;
+  let best = centre;
+  let bestScore = here;
+  for (let k = 0; k < LANE_PROBES.length; k++) {
+    const c = covers[k];
+    if (!Number.isFinite(c)) continue;
+    const score = c + LANE_STEP_COST * Math.abs(k - centre);
+    if (score < bestScore - 1e-9) { best = k; bestScore = score; }
+  }
+  // Only a place clearly clearer than here is worth leaving for (a lane never fidgets)
+  if (best === centre || bestScore > here * LANE_GAIN) return 0;
+  return Math.sign(LANE_PROBES[best]) * LANE_SHIFT_RATE * Math.min(1, here / 0.12);
 }
 
 export interface AmbientCamera {
@@ -242,7 +282,7 @@ function rawPath(i: number, t: number, c: AmbientComposition): V3 {
   const lane = c.lanes[i] ?? { x: 0.5, y: 0.5 };
   // Editorial holds move the centre of the habitat (and narrow it), never flatten its depth
   const hold = clamp(c.weight, 0, 1) * 0.68;
-  const cx = (lane.x - 0.5) * 2 * cam.halfW * hold;
+  const cx = (lane.x - 0.5) * 2 * cam.halfW * hold + clamp(c.laneShift?.[i] ?? 0, -LANE_SHIFT_MAX, LANE_SHIFT_MAX) * 2 * cam.halfW;
   const cy = ((0.5 - (i === 0 ? 0.6 : 0.38)) * (1 - hold) + (0.5 - lane.y) * hold) * 2 * cam.halfH;
   const ax = (cam.halfW * 0.78 + 0.1) * (1 - 0.45 * hold);
   let x: number, y: number, z: number;
