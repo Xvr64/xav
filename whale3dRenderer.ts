@@ -704,6 +704,13 @@ export class WhaleAsciiRenderer {
     this.atlasKey = '';
     this.skinTexture.needsUpdate = true;
     this.veilDirty = true;
+    // A restored context has a new renderer state: the memory current's program and its readiness
+    // went with the old one, so it is let go and prepared again (prepareMemoryCurrent, on the next
+    // frame past the Globe or on the Profile) and warmed once that link is done. Not disposed: its
+    // GL objects died with the lost context, and deleting them on the new one only raises
+    // INVALID_OPERATION warnings; the CPU side is collected with it
+    this.current = null;
+    this.currentWarm = false;
   };
   private readonly canvas: HTMLCanvasElement;
 

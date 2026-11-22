@@ -370,6 +370,21 @@ test('the memory current is linked ahead of the Profile and warmed after the com
   assert.ok(/if \(scrollY >= globeScrollGeometry\.start\) ascii\.prepareMemoryCurrent\(\);/.test(runtime));
 });
 
+test('a restored WebGL context lets the memory current go, so it is prepared and warmed again', () => {
+  const renderer = readFileSync(new URL('./whale3dRenderer.ts', import.meta.url), 'utf8');
+  const restored = renderer.slice(renderer.indexOf('private readonly onRestored = () => {'), renderer.indexOf('private readonly canvas: HTMLCanvasElement;'));
+  assert.ok(restored.length > 0);
+  // three replaces its renderer state on restore: the old program (and prepared()) cannot come back
+  assert.ok(/this\.current = null;\s*this\.currentWarm = false;/.test(restored));
+  // Its GL objects died with the old context: deleting them on the new one would only warn
+  assert.ok(!/\.dispose\(\)/.test(restored));
+  // ... and with no current, the next frame past the Globe or on the Profile links it again
+  const ahead = renderer.slice(renderer.indexOf('  prepareMemoryCurrent() {'), renderer.indexOf('  dispose() {'));
+  assert.ok(/if \(this\.lost \|\| this\.current \|\| !memoryWater\.landings\) return;/.test(ahead));
+  const framed = renderer.slice(renderer.indexOf('} else if (profileMemories && memoryWater.framed'));
+  assert.ok(/!this\.currentWarm\) \{[\s\S]*?this\.prepareMemoryCurrent\(\);/.test(framed), 'on the Profile too, if the restore came after the Globe');
+});
+
 test('a lane shift moves the habitat sideways only, and none leaves the paths exactly as before', () => {
   const c = { ...composition(1440, 900), weight: 0.9, lanes: [{ x: 0.85, y: 0.6 }, { x: 0.15, y: 0.95 }] };
   const cam = ambientCamera(1440, 900);
