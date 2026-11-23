@@ -1,14 +1,26 @@
-# Xavier Hery portfolio: working rules for Claude Code
+# Xavier Hery portfolio: working rules for Claude Code, Codex, and Antigravity
 
 ## Git workflow (permanent)
-- **Never modify or commit to `main`.** All work happens on a feature branch in its own worktree.
-  `main` changes only when the owner merges a Pull Request; Cloudflare deploys `main`.
-- Ocean Team missions have readable names: `npm run ocean -- <name>` (e.g. `scroll-improvements`)
-  creates `.claude/worktrees/ocean-<name>/` on branch `ocean/<name>` (with `node_modules` linked) and
-  makes it the current mission; a unique internal id stays in `.ocean/runs/<name>/worktree.json`
-  (run notes are outside `.claude/`, which Claude Code protects with an approval prompt per write). Run
-  `/ocean-team <mission>` or `/ocean-team continue <name>` from the main checkout; the playbook is
-  `.claude/skills/ocean-team/SKILL.md`. Never rename or move a mission worktree while agents work in it.
+- **Never modify, reset, overwrite, or commit to `main` (or `origin/main`).** All work happens on a
+  fresh, isolated feature branch in its own worktree. `main` changes only when the owner merges a
+  Pull Request; Cloudflare deploys `main`.
+- **Always start from the latest `origin/main`.** Before starting any new project or mission:
+  1. Run `git fetch origin` and identify the exact latest `origin/main` commit.
+  2. Create a **new** isolated feature branch and worktree based directly on `origin/main` (e.g.
+     `npm run ocean -- <name> --base origin/main` or `git worktree add <path> -b <branch> origin/main`).
+  3. **Never reuse rejected experimental branches or cherry-pick their experimental code** — in
+     particular, never base work on or reuse code from the abandoned `ocean/creative-breakthrough`
+     (ASCII Globe) or `codex/living-ocean-crossing` (fish ecosystem) experiments.
+  4. Keep all changes isolated from production until reviewed and approved by the owner.
+  5. Propose approved changes through a Pull Request into `main`.
+  6. Never merge, force-push, or deploy without the owner's explicit approval.
+- Ocean Team missions have readable names: `npm run ocean -- <name> --base origin/main` (e.g.
+  `scroll-improvements`) creates `.claude/worktrees/ocean-<name>/` on branch `ocean/<name>` (with
+  `node_modules` linked) and makes it the current mission; a unique internal id stays in
+  `.ocean/runs/<name>/worktree.json` (run notes are outside `.claude/`, which Claude Code protects
+  with an approval prompt per write). Run `/ocean-team <mission>` or `/ocean-team continue <name>`
+  from the main checkout; the playbook is `.claude/skills/ocean-team/SKILL.md`. Never rename or move
+  a mission worktree while agents work in it.
 - **Ocean Preview**: the owner types `npm run ocean:preview` in the main checkout to see the active
   mission at http://localhost:5181 (`.claude/ocean-team/preview.mjs` detects the worktree; `-- <name>`
   picks one). Port 5181 is reserved for Ocean Preview.

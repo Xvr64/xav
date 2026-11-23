@@ -24,8 +24,13 @@ and Edit tools, never through shell redirects.
 
 ## Fixed rules
 
+- **Always start from the latest `origin/main`:** Before creating a mission branch, run
+  `git fetch origin` and branch directly from `origin/main` via
+  `npm run ocean -- <id> --base origin/main`. **Never base work on or reuse/cherry-pick code from
+  rejected creative experiments** (specifically `ocean/creative-breakthrough` and
+  `codex/living-ocean-crossing`, both permanently abandoned).
 - **Every mission runs in its own worktree and branch, named readably**: `.claude/worktrees/ocean-<id>/`
-  on `ocean/<id>`, created by `npm run ocean -- <id>` (`.claude/ocean-team/new-mission.mjs`). Here
+  on `ocean/<id>`, created by `npm run ocean -- <id> --base origin/main` (`.claude/ocean-team/new-mission.mjs`). Here
   `<id>` is the mission **name**: 2 to 4 kebab-case words chosen from the mission, such as
   `portfolio-v2` or `scroll-improvements` (the launcher slugifies whatever it is given and keeps a
   unique internal id in `runs/<id>/worktree.json`). Older missions are named by their date id. It
@@ -77,8 +82,9 @@ Schema (JSON; `id` short; `check` one of `tests`, `cmd`, `harness`, `review`):
 
 1. Mission name: `continue <name>` reuses an existing run: run `npm run ocean -- <name>` (it reattaches
    the worktree if needed and makes it the current mission), then read its `plan.md`, `findings.md`,
-   `team-messages.md` and do not redo finished planning. Otherwise pick a short readable name that is
-   not taken (`npm run ocean -- --list`), run `npm run ocean -- <name>` and use the name it prints.
+   `team-messages.md` and do not redo finished planning. Otherwise run `git fetch origin`, pick a
+   short readable name that is not taken (`npm run ocean -- --list`), run
+   `npm run ocean -- <name> --base origin/main`, and use the name it prints.
 2. `L init <id>`: records the mission base, `main` and the main checkout's uncommitted files.
 3. `L baseline <id> --shots`: tsc, full tests, isolated build and headless shots at 1440/390, run
    **once**. Advisers read `runs/<id>/ledger.json` / the logs instead of re-running them.
