@@ -62,6 +62,7 @@ export interface LanguageItem {
   levelCode?: string;
   /** Plain-language level shown in the Languages section */
   levelWord: string;
+  certification?: string;
 }
 
 export interface InterestCategory {
@@ -333,7 +334,8 @@ export const CV_DATA = {
       cefrOrStandard: 'CEFR C1',
       classification: 'Bilingual / Fluent',
       levelCode: 'C1',
-      levelWord: 'Fluent'
+      levelWord: 'Fluent',
+      certification: 'TOEIC 975/990'
     },
     {
       id: 'es',

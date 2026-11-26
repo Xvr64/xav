@@ -356,6 +356,12 @@ export default function App() {
                       </>
                     )}
                     <BioWords text={lang.levelWord} />
+                    {lang.certification && (
+                      <>
+                        <span aria-hidden="true"> <AsciiText text="·" /> </span>
+                        <BioWords text={lang.certification} />
+                      </>
+                    )}
                   </p>
                 </RevealBlock>
               ))}
