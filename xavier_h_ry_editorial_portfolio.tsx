@@ -321,7 +321,7 @@ export default function App() {
                         The CV's full wording stays in cvData (verbatimPoints) and in the PDF. */}
                     {exp.domainTag && (
                       <ul className="exp-scope" aria-label="Scope">
-                        {exp.domainTag.split(/\s*\/\s*/).map((tag) => (
+                        {exp.domainTag.split(/\s+\/\s+/).map((tag) => (
                           <li key={tag} className="item">
                             <BioWords text={tag} />
                           </li>

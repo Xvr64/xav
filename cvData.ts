@@ -97,7 +97,7 @@ export const CV_DATA = {
       company: 'FRESHPEPPER',
       role: 'Business Development & Operations Intern',
       date: 'April 2025',
-      domainTag: 'B2B Negotiations / Commercial Quotations / Cross-Team Workflow',
+      domainTag: 'B2B Pipeline & Negotiations / RFP & Commercial Quotations / Sales & 3D Design Coordination',
       concisePoints: [],
       // The CV's own wording (Engl CV Xavier Hery.pdf), shown on the page as the station's record
       verbatimPoints: [
@@ -112,7 +112,7 @@ export const CV_DATA = {
       company: 'BOLLORÉ LOGISTICS',
       role: 'Logistics Operations Intern',
       date: 'July 2022',
-      domainTag: 'International Air & Sea Freight / Carrier Coordination / Customs Documentation',
+      domainTag: 'Warehouse & Order Preparation / Robotics & Sustainable Logistics / Import/Export Documentation',
       concisePoints: [],
       verbatimPoints: [
         'Supported operational teams on international air and sea freight files, tracking shipments from departure to destination.',
